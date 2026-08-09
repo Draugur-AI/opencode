@@ -61,6 +61,7 @@ import { ErrorPage } from "./pages/error"
 import { useCheckServerHealth } from "./utils/server-health"
 import { legacySessionHref, legacySessionServer, requireServerKey, sessionHref } from "./utils/session-route"
 import { createSessionLineage } from "@/pages/session/session-lineage"
+import { SessionPage, SessionRouteErrorBoundary, TargetSessionRoute } from "@/pages/session-lazy"
 
 const NewSession = lazy(() => import("@/pages/new-session"))
 const NewLayout = lazy(() => import("@/pages/layout-new"))
@@ -68,13 +69,6 @@ const NewHome = lazy(() => import("@/pages/home").then((module) => ({ default: m
 const LegacyLayout = lazy(() => import("@/pages/layout"))
 const LegacyHome = lazy(() => import("@/pages/home/legacy-home").then((module) => ({ default: module.LegacyHome })))
 const File = lazy(() => import("@opencode-ai/session-ui/file").then((module) => ({ default: module.File })))
-const SessionPage = lazy(() => import("@/pages/session").then((module) => ({ default: module.SessionPage })))
-const SessionRouteErrorBoundary = lazy(() =>
-  import("@/pages/session").then((module) => ({ default: module.SessionRouteErrorBoundary })),
-)
-const TargetSessionRouteContent = lazy(() =>
-  import("@/pages/session").then((module) => ({ default: module.TargetSessionRouteContent })),
-)
 
 const SessionRoute = () => {
   const settings = useSettings()
@@ -131,12 +125,6 @@ function TargetServerRoute(props: ParentProps) {
     </Show>
   )
 }
-
-const TargetSessionRoute = () => (
-  <TargetServerRoute>
-    <TargetSessionRouteContent />
-  </TargetServerRoute>
-)
 
 function LegacyTargetSessionRoute() {
   const params = useParams<{ serverKey: string; id: string }>()
