@@ -4,7 +4,7 @@ type DecoderRequest = {
   id: number
   type: "messages" | "sessions" | "homeSessions"
   buffer: ArrayBuffer
-  options?: { directories: string[]; limit: number }
+  options?: { directories?: string[]; limit: number }
 }
 
 self.onmessage = (event: MessageEvent<DecoderRequest>) => {

@@ -73,7 +73,6 @@ export function createHomeSessionsController(home: HomeController) {
           if (!(response.data instanceof ArrayBuffer)) throw new Error("Home session response is not an ArrayBuffer")
           return {
             data: await decodeHomeSessionPage(response.data, {
-              directories: projectDirectories(),
               limit: HOME_SESSION_LIMIT,
             }),
           }

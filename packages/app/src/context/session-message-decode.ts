@@ -50,15 +50,15 @@ export function decodeLegacySessionList(buffer: ArrayBuffer) {
   return (text ? (JSON.parse(text) as Session[]) : []).map(legacySessionInfo)
 }
 
-export function decodeHomeSessionPage(buffer: ArrayBuffer, options?: { directories: string[]; limit: number }) {
+export function decodeHomeSessionPage(buffer: ArrayBuffer, options?: { directories?: string[]; limit: number }) {
   const text = new TextDecoder().decode(buffer)
   const page = (text ? JSON.parse(text) : { data: [], cursor: {} }) as V2SessionListResponse
   const sessions = parseHomeSessionIndex(page.data)
   if (!options) return { data: sessions, cursor: page.cursor }
-  const directories = new Set(options.directories.map(pathKey))
+  const directories = options.directories ? new Set(options.directories.map(pathKey)) : undefined
   return {
     data: [...Map.groupBy(sessions, (session) => pathKey(session.directory))]
-      .filter(([directory]) => directories.has(directory))
+      .filter(([directory]) => !directories || directories.has(directory))
       .flatMap(([, items]) => takeRecentSessions(items, options.limit, Number.NEGATIVE_INFINITY)),
     cursor: page.cursor,
   }

@@ -16,14 +16,14 @@ export function decodeSessionList(buffer: ArrayBuffer) {
   return decode<SessionInfo[]>("sessions", buffer)
 }
 
-export function decodeHomeSessionPage(buffer: ArrayBuffer, options: { directories: string[]; limit: number }) {
+export function decodeHomeSessionPage(buffer: ArrayBuffer, options: { directories?: string[]; limit: number }) {
   return decode<{ data: Session[]; cursor: { next?: string } }>("homeSessions", buffer, options)
 }
 
 function decode<T>(
   type: "messages" | "sessions" | "homeSessions",
   buffer: ArrayBuffer,
-  options?: { directories: string[]; limit: number },
+  options?: { directories?: string[]; limit: number },
 ) {
   const id = ++nextID
   return new Promise<T>((resolve, reject) => {

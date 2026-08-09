@@ -62,3 +62,22 @@ test("bounds Home sessions by directory before returning from the decoder", () =
 
   expect(result.data.map((item) => item.id)).toEqual(["new"])
 })
+
+test("keeps a bounded server-wide Home index when directories are not specified", () => {
+  const session = (id: string, directory: string, updated: number) =>
+    ({
+      id,
+      projectID: "project",
+      location: { directory },
+      subpath: "",
+      title: id,
+      time: { created: updated, updated },
+    }) as SessionV2Info
+  const page = {
+    data: [session("repo-old", "/repo", 1), session("repo-new", "/repo", 2), session("other", "/other", 3)],
+    cursor: {},
+  }
+  const result = decodeHomeSessionPage(new TextEncoder().encode(JSON.stringify(page)).buffer, { limit: 1 })
+
+  expect(result.data.map((item) => item.id).sort()).toEqual(["other", "repo-new"])
+})
