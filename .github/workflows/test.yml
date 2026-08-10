@@ -68,6 +68,24 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Run unit tests
+        # Fork note (TKT-336): Linux-only. Windows unit was a "varying subset of
+        # unrelated tests" red (FORK.md's old known-red table, mode A/B) that a
+        # per-test timeout raise (packages/core's own missing --timeout, fixed
+        # separately) only partly addressed -- it stabilized the genuinely-slow
+        # suites (i18n parity, Git worktrees/trees, LocationServiceMap,
+        # MoveSession) but exposed a real, deterministic failure underneath:
+        # Ripgrep.Error: ripgrep execution failed on windows-latest, every run,
+        # not a timing margin issue (confirmed: raising the timeout to 30s just
+        # meant it failed at exactly 30000ms instead of ~5000ms -- a genuine
+        # execution failure, not slowness). RipgrepBinary's Windows path
+        # downloads+extracts a zip via PowerShell at first use; root-causing
+        # that is real production-code investigation, out of scope for a CI
+        # hygiene ticket. Per the ticket's own stated fallback ("skip the
+        # windows unit job entirely... if timeouts alone do not stabilize it"),
+        # skipped here rather than chased further. Un-skip condition: the
+        # Ripgrep-on-Windows execution failure is root-caused and fixed
+        # (tracked in the feedback queue, TKT-336's diary has the log excerpt).
+        if: runner.os == 'Linux'
         timeout-minutes: 20
         run: GITHUB_ACTIONS=false bun turbo test
         env:
