@@ -667,6 +667,70 @@ const scenarios: Scenario[] = [
   http.protected.get("/api/model", "v2.model.list").json(200, locationData(array)),
   http.protected.get("/api/provider", "v2.provider.list").json(200, locationData(array)),
   http.protected.get("/api/integration", "v2.integration.list").json(200, locationData(array)),
+  http.protected.get("/api/project", "v2.project.list").json(200, data(array)),
+  http.protected
+    .get("/api/project/{projectID}", "v2.project.get")
+    .seeded((ctx) => ctx.project())
+    .at((ctx) => ({
+      path: route("/api/project/{projectID}", { projectID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, data(object)),
+  http.protected
+    .get("/api/project/{projectID}", "v2.project.get.missing")
+    .at((ctx) => ({
+      path: route("/api/project/{projectID}", { projectID: "project_httpapi_v2_missing" }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .patch("/api/project/{projectID}", "v2.project.updateMetadata")
+    .mutating()
+    .seeded((ctx) => ctx.project())
+    .at((ctx) => ({
+      path: route("/api/project/{projectID}", { projectID: ctx.state.id }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { name: "HTTP API v2 Project", commands: { start: "bun --version" } },
+    }))
+    .json(
+      200,
+      data((value) => {
+        object(value)
+        check(value.name === "HTTP API v2 Project", "v2 project update should return patched name")
+      }),
+    ),
+  http.protected
+    .get("/api/project/{projectID}/preference", "v2.project.preference.read")
+    .seeded((ctx) => ctx.project())
+    .at((ctx) => ({
+      path: route("/api/project/{projectID}/preference", { projectID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(
+      200,
+      data((value) => {
+        object(value)
+        check(value.favorite === false, "an unset project preference reads as the untouched default")
+        check(value.revision === 0, "an unset project preference reads at revision 0")
+      }),
+    ),
+  http.protected
+    .patch("/api/project/{projectID}/preference", "v2.project.preference.write")
+    .mutating()
+    .seeded((ctx) => ctx.project())
+    .at((ctx) => ({
+      path: route("/api/project/{projectID}/preference", { projectID: ctx.state.id }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { favorite: true },
+    }))
+    .json(
+      200,
+      data((value) => {
+        object(value)
+        check(value.favorite === true, "preference write should persist favorite=true")
+        check(value.revision === 1, "the first preference write should land at revision 1")
+      }),
+    ),
   http.protected
     .get("/api/integration/{integrationID}", "v2.integration.get")
     .at((ctx) => ({

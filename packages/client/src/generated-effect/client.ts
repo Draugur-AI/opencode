@@ -870,6 +870,76 @@ const adaptGroup19 = (raw: RawClient["server.projectCopy"]) => ({
   refresh: Endpoint19_2(raw),
 })
 
+const Endpoint20_0 = (raw: RawClient["server.project"]) => () =>
+  raw["project.list"]({}).pipe(
+    Effect.mapError(mapClientError),
+    Effect.map((value) => value.data),
+  )
+
+type Endpoint20_1Request = Parameters<RawClient["server.project"]["project.get"]>[0]
+type Endpoint20_1Input = { readonly projectID: Endpoint20_1Request["params"]["projectID"] }
+const Endpoint20_1 = (raw: RawClient["server.project"]) => (input: Endpoint20_1Input) =>
+  raw["project.get"]({ params: { projectID: input["projectID"] } }).pipe(
+    Effect.mapError(mapClientError),
+    Effect.map((value) => value.data),
+  )
+
+type Endpoint20_2Request = Parameters<RawClient["server.project"]["project.updateMetadata"]>[0]
+type Endpoint20_2Input = {
+  readonly projectID: Endpoint20_2Request["params"]["projectID"]
+  readonly name?: Endpoint20_2Request["payload"]["name"]
+  readonly icon?: Endpoint20_2Request["payload"]["icon"]
+  readonly commands?: Endpoint20_2Request["payload"]["commands"]
+}
+const Endpoint20_2 = (raw: RawClient["server.project"]) => (input: Endpoint20_2Input) =>
+  raw["project.updateMetadata"]({
+    params: { projectID: input["projectID"] },
+    payload: { name: input["name"], icon: input["icon"], commands: input["commands"] },
+  }).pipe(
+    Effect.mapError(mapClientError),
+    Effect.map((value) => value.data),
+  )
+
+type Endpoint20_3Request = Parameters<RawClient["server.project"]["project.preference.read"]>[0]
+type Endpoint20_3Input = { readonly projectID: Endpoint20_3Request["params"]["projectID"] }
+const Endpoint20_3 = (raw: RawClient["server.project"]) => (input: Endpoint20_3Input) =>
+  raw["project.preference.read"]({ params: { projectID: input["projectID"] } }).pipe(
+    Effect.mapError(mapClientError),
+    Effect.map((value) => value.data),
+  )
+
+type Endpoint20_4Request = Parameters<RawClient["server.project"]["project.preference.write"]>[0]
+type Endpoint20_4Input = {
+  readonly projectID: Endpoint20_4Request["params"]["projectID"]
+  readonly favorite?: Endpoint20_4Request["payload"]["favorite"]
+  readonly rank?: Endpoint20_4Request["payload"]["rank"]
+  readonly hidden?: Endpoint20_4Request["payload"]["hidden"]
+  readonly lastOpenedAt?: Endpoint20_4Request["payload"]["lastOpenedAt"]
+  readonly expectedRevision?: Endpoint20_4Request["payload"]["expectedRevision"]
+}
+const Endpoint20_4 = (raw: RawClient["server.project"]) => (input: Endpoint20_4Input) =>
+  raw["project.preference.write"]({
+    params: { projectID: input["projectID"] },
+    payload: {
+      favorite: input["favorite"],
+      rank: input["rank"],
+      hidden: input["hidden"],
+      lastOpenedAt: input["lastOpenedAt"],
+      expectedRevision: input["expectedRevision"],
+    },
+  }).pipe(
+    Effect.mapError(mapClientError),
+    Effect.map((value) => value.data),
+  )
+
+const adaptGroup20 = (raw: RawClient["server.project"]) => ({
+  list: Endpoint20_0(raw),
+  get: Endpoint20_1(raw),
+  updateMetadata: Endpoint20_2(raw),
+  read: Endpoint20_3(raw),
+  write: Endpoint20_4(raw),
+})
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroup0(raw["server.health"]),
   location: adaptGroup1(raw["server.location"]),
@@ -891,6 +961,7 @@ const adaptClient = (raw: RawClient) => ({
   questions: adaptGroup17(raw["server.question"]),
   references: adaptGroup18(raw["server.reference"]),
   projectCopies: adaptGroup19(raw["server.projectCopy"]),
+  "server.project": adaptGroup20(raw["server.project"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>

@@ -109,6 +109,19 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`project_preference\` (
+          \`project_id\` text PRIMARY KEY,
+          \`favorite\` integer DEFAULT false NOT NULL,
+          \`rank\` text,
+          \`hidden\` integer DEFAULT false NOT NULL,
+          \`time_last_opened\` integer,
+          \`revision\` integer DEFAULT 0 NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`fk_project_preference_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`project\` (
           \`id\` text PRIMARY KEY,
           \`worktree\` text NOT NULL,

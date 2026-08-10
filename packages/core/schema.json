@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "5f8c8aca-5b2c-42b0-a16f-4c5090078c1f",
+  "id": "bdc2daff-9ba4-4ecb-b1a3-0ad1b3c784f7",
   "prevIds": [
-    "7ab0b4c6-7f9e-41e5-ba37-c4ce0d9e1bb3"
+    "5f8c8aca-5b2c-42b0-a16f-4c5090078c1f"
   ],
   "ddl": [
     {
@@ -44,6 +44,10 @@
     },
     {
       "name": "project_directory",
+      "entityType": "tables"
+    },
+    {
+      "name": "project_preference",
       "entityType": "tables"
     },
     {
@@ -667,6 +671,86 @@
       "name": "time_created",
       "entityType": "columns",
       "table": "project_directory"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "project_id",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "favorite",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "rank",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "false",
+      "generated": null,
+      "name": "hidden",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_last_opened",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "revision",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "project_preference"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_updated",
+      "entityType": "columns",
+      "table": "project_preference"
     },
     {
       "type": "text",
@@ -1885,6 +1969,21 @@
     },
     {
       "columns": [
+        "project_id"
+      ],
+      "tableTo": "project",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_project_preference_project_id_project_id_fk",
+      "entityType": "fks",
+      "table": "project_preference"
+    },
+    {
+      "columns": [
         "session_id"
       ],
       "tableTo": "session",
@@ -2173,6 +2272,15 @@
       "nameExplicit": false,
       "name": "permission_pk",
       "table": "permission",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "project_id"
+      ],
+      "nameExplicit": false,
+      "name": "project_preference_pk",
+      "table": "project_preference",
       "entityType": "pks"
     },
     {

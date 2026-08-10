@@ -136,6 +136,15 @@ import type {
   ProjectCopiesRemoveOutput,
   ProjectCopiesRefreshInput,
   ProjectCopiesRefreshOutput,
+  ServerProjectListOutput,
+  ServerProjectGetInput,
+  ServerProjectGetOutput,
+  ServerProjectUpdateMetadataInput,
+  ServerProjectUpdateMetadataOutput,
+  ServerProjectReadInput,
+  ServerProjectReadOutput,
+  ServerProjectWriteInput,
+  ServerProjectWriteOutput,
 } from "./types"
 import { ClientError } from "./client-error"
 
@@ -1163,6 +1172,65 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "server.project": {
+      list: (requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectListOutput }>(
+          { method: "GET", path: `/api/project`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
+          requestOptions,
+        ).then((value) => value.data),
+      get: (input: ServerProjectGetInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectGetOutput }>(
+          {
+            method: "GET",
+            path: `/api/project/${encodeURIComponent(input.projectID)}`,
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      updateMetadata: (input: ServerProjectUpdateMetadataInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectUpdateMetadataOutput }>(
+          {
+            method: "PATCH",
+            path: `/api/project/${encodeURIComponent(input.projectID)}`,
+            body: { name: input["name"], icon: input["icon"], commands: input["commands"] },
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      read: (input: ServerProjectReadInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectReadOutput }>(
+          {
+            method: "GET",
+            path: `/api/project/${encodeURIComponent(input.projectID)}/preference`,
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      write: (input: ServerProjectWriteInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectWriteOutput }>(
+          {
+            method: "PATCH",
+            path: `/api/project/${encodeURIComponent(input.projectID)}/preference`,
+            body: {
+              favorite: input["favorite"],
+              rank: input["rank"],
+              hidden: input["hidden"],
+              lastOpenedAt: input["lastOpenedAt"],
+              expectedRevision: input["expectedRevision"],
+            },
+            successStatus: 200,
+            declaredStatuses: [409, 404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
     },
   }
 }

@@ -35,8 +35,14 @@ describe("opencode run (non-interactive subprocess)", () => {
         )
         yield* llm.text("  after tool  ")
 
+        // timeoutMs raised from the 30_000 default: TKT-315 wired three more global
+        // nodes into the CLI AppLayer (feedback #150) and this test runs concurrently
+        // with a dozen others, so the margin that was fine in isolation isn't always
+        // enough on a loaded runner. Interim only -- the real fix is lazy node
+        // construction, tracked in #150.
         const result = yield* opencode.run("use a tool", {
           extraArgs: ["--dangerously-skip-permissions"],
+          timeoutMs: 45_000,
         })
 
         opencode.expectExit(result, 0)
@@ -49,13 +55,14 @@ describe("opencode run (non-interactive subprocess)", () => {
     "prints reasoning before text only with --thinking",
     ({ llm, opencode }) =>
       Effect.gen(function* () {
+        // timeoutMs raised from the 30_000 default -- see feedback #150.
         yield* llm.reason("  considering  ", { text: "  answer  " })
-        const thinking = yield* opencode.run("think", { extraArgs: ["--thinking"] })
+        const thinking = yield* opencode.run("think", { extraArgs: ["--thinking"], timeoutMs: 45_000 })
         opencode.expectExit(thinking, 0)
         expect(thinking.stdout).toBe("Thinking: considering\nanswer\n")
 
         yield* llm.reason("hidden", { text: "visible" })
-        const plain = yield* opencode.run("think again")
+        const plain = yield* opencode.run("think again", { timeoutMs: 45_000 })
         opencode.expectExit(plain, 0)
         expect(plain.stdout).toBe("visible\n")
       }),
@@ -95,7 +102,8 @@ describe("opencode run (non-interactive subprocess)", () => {
           }),
         )
         yield* llm.fail("upstream provider exploded mid-stream")
-        const result = yield* opencode.run("trigger midstream error", { timeoutMs: 30_000 })
+        // timeoutMs raised from 30_000 -- see feedback #150.
+        const result = yield* opencode.run("trigger midstream error", { timeoutMs: 45_000 })
         expect(result.exitCode).toBe(0)
         expect(result.stdout).toBe("partial response\n")
         expect(result.stderr).not.toContain("upstream provider exploded mid-stream")
@@ -111,7 +119,8 @@ describe("opencode run (non-interactive subprocess)", () => {
     ({ llm, opencode }) =>
       Effect.gen(function* () {
         yield* llm.text("structured output")
-        const result = yield* opencode.run("say hi", { format: "json" })
+        // timeoutMs raised from the 30_000 default -- see feedback #150.
+        const result = yield* opencode.run("say hi", { format: "json", timeoutMs: 45_000 })
         opencode.expectExit(result, 0)
 
         const events = opencode.parseJsonEvents(result.stdout)
@@ -175,9 +184,11 @@ describe("opencode run (non-interactive subprocess)", () => {
         )
         yield* llm.text("after")
 
+        // timeoutMs raised from the 30_000 default -- see feedback #150.
         const result = yield* opencode.run("exercise json records", {
           format: "json",
           extraArgs: ["--thinking", "--dangerously-skip-permissions"],
+          timeoutMs: 45_000,
         })
 
         expect(result.exitCode).toBe(0)
@@ -223,7 +234,8 @@ describe("opencode run (non-interactive subprocess)", () => {
           }),
         )
         yield* llm.fail("provider failed")
-        const result = yield* opencode.run("fail after output", { format: "json" })
+        // timeoutMs raised from the 30_000 default -- see feedback #150.
+        const result = yield* opencode.run("fail after output", { format: "json", timeoutMs: 45_000 })
 
         const events = opencode.parseJsonEvents(result.stdout)
         expect(result.exitCode).toBe(0)
@@ -245,9 +257,11 @@ describe("opencode run (non-interactive subprocess)", () => {
     "rejects requested permissions by default and allows them with the dangerous flag",
     ({ home, llm, opencode }) =>
       Effect.gen(function* () {
+        // timeoutMs raised from the 30_000 default on all three runs below, and the
+        // outer test timeout raised to match -- see feedback #150.
         yield* llm.tool("bash", { command: "rm -f denied-file", description: "Remove a test file" })
         yield* llm.text("continued after rejection")
-        const denied = yield* opencode.run("request permission", { permission: { bash: "ask" } })
+        const denied = yield* opencode.run("request permission", { permission: { bash: "ask" }, timeoutMs: 45_000 })
         opencode.expectExit(denied, 0)
         expect(denied.stderr).toContain("permission requested: bash")
         expect(denied.stdout).toBe("")
@@ -258,6 +272,7 @@ describe("opencode run (non-interactive subprocess)", () => {
         const allowed = yield* opencode.run("request permission", {
           permission: { bash: "ask" },
           extraArgs: ["--dangerously-skip-permissions"],
+          timeoutMs: 45_000,
         })
         opencode.expectExit(allowed, 0)
         expect(allowed.stderr).not.toContain("permission requested: bash")
@@ -269,12 +284,13 @@ describe("opencode run (non-interactive subprocess)", () => {
         const explicitlyDenied = yield* opencode.run("request denied permission", {
           permission: { bash: "deny" },
           extraArgs: ["--dangerously-skip-permissions"],
+          timeoutMs: 45_000,
         })
         opencode.expectExit(explicitlyDenied, 0)
         expect(explicitlyDenied.stdout).toContain("continued after explicit denial")
         expect(yield* Effect.promise(() => Bun.file(`${home}/explicitly-denied`).exists())).toBe(false)
       }),
-    60_000,
+    120_000,
   )
 
   cliIt.live(

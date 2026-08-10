@@ -268,11 +268,11 @@ const app = LayerNode.group([
   ProjectV2.node,
   ProjectCopy.node,
   PtyTicket.node,
-  // Pre-existing gap from #7 (TKT-317, goal/ledger): session.goal.* and session.ledger.*
-  // routes 500'd with "Service not found" through this path, because this list -- not
-  // packages/server/routes.ts -- is what the httpapi exerciser and this V1 HttpApiApp
-  // actually build against. Found while working TKT-315; see FORK.md's node-assembly-sites
-  // list for every other place a new global .node needs the same explicit entry.
+  // Pre-existing gap from #7 (TKT-317, goal/ledger), surfaced by TKT-315: session.goal.*
+  // and session.ledger.* routes 500'd with "Service not found" through this path, because
+  // this list -- not packages/server/routes.ts -- is what the httpapi exerciser and this V1
+  // HttpApiApp actually build against. See FORK.md's node-assembly-sites list for every other
+  // place a new global .node needs the same explicit entry.
   SessionGoal.node,
   SessionLedger.node,
 ])
