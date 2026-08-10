@@ -3,6 +3,7 @@ import { Agent } from "@/agent/agent"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionLifecycle } from "@opencode-ai/core/session/lifecycle"
+import { BaselineCounters } from "@opencode-ai/core/observability/baseline-counters"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Command } from "@/command"
 import { Permission } from "@/permission"
@@ -104,6 +105,12 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
       sessionID: SessionID,
       archived: number,
     ) {
+      // TKT-309 baseline: how much is still calling the V1 archive route, so removing the
+      // adapter later is a measured decision rather than a guess.
+      yield* Effect.logInfo("baseline: v1 session archive call", {
+        sessionID,
+        total: BaselineCounters.v1SessionArchive(),
+      })
       const id = SessionV2.ID.make(sessionID)
       const current = yield* sessionV2.get(id).pipe(Effect.orDie)
       // Only an active session is archivable. A session already archived keeps the instant it was

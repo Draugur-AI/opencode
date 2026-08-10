@@ -8,6 +8,7 @@ import { SessionEvent } from "./event"
 import { SessionMessage } from "./message"
 import { SessionSchema } from "./schema"
 import { Token } from "../util/token"
+import { BaselineCounters } from "../observability/baseline-counters"
 
 const DEFAULT_BUFFER = 20_000
 const DEFAULT_KEEP_TOKENS = 8_000
@@ -188,6 +189,12 @@ export const make = (dependencies: Dependencies) => {
       messageID,
       timestamp: yield* DateTime.now,
       reason: "auto",
+    })
+    // TKT-309 baseline: how often compaction actually runs (past the size checks above),
+    // ahead of the durable-goal/ledger slice that changes what survives it.
+    yield* Effect.logInfo("baseline: compaction run", {
+      sessionID: input.sessionID,
+      total: BaselineCounters.compactionRun(),
     })
 
     const chunks: string[] = []
