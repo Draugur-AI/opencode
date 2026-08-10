@@ -167,6 +167,16 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`session_lifecycle_request\` (
+          \`session_id\` text NOT NULL,
+          \`request_id\` text NOT NULL,
+          \`lifecycle_revision\` integer NOT NULL,
+          \`time_created\` integer NOT NULL,
+          CONSTRAINT \`session_lifecycle_request_pk\` PRIMARY KEY(\`session_id\`, \`request_id\`),
+          CONSTRAINT \`fk_session_lifecycle_request_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`session_message\` (
           \`id\` text PRIMARY KEY,
           \`session_id\` text NOT NULL,
@@ -209,7 +219,21 @@ export default {
           \`time_updated\` integer NOT NULL,
           \`time_compacting\` integer,
           \`time_archived\` integer,
+          \`lifecycle\` text DEFAULT 'active' NOT NULL,
+          \`lifecycle_revision\` integer DEFAULT 0 NOT NULL,
+          \`time_trashed\` integer,
+          \`purge_after\` integer,
+          \`trash_restore_to\` text,
           CONSTRAINT \`fk_session_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_tombstone\` (
+          \`id\` text PRIMARY KEY,
+          \`project_id\` text NOT NULL,
+          \`time_purged\` integer NOT NULL,
+          \`last_lifecycle_revision\` integer NOT NULL,
+          CONSTRAINT \`fk_session_tombstone_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -256,6 +280,9 @@ export default {
         `CREATE UNIQUE INDEX \`session_input_session_promoted_seq_idx\` ON \`session_input\` (\`session_id\`,\`promoted_seq\`);`,
       )
       yield* tx.run(
+        `CREATE INDEX \`session_lifecycle_request_session_time_idx\` ON \`session_lifecycle_request\` (\`session_id\`,\`time_created\`);`,
+      )
+      yield* tx.run(
         `CREATE UNIQUE INDEX \`session_message_session_seq_idx\` ON \`session_message\` (\`session_id\`,\`seq\`);`,
       )
       yield* tx.run(
@@ -268,6 +295,10 @@ export default {
       yield* tx.run(`CREATE INDEX \`session_project_idx\` ON \`session\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_workspace_idx\` ON \`session\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_parent_idx\` ON \`session\` (\`parent_id\`);`)
+      yield* tx.run(
+        `CREATE INDEX \`session_project_lifecycle_updated_id_idx\` ON \`session\` (\`project_id\`,\`lifecycle\`,\`time_updated\`,\`id\`);`,
+      )
+      yield* tx.run(`CREATE INDEX \`session_tombstone_time_purged_idx\` ON \`session_tombstone\` (\`time_purged\`);`)
       yield* tx.run(`CREATE INDEX \`todo_session_idx\` ON \`todo\` (\`session_id\`);`)
     })
   },

@@ -6,6 +6,7 @@ import { ProjectV2 } from "../project"
 import { ProviderV2 } from "../provider"
 import { AbsolutePath, RelativePath } from "../schema"
 import { WorkspaceV2 } from "../workspace"
+import { SessionLifecycle } from "./lifecycle"
 import { SessionSchema } from "./schema"
 import { SessionTable } from "./sql"
 import { SessionMessage } from "./message"
@@ -46,5 +47,7 @@ export function fromRow(row: typeof SessionTable.$inferSelect): SessionSchema.In
       updated: DateTime.makeUnsafe(row.time_updated),
       archived: row.time_archived ? DateTime.makeUnsafe(row.time_archived) : undefined,
     },
+    lifecycle: SessionLifecycle.fromRow(row),
+    lifecycleRevision: row.lifecycle_revision,
   })
 }

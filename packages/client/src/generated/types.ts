@@ -33,6 +33,25 @@ export type SessionNotFoundError = {
 export const isSessionNotFoundError = (value: unknown): value is SessionNotFoundError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionNotFoundError"
 
+export type SessionLifecycleConflictError = {
+  readonly _tag: "SessionLifecycleConflictError"
+  readonly sessionID: string
+  readonly lifecycleRevision: number
+  readonly message: string
+}
+export const isSessionLifecycleConflictError = (value: unknown): value is SessionLifecycleConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionLifecycleConflictError"
+
+export type SessionLifecycleTransitionError = {
+  readonly _tag: "SessionLifecycleTransitionError"
+  readonly sessionID: string
+  readonly from: string
+  readonly to: string
+  readonly message: string
+}
+export const isSessionLifecycleTransitionError = (value: unknown): value is SessionLifecycleTransitionError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionLifecycleTransitionError"
+
 export type ConflictError = {
   readonly _tag: "ConflictError"
   readonly message: string
@@ -154,6 +173,7 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -164,6 +184,7 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -174,6 +195,7 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -184,16 +206,29 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
     readonly cursor?: string | undefined
   }["search"]
+  readonly lifecycle?: {
+    readonly workspace?: string | undefined
+    readonly limit?: number | undefined
+    readonly order?: "asc" | "desc" | undefined
+    readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
+    readonly directory?: string | undefined
+    readonly project?: string | undefined
+    readonly subpath?: string | undefined
+    readonly cursor?: string | undefined
+  }["lifecycle"]
   readonly directory?: {
     readonly workspace?: string | undefined
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -204,6 +239,7 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -214,6 +250,7 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -224,6 +261,7 @@ export type SessionsListInput = {
     readonly limit?: number | undefined
     readonly order?: "asc" | "desc" | undefined
     readonly search?: string | undefined
+    readonly lifecycle?: ("active" | "archived" | "trash" | "all") | undefined
     readonly directory?: string | undefined
     readonly project?: string | undefined
     readonly subpath?: string | undefined
@@ -246,6 +284,11 @@ export type SessionsListOutput = {
       readonly cache: { readonly read: number; readonly write: number }
     }
     readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
     readonly title: string
     readonly location: { readonly directory: string; readonly workspaceID?: string }
     readonly subpath?: string
@@ -308,6 +351,11 @@ export type SessionsCreateOutput = {
       readonly cache: { readonly read: number; readonly write: number }
     }
     readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
     readonly title: string
     readonly location: { readonly directory: string; readonly workspaceID?: string }
     readonly subpath?: string
@@ -346,6 +394,11 @@ export type SessionsGetOutput = {
       readonly cache: { readonly read: number; readonly write: number }
     }
     readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
     readonly title: string
     readonly location: { readonly directory: string; readonly workspaceID?: string }
     readonly subpath?: string
@@ -362,6 +415,224 @@ export type SessionsGetOutput = {
         readonly patch: string
       }>
     }
+  }
+}["data"]
+
+export type SessionsTombstoneInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type SessionsTombstoneOutput = {
+  readonly data: {
+    readonly id: string
+    readonly projectID: string
+    readonly purgedAt: number
+    readonly lastLifecycleRevision: number
+  }
+}["data"]
+
+export type SessionsArchiveInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly requestID: { readonly requestID: string; readonly expectedLifecycleRevision?: number | null }["requestID"]
+  readonly expectedLifecycleRevision?: {
+    readonly requestID: string
+    readonly expectedLifecycleRevision?: number | null
+  }["expectedLifecycleRevision"]
+}
+
+export type SessionsArchiveOutput = {
+  readonly data: {
+    readonly id: string
+    readonly parentID?: string
+    readonly projectID: string
+    readonly agent?: string
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+    readonly cost: number
+    readonly tokens: {
+      readonly input: number
+      readonly output: number
+      readonly reasoning: number
+      readonly cache: { readonly read: number; readonly write: number }
+    }
+    readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
+    readonly title: string
+    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly subpath?: string
+    readonly revert?: {
+      readonly messageID: string
+      readonly partID?: string
+      readonly snapshot?: string
+      readonly diff?: string
+      readonly files?: ReadonlyArray<{
+        readonly path: string
+        readonly status: "added" | "modified" | "deleted"
+        readonly additions: number
+        readonly deletions: number
+        readonly patch: string
+      }>
+    }
+  }
+}["data"]
+
+export type SessionsRestoreInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly requestID: { readonly requestID: string; readonly expectedLifecycleRevision?: number | null }["requestID"]
+  readonly expectedLifecycleRevision?: {
+    readonly requestID: string
+    readonly expectedLifecycleRevision?: number | null
+  }["expectedLifecycleRevision"]
+}
+
+export type SessionsRestoreOutput = {
+  readonly data: {
+    readonly id: string
+    readonly parentID?: string
+    readonly projectID: string
+    readonly agent?: string
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+    readonly cost: number
+    readonly tokens: {
+      readonly input: number
+      readonly output: number
+      readonly reasoning: number
+      readonly cache: { readonly read: number; readonly write: number }
+    }
+    readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
+    readonly title: string
+    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly subpath?: string
+    readonly revert?: {
+      readonly messageID: string
+      readonly partID?: string
+      readonly snapshot?: string
+      readonly diff?: string
+      readonly files?: ReadonlyArray<{
+        readonly path: string
+        readonly status: "added" | "modified" | "deleted"
+        readonly additions: number
+        readonly deletions: number
+        readonly patch: string
+      }>
+    }
+  }
+}["data"]
+
+export type SessionsTrashInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly requestID: { readonly requestID: string; readonly expectedLifecycleRevision?: number | null }["requestID"]
+  readonly expectedLifecycleRevision?: {
+    readonly requestID: string
+    readonly expectedLifecycleRevision?: number | null
+  }["expectedLifecycleRevision"]
+}
+
+export type SessionsTrashOutput = {
+  readonly data: {
+    readonly id: string
+    readonly parentID?: string
+    readonly projectID: string
+    readonly agent?: string
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+    readonly cost: number
+    readonly tokens: {
+      readonly input: number
+      readonly output: number
+      readonly reasoning: number
+      readonly cache: { readonly read: number; readonly write: number }
+    }
+    readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
+    readonly title: string
+    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly subpath?: string
+    readonly revert?: {
+      readonly messageID: string
+      readonly partID?: string
+      readonly snapshot?: string
+      readonly diff?: string
+      readonly files?: ReadonlyArray<{
+        readonly path: string
+        readonly status: "added" | "modified" | "deleted"
+        readonly additions: number
+        readonly deletions: number
+        readonly patch: string
+      }>
+    }
+  }
+}["data"]
+
+export type SessionsRestoreFromTrashInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly requestID: { readonly requestID: string; readonly expectedLifecycleRevision?: number | null }["requestID"]
+  readonly expectedLifecycleRevision?: {
+    readonly requestID: string
+    readonly expectedLifecycleRevision?: number | null
+  }["expectedLifecycleRevision"]
+}
+
+export type SessionsRestoreFromTrashOutput = {
+  readonly data: {
+    readonly id: string
+    readonly parentID?: string
+    readonly projectID: string
+    readonly agent?: string
+    readonly model?: { readonly id: string; readonly providerID: string; readonly variant?: string }
+    readonly cost: number
+    readonly tokens: {
+      readonly input: number
+      readonly output: number
+      readonly reasoning: number
+      readonly cache: { readonly read: number; readonly write: number }
+    }
+    readonly time: { readonly created: number; readonly updated: number; readonly archived?: number }
+    readonly lifecycle:
+      | { readonly state: "active" }
+      | { readonly state: "archived"; readonly at: number }
+      | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+    readonly lifecycleRevision: number
+    readonly title: string
+    readonly location: { readonly directory: string; readonly workspaceID?: string }
+    readonly subpath?: string
+    readonly revert?: {
+      readonly messageID: string
+      readonly partID?: string
+      readonly snapshot?: string
+      readonly diff?: string
+      readonly files?: ReadonlyArray<{
+        readonly path: string
+        readonly status: "added" | "modified" | "deleted"
+        readonly additions: number
+        readonly deletions: number
+        readonly patch: string
+      }>
+    }
+  }
+}["data"]
+
+export type SessionsPurgeInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly requestID: { readonly requestID: string; readonly confirmation: string }["requestID"]
+  readonly confirmation: { readonly requestID: string; readonly confirmation: string }["confirmation"]
+}
+
+export type SessionsPurgeOutput = {
+  readonly data: {
+    readonly id: string
+    readonly projectID: string
+    readonly purgedAt: number
+    readonly lastLifecycleRevision: number
   }
 }["data"]
 
@@ -708,6 +979,27 @@ export type SessionsHistoryOutput = {
           readonly sessionID: string
           readonly messageID: string
           readonly model: { readonly id: string; readonly providerID: string; readonly variant?: string }
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.lifecycle.changed"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly from:
+            | { readonly state: "active" }
+            | { readonly state: "archived"; readonly at: number }
+            | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+          readonly to:
+            | { readonly state: "active" }
+            | { readonly state: "archived"; readonly at: number }
+            | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+          readonly requestID: string
+          readonly expectedLifecycleRevision?: number
         }
       }
     | {
@@ -1166,6 +1458,27 @@ export type SessionsEventsOutput =
         readonly sessionID: string
         readonly messageID: string
         readonly model: { readonly id: string; readonly providerID: string; readonly variant?: string }
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.lifecycle.changed"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly from:
+          | { readonly state: "active" }
+          | { readonly state: "archived"; readonly at: number }
+          | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+        readonly to:
+          | { readonly state: "active" }
+          | { readonly state: "archived"; readonly at: number }
+          | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
+        readonly requestID: string
+        readonly expectedLifecycleRevision?: number
       }
     }
   | {

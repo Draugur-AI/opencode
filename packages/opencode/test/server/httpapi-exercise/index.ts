@@ -1029,6 +1029,61 @@ const scenarios: Scenario[] = [
     }))
     .json(404, object, "status"),
   http.protected
+    .post("/api/session/{sessionID}/archive", "v2.session.archive")
+    .seeded((ctx) => ctx.session({ title: "Archive lifecycle" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/archive", { sessionID: ctx.state.id }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { requestID: "exercise-archive" },
+    }))
+    .mutating()
+    .json(200, (body) => {
+      check(isRecord(body) && isRecord(body.data), "archive should return the session")
+      const data = isRecord(body) && isRecord(body.data) ? body.data : {}
+      const lifecycle = isRecord(data.lifecycle) ? data.lifecycle : {}
+      check(lifecycle.state === "archived", "archived session should report the archived lifecycle state")
+      check(typeof data.lifecycleRevision === "number", "archived session should report a lifecycle revision")
+    }),
+  http.protected
+    .post("/api/session/{sessionID}/restore", "v2.session.restore")
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/restore", { sessionID: "ses_httpapi_missing" }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { requestID: "exercise-restore" },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .post("/api/session/{sessionID}/trash", "v2.session.trash")
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/trash", { sessionID: "ses_httpapi_missing" }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { requestID: "exercise-trash" },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .post("/api/session/{sessionID}/restore-from-trash", "v2.session.restoreFromTrash")
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/restore-from-trash", { sessionID: "ses_httpapi_missing" }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { requestID: "exercise-restore-from-trash" },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .post("/api/session/{sessionID}/purge", "v2.session.purge")
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/purge", { sessionID: "ses_httpapi_missing" }),
+      headers: { ...ctx.headers(), "content-type": "application/json" },
+      body: { requestID: "exercise-purge", confirmation: "ses_httpapi_missing" },
+    }))
+    .json(404, object, "status"),
+  http.protected
+    .get("/api/session/{sessionID}/tombstone", "v2.session.tombstone")
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/tombstone", { sessionID: "ses_httpapi_missing" }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
+  http.protected
     .get("/api/session/{sessionID}/message", "v2.session.messages")
     .at((ctx) => ({
       path: route("/api/session/{sessionID}/message", { sessionID: "ses_httpapi_missing" }),
@@ -1208,6 +1263,41 @@ const scenarios: Scenario[] = [
         object(body)
         check(body.title === "After rename", "updated session should use new title")
       },
+      "status",
+    ),
+  /**
+   * Differential evidence for the V1 archive adapter.
+   *
+   * The old route and the current `POST /api/session/{id}/archive` must not implement archiving
+   * independently — the old one translates into the same core service. This asserts the durable
+   * result of the V1 request: the same lifecycle state, and a lifecycle revision, that the
+   * current route produces in `v2.session.archive`. If the adapter were ever replaced by a direct
+   * write to the legacy timestamp, `lifecycle` would stay `active` here and this would fail.
+   */
+  http.protected
+    .patch("/session/{sessionID}", "session.update.archive")
+    .mutating()
+    .seeded((ctx) => ctx.session({ title: "Archive through V1" }))
+    .at((ctx) => ({
+      path: route("/session/{sessionID}", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: { time: { archived: 1700000000000 } },
+    }))
+    .jsonEffect(
+      200,
+      (body, ctx) =>
+        Effect.gen(function* () {
+          object(body)
+          const lifecycle = yield* ctx.sessionLifecycle(ctx.state.id)
+          check(lifecycle?.state === "archived", "V1 archive must produce the same lifecycle state as the current route")
+          // A revision above zero can only come from a committed LifecycleChanged event. A direct
+          // write to the legacy timestamp would leave it at zero, which is what makes this a
+          // differential test rather than a restatement of the handler.
+          check(
+            (lifecycle?.revision ?? 0) > 0,
+            "V1 archive must go through the lifecycle service, which stamps a revision",
+          )
+        }),
       "status",
     ),
   http.protected

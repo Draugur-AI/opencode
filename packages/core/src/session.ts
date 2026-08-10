@@ -16,7 +16,9 @@ import { Database } from "./database/database"
 import { SessionProjector } from "./session/projector"
 import { SessionMessageTable, SessionTable } from "./session/sql"
 import { SessionSchema } from "./session/schema"
-import { AbsolutePath, PositiveInt, RelativePath } from "./schema"
+import { SessionLifecycle } from "./session/lifecycle"
+import { SessionPurge } from "./session/purge"
+import { AbsolutePath, NonNegativeInt, PositiveInt, RelativePath } from "./schema"
 import { AgentV2 } from "./agent"
 import { SessionV1 } from "./v1/session"
 import { InstallationVersion } from "./installation/version"
@@ -58,6 +60,9 @@ const ListInputBase = {
   limit: PositiveInt.pipe(Schema.optional),
   order: Schema.Literals(["asc", "desc"]).pipe(Schema.optional),
   anchor: ListAnchor.pipe(Schema.optional),
+  /** Which lifecycle view to list. Defaults to `active`, so archived and trashed sessions are
+   * absent from an unqualified list rather than mixed into it. */
+  lifecycle: SessionLifecycle.Filter.pipe(Schema.optional),
 }
 
 const ListDirectoryInput = Schema.Struct({
@@ -88,6 +93,32 @@ type CompactInput = {
   prompt?: Prompt
 }
 
+type LifecycleInput = {
+  sessionID: SessionSchema.ID
+  /** Idempotency key. Repeating it after a dropped response resolves to the first outcome. */
+  requestID: SessionLifecycle.RequestID
+  /** The revision the caller believes it is mutating. Omitted means "whatever it is now". */
+  expectedLifecycleRevision?: number
+}
+
+/** The lifecycle columns of one session row, which `SessionSchema.Info` does not all expose. */
+type LifecycleRow = {
+  readonly lifecycle: SessionLifecycle.State
+  readonly lifecycle_revision: number
+  readonly time_archived: number | null
+  readonly time_updated: number
+  readonly time_trashed: number | null
+  readonly purge_after: number | null
+  readonly trash_restore_to: SessionLifecycle.RestorableState | null
+}
+
+type PurgeInput = {
+  sessionID: SessionSchema.ID
+  requestID: SessionLifecycle.RequestID
+  /** The session ID, echoed. Permanent deletion should not be reachable by a stray boolean. */
+  confirmation: SessionSchema.ID
+}
+
 export class NotFoundError extends Schema.TaggedErrorClass<NotFoundError>()("Session.NotFoundError", {
   sessionID: SessionSchema.ID,
 }) {}
@@ -98,6 +129,34 @@ export class OperationUnavailableError extends Schema.TaggedErrorClass<Operation
     operation: Schema.Literals(["move", "shell", "skill", "switchAgent", "compact", "wait"]),
   },
 ) {}
+
+/** The row moved under the caller: a stale `expectedLifecycleRevision`, or a concurrent writer. */
+export class LifecycleConflictError extends Schema.TaggedErrorClass<LifecycleConflictError>()(
+  "Session.LifecycleConflictError",
+  {
+    sessionID: SessionSchema.ID,
+    /** The revision the row actually holds, so a caller can retry without a second read. */
+    lifecycleRevision: NonNegativeInt,
+  },
+) {}
+
+/** The requested transition is not one the lifecycle allows from the state the session is in. */
+export class LifecycleTransitionError extends Schema.TaggedErrorClass<LifecycleTransitionError>()(
+  "Session.LifecycleTransitionError",
+  {
+    sessionID: SessionSchema.ID,
+    from: SessionLifecycle.State,
+    to: SessionLifecycle.State,
+  },
+) {}
+
+/** Permanent deletion was requested without echoing the session ID back. */
+export class ConfirmationRequiredError extends Schema.TaggedErrorClass<ConfirmationRequiredError>()(
+  "Session.ConfirmationRequiredError",
+  { sessionID: SessionSchema.ID },
+) {}
+
+export type LifecycleError = NotFoundError | LifecycleConflictError | LifecycleTransitionError
 
 export { ContextSnapshotDecodeError, MessageDecodeError } from "./session/error"
 
@@ -114,6 +173,25 @@ export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<SessionSchema.Info[]>
   readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info>
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
+  /** Hide a completed session from active views. Reversible with `restore`. */
+  readonly archive: (input: LifecycleInput) => Effect.Effect<SessionSchema.Info, LifecycleError>
+  /** Return an archived session to active views. */
+  readonly restore: (input: LifecycleInput) => Effect.Effect<SessionSchema.Info, LifecycleError>
+  /** Mark a session for deletion after a grace period. Reversible with `restoreFromTrash`. */
+  readonly trash: (input: LifecycleInput) => Effect.Effect<SessionSchema.Info, LifecycleError>
+  /** Take a session back out of trash, to whichever state it was in when it went in. */
+  readonly restoreFromTrash: (input: LifecycleInput) => Effect.Effect<SessionSchema.Info, LifecycleError>
+  /**
+   * Permanently delete a trashed session and everything it owns. Not reversible. Idempotent: a
+   * retry against an already-purged session returns the same tombstone rather than failing.
+   */
+  readonly purge: (
+    input: PurgeInput,
+  ) => Effect.Effect<SessionLifecycle.Tombstone, NotFoundError | LifecycleTransitionError | ConfirmationRequiredError>
+  /** What a purged session left behind, while it is still within its retention window. */
+  readonly tombstone: (
+    sessionID: SessionSchema.ID,
+  ) => Effect.Effect<SessionLifecycle.Tombstone | undefined>
   readonly messages: (input: {
     sessionID: SessionSchema.ID
     limit?: number
@@ -191,6 +269,7 @@ const layer = Layer.effect(
     const execution = yield* SessionExecution.Service
     const store = yield* SessionStore.Service
     const locations = yield* LocationServiceMap.Service
+    const fs = yield* FSUtil.Service
     const decodeMessage = Schema.decodeUnknownEffect(SessionMessage.Message)
     const isDurableSessionEvent = Schema.is(SessionEvent.Durable)
     const decode = (row: typeof SessionMessageTable.$inferSelect) =>
@@ -203,6 +282,94 @@ const layer = Layer.effect(
             }),
         ),
       )
+
+    /** The lifecycle columns, which `SessionSchema.Info` deliberately does not all expose. */
+    const lifecycleRow = Effect.fn("V2Session.lifecycleRow")(function* (sessionID: SessionSchema.ID) {
+      return yield* db
+        .select({
+          lifecycle: SessionTable.lifecycle,
+          lifecycle_revision: SessionTable.lifecycle_revision,
+          time_archived: SessionTable.time_archived,
+          time_updated: SessionTable.time_updated,
+          time_trashed: SessionTable.time_trashed,
+          purge_after: SessionTable.purge_after,
+          trash_restore_to: SessionTable.trash_restore_to,
+        })
+        .from(SessionTable)
+        .where(eq(SessionTable.id, sessionID))
+        .get()
+        .pipe(Effect.orDie)
+    })
+
+
+    /**
+     * One path for every lifecycle verb, so the checks cannot drift apart between them.
+     *
+     * The revision read here is always passed on as the event's `expectedLifecycleRevision`, even
+     * when the caller supplied none. The check that decides the outcome is the compare-and-set
+     * inside the commit transaction; checking here only lets us answer with a typed error instead
+     * of a rolled-back transaction in the common case.
+     */
+    const mutateLifecycle = Effect.fn("V2Session.mutateLifecycle")(function* (
+      input: LifecycleInput,
+      next: (row: LifecycleRow, now: DateTime.Utc) => SessionLifecycle.Value,
+    ) {
+      const row = yield* lifecycleRow(input.sessionID)
+      if (!row) return yield* new NotFoundError({ sessionID: input.sessionID })
+
+      const applied = yield* SessionLifecycle.findRequest(db, input.sessionID, input.requestID)
+      if (applied !== undefined) return yield* result.get(input.sessionID)
+
+      if (
+        input.expectedLifecycleRevision !== undefined &&
+        row.lifecycle_revision !== input.expectedLifecycleRevision
+      )
+        return yield* new LifecycleConflictError({
+          sessionID: input.sessionID,
+          lifecycleRevision: row.lifecycle_revision,
+        })
+
+      const now = yield* DateTime.now
+      const from = SessionLifecycle.fromRow(row)
+      const to = next(row, now)
+      if (!SessionLifecycle.canTransition(from.state, to.state))
+        return yield* new LifecycleTransitionError({
+          sessionID: input.sessionID,
+          from: from.state,
+          to: to.state,
+        })
+
+      yield* events
+        .publish(SessionEvent.LifecycleChanged, {
+          sessionID: input.sessionID,
+          timestamp: now,
+          from,
+          to,
+          requestID: input.requestID,
+          expectedLifecycleRevision: input.expectedLifecycleRevision ?? row.lifecycle_revision,
+        })
+        .pipe(
+          Effect.catchDefect((defect) => {
+            // Lost the in-transaction compare-and-set: report the revision that won.
+            if (defect instanceof SessionLifecycle.Conflict)
+              return lifecycleRow(input.sessionID).pipe(
+                Effect.flatMap(
+                  (current) =>
+                    new LifecycleConflictError({
+                      sessionID: input.sessionID,
+                      lifecycleRevision: current?.lifecycle_revision ?? 0,
+                    }),
+                ),
+              )
+            // A concurrent delivery of the same request ID committed first. That is the outcome
+            // this request asked for, so read it back rather than reporting a failure.
+            if (defect instanceof SessionLifecycle.DuplicateRequest) return Effect.void
+            return Effect.die(defect)
+          }),
+        )
+
+      return yield* result.get(input.sessionID)
+    })
 
     const result = Service.of({
       create: Effect.fn("V2Session.create")(function* (input) {
@@ -265,6 +432,60 @@ const layer = Layer.effect(
         if (!session) return yield* new NotFoundError({ sessionID })
         return session
       }),
+      archive: (input) => mutateLifecycle(input, (_row, now) => ({ state: "archived", at: now })),
+      restore: (input) => mutateLifecycle(input, () => ({ state: "active" })),
+      trash: (input) =>
+        mutateLifecycle(input, (_row, now) => ({
+          state: "trash",
+          at: now,
+          purgeAfter: DateTime.makeUnsafe(DateTime.toEpochMillis(now) + SessionLifecycle.TrashGraceMillis),
+        })),
+      restoreFromTrash: (input) =>
+        mutateLifecycle(input, (row, now) => {
+          // Only a trashed session can be restored from trash. Returning the state it is already
+          // in makes the transition check reject the request, because no state is a legal target
+          // for itself. Without this an archived session would be silently un-archived, since the
+          // restore target defaults to `active` when there is no recorded trash origin.
+          if (row.lifecycle !== "trash") return SessionLifecycle.fromRow(row)
+          // `at` is the restore moment, not the original archive moment: leaving trash
+          // re-establishes the archive rather than pretending the session never left it.
+          return row.trash_restore_to === "archived" ? { state: "archived", at: now } : { state: "active" }
+        }),
+      purge: Effect.fn("V2Session.purge")(function* (input) {
+        if (input.confirmation !== input.sessionID)
+          return yield* new ConfirmationRequiredError({ sessionID: input.sessionID })
+        const row = yield* lifecycleRow(input.sessionID)
+        if (!row) {
+          // Already gone. A retry of an acknowledged purge, or of one whose response was dropped,
+          // resolves to the tombstone instead of a spurious not-found.
+          const existing = yield* SessionPurge.tombstone(db, input.sessionID)
+          if (existing) return existing
+          return yield* new NotFoundError({ sessionID: input.sessionID })
+        }
+        if (row.lifecycle !== "trash")
+          return yield* new LifecycleTransitionError({
+            sessionID: input.sessionID,
+            from: row.lifecycle,
+            to: "trash",
+          })
+        // Stop the session running before its rows disappear underneath the runner.
+        yield* execution.interrupt(input.sessionID)
+        // A session-owned Monitor would be cancelled here. No monitor domain exists at this
+        // commit; TKT-322 introduces one and owns adding that call plus its purge-policy test.
+        const claimed = yield* SessionPurge.claim(db, {
+          sessionID: input.sessionID,
+          now: Date.now(),
+          requireExpired: false,
+        })
+        if (!claimed) {
+          const existing = yield* SessionPurge.tombstone(db, input.sessionID)
+          if (existing) return existing
+          return yield* new NotFoundError({ sessionID: input.sessionID })
+        }
+        yield* SessionPurge.removeObjects(fs, claimed.objects)
+        return claimed.tombstone
+      }),
+      tombstone: (sessionID) => SessionPurge.tombstone(db, sessionID),
       list: Effect.fn("V2Session.list")(function* (input = {}) {
         const direction = input.anchor?.direction ?? "next"
         const requestedOrder = input.order ?? "desc"
@@ -275,6 +496,8 @@ const layer = Layer.effect(
         if (input.workspaceID) conditions.push(eq(SessionTable.workspace_id, input.workspaceID))
         if ("project" in input) conditions.push(eq(SessionTable.project_id, input.project))
         if (input.search) conditions.push(like(SessionTable.title, `%${input.search}%`))
+        const lifecycle = input.lifecycle ?? "active"
+        if (lifecycle !== "all") conditions.push(eq(SessionTable.lifecycle, lifecycle))
         if (input.anchor) {
           conditions.push(
             order === "asc"
@@ -482,5 +705,6 @@ export const node = makeGlobalNode({
     SessionStore.node,
     LocationServiceMap.node,
     SessionProjector.node,
+    FSUtil.node,
   ],
 })

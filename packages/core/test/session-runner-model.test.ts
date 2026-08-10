@@ -117,6 +117,8 @@ describe("SessionRunnerModel", () => {
       const session = SessionV2.Info.make({
         id: SessionV2.ID.make("ses_model_variant"),
         projectID: ProjectV2.ID.global,
+        lifecycle: { state: "active" },
+        lifecycleRevision: 0,
         title: "test",
         model: {
           id: catalog.id,
@@ -157,6 +159,8 @@ describe("SessionRunnerModel", () => {
       const session = SessionV2.Info.make({
         id: SessionV2.ID.make("ses_compatible_variant"),
         projectID: ProjectV2.ID.global,
+        lifecycle: { state: "active" },
+        lifecycleRevision: 0,
         title: "test",
         model: { id: catalog.id, providerID: catalog.providerID, variant: ModelV2.VariantID.make("high") },
         cost: 0,
@@ -181,6 +185,8 @@ describe("SessionRunnerModel", () => {
       const session = SessionV2.Info.make({
         id: SessionV2.ID.make("ses_model_variant_unavailable"),
         projectID: ProjectV2.ID.global,
+        lifecycle: { state: "active" },
+        lifecycleRevision: 0,
         title: "test",
         model: {
           id: catalog.id,
@@ -217,6 +223,8 @@ describe("SessionRunnerModel", () => {
       const session = SessionV2.Info.make({
         id: SessionV2.ID.make("ses_anthropic_variant"),
         projectID: ProjectV2.ID.global,
+        lifecycle: { state: "active" },
+        lifecycleRevision: 0,
         title: "test",
         model: { id: catalog.id, providerID: catalog.providerID, variant: ModelV2.VariantID.make("high") },
         cost: 0,
