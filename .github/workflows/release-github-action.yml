@@ -1,11 +1,10 @@
 name: release-github-action
 
+# Fork note (TKT-336): push trigger disabled. Release automation for the github/**
+# subpath (github-action distribution), same safety reasoning as publish.yml -- this
+# fork does not cut its own releases. workflow_dispatch added as a manual escape hatch.
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - "github/**"
+  workflow_dispatch:
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

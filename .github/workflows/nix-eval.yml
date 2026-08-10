@@ -1,10 +1,13 @@
 name: nix-eval
 
+# Fork note (TKT-336): auto-triggers disabled. runs-on is blacksmith-4vcpu-ubuntu-2404,
+# which queues forever on this org (no Blacksmith app installed) and was accumulating
+# unstartable runs on every push/PR. Nix packaging validity is an upstream distribution
+# concern this fork does not maintain (no nix build/publish happens here). workflow_dispatch
+# kept as a manual escape hatch. See FORK.md. Un-disable condition: retarget runs-on to a
+# GitHub-hosted runner AND restore the push/pull_request triggers below, if this fork ever
+# needs to keep its own Nix packaging green.
 on:
-  push:
-    branches: [dev]
-  pull_request:
-    branches: [dev]
   workflow_dispatch:
 
 concurrency:

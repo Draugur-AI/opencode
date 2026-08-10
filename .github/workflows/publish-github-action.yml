@@ -1,11 +1,10 @@
 name: publish-github-action
 
+# Fork note (TKT-336): tag-push trigger disabled. Real publish pipeline, same reasoning
+# as publish.yml (safety, not just runner availability -- see there). This fork does not
+# cut github-v* release tags; workflow_dispatch kept as a manual escape hatch.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "github-v*.*.*"
-      - "!github-v1"
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 

@@ -6,7 +6,12 @@ on:
 
 jobs:
   notify:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork note (TKT-336): retargeted from blacksmith-4vcpu-ubuntu-2404. Low priority --
+    # only fires on an actual GitHub release being published, which requires a deliberate
+    # human act and won't happen via automation now that publish.yml's push trigger is
+    # disabled -- but retargeting is free and keeps this consistent if a release is ever
+    # cut by hand. Whether DISCORD_WEBHOOK is configured on this repo is unverified.
+    runs-on: ubuntu-latest
     steps:
       - name: Send nicely-formatted embed to Discord
         uses: SethCohen/github-releases-to-discord@24d166886aee4646d448c8a389ff9e1ebcab3682 # v1.20.0

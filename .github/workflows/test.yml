@@ -27,10 +27,10 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          # Fork note (TKT-305): blacksmith-* runner labels require the Blacksmith GitHub
-          # App, which is not installed on Draugur-AI, so jobs targeting them queue forever
-          # on this fork. Retargeted to GitHub-hosted runners; the e2e job below is left on
-          # blacksmith deliberately (out of the milestone-1 required gate) — see FORK.md.
+          # Fork note (TKT-305, retargeting extended to the e2e job below in TKT-336):
+          # blacksmith-* runner labels require the Blacksmith GitHub App, which is not
+          # installed on Draugur-AI, so jobs targeting them queue forever on this fork.
+          # Retargeted to GitHub-hosted runners. See FORK.md.
           - name: linux
             host: ubuntu-latest
           - name: windows
@@ -89,10 +89,13 @@ jobs:
       fail-fast: false
       matrix:
         settings:
+          # Fork note (TKT-336): was blacksmith-*, queued forever (no Blacksmith app on
+          # this org) and held its whole workflow run open, blocking rerun-failed-jobs for
+          # every job in the run, e2e included. Retargeted to GitHub-hosted. See FORK.md.
           - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
+            host: ubuntu-latest
           - name: windows
-            host: blacksmith-4vcpu-windows-2025
+            host: windows-latest
     runs-on: ${{ matrix.settings.host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
