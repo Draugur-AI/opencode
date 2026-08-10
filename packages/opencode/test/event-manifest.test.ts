@@ -9,7 +9,10 @@ describe("public event manifest", () => {
     expect(EventManifest.Definitions).toBe(SchemaEventManifest.Definitions)
     expect(EventManifest.Latest).toBe(SchemaEventManifest.Latest)
     expect(EventManifest.Durable).toBe(SchemaEventManifest.Durable)
-    expect(EventManifest.Latest.size).toBe(88)
+    // 89 since session.next.lifecycle.changed joined the manifest. This assertion exists so that
+    // adding a public wire type is a deliberate act; update the count with the addition.
+    expect(EventManifest.Latest.size).toBe(89)
+    expect(EventManifest.Latest.has("session.next.lifecycle.changed")).toBe(true)
     expect(EventManifest.Latest.get("session.next.step.ended")).toBe(SessionEvent.Step.Ended)
     expect(EventManifest.Latest.get("todo.updated")).toBe(Todo.Event.Updated)
     expect(EventManifest.Latest.has("ide.installed")).toBe(false)

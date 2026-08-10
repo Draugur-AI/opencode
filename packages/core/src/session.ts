@@ -173,8 +173,15 @@ export interface Interface {
   readonly list: (input?: ListInput) => Effect.Effect<SessionSchema.Info[]>
   readonly create: (input: CreateInput) => Effect.Effect<SessionSchema.Info>
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<SessionSchema.Info, NotFoundError>
-  /** Hide a completed session from active views. Reversible with `restore`. */
-  readonly archive: (input: LifecycleInput) => Effect.Effect<SessionSchema.Info, LifecycleError>
+  /**
+   * Hide a completed session from active views. Reversible with `restore`.
+   *
+   * `at` overrides the archive instant. It exists for the V1 compatibility route, whose contract
+   * is "store exactly the timestamp I sent" — including values a clock would never produce.
+   */
+  readonly archive: (
+    input: LifecycleInput & { readonly at?: DateTime.Utc },
+  ) => Effect.Effect<SessionSchema.Info, LifecycleError>
   /** Return an archived session to active views. */
   readonly restore: (input: LifecycleInput) => Effect.Effect<SessionSchema.Info, LifecycleError>
   /** Mark a session for deletion after a grace period. Reversible with `restoreFromTrash`. */
@@ -432,7 +439,7 @@ const layer = Layer.effect(
         if (!session) return yield* new NotFoundError({ sessionID })
         return session
       }),
-      archive: (input) => mutateLifecycle(input, (_row, now) => ({ state: "archived", at: now })),
+      archive: (input) => mutateLifecycle(input, (_row, now) => ({ state: "archived", at: input.at ?? now })),
       restore: (input) => mutateLifecycle(input, () => ({ state: "active" })),
       trash: (input) =>
         mutateLifecycle(input, (_row, now) => ({

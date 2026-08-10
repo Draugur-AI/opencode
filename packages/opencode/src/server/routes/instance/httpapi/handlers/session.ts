@@ -18,7 +18,7 @@ import { SessionSummary } from "@/session/summary"
 import { Todo } from "@/session/todo"
 import { MessageID, PartID, SessionID } from "@/session/schema"
 import { NamedError } from "@opencode-ai/core/util/error"
-import { Cause, Effect, Option, Schema, Scope } from "effect"
+import { Cause, DateTime, Effect, Option, Schema, Scope } from "effect"
 import * as Stream from "effect/Stream"
 import { InstanceState } from "@/effect/instance-state"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
@@ -106,11 +106,21 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     ) {
       const id = SessionV2.ID.make(sessionID)
       const current = yield* sessionV2.get(id).pipe(Effect.orDie)
-      // Only an active session is archivable. A session already archived needs no change, and one
-      // in trash must not be quietly resurrected by a client that cannot express trash at all.
+      // Only an active session is archivable. A session already archived keeps the instant it was
+      // archived at — the lifecycle has no "re-stamp the archive time" transition — and one in
+      // trash must not be quietly resurrected by a client that cannot express trash at all. The
+      // route still answers with the session's real state, so a caller is told the truth either
+      // way rather than being echoed a value that was not stored.
       if (current.lifecycle.state !== "active") return
       yield* sessionV2
-        .archive({ sessionID: id, requestID: SessionLifecycle.RequestID.make(`v1-archive:${sessionID}:${archived}`) })
+        .archive({
+          sessionID: id,
+          requestID: SessionLifecycle.RequestID.make(`v1-archive:${sessionID}:${archived}`),
+          // The V1 contract is "store exactly the timestamp I sent", and its schema deliberately
+          // accepts values no clock produces (the route's own tests pass 1 and -1). Stamping the
+          // current time here instead would silently rewrite what the caller asked for.
+          at: DateTime.makeUnsafe(archived),
+        })
         .pipe(Effect.orDie)
     })
 
