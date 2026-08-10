@@ -16,6 +16,7 @@ import {
 } from "@opencode-ai/protocol/errors"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionLifecycle } from "@opencode-ai/core/session/lifecycle"
+import { BaselineCounters } from "@opencode-ai/core/observability/baseline-counters"
 
 const DefaultSessionsLimit = 50
 const DefaultSessionHistoryLimit = 50
@@ -458,11 +459,18 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
       )
       .handle(
         "session.events",
-        Effect.fn((ctx) =>
-          Effect.succeed(
-            session.events({ sessionID: ctx.params.sessionID, after: ctx.query.after }).pipe(Stream.orDie),
-          ),
-        ),
+        // TKT-309 baseline: split fresh subscribes from cursor-resumed ones (a reconnect
+        // asking to replay after a sequence) so client reconnect behavior is measured
+        // before the tab-reconciliation slice changes how it's driven.
+        Effect.fn(function* (ctx) {
+          const hasCursor = ctx.query.after !== undefined
+          yield* Effect.logInfo("baseline: session event subscribe", {
+            sessionID: ctx.params.sessionID,
+            hasCursor,
+            total: BaselineCounters.sessionEventSubscribe(hasCursor),
+          })
+          return session.events({ sessionID: ctx.params.sessionID, after: ctx.query.after }).pipe(Stream.orDie)
+        }),
       )
       .handle(
         "session.interrupt",
