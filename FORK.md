@@ -8,7 +8,11 @@ lifecycle, and one durable model for what an agent is trying to achieve, replaci
 disconnected browser-side workarounds. The redesign is specified in three posts, all reviewed
 against upstream `dev` at commit
 [`0bff28de`](https://github.com/anomalyco/opencode/commit/0bff28de09105088ff5bdefab91413d55c28dff1)
-on 2026-08-10. That commit is the fork's baseline until a sync moves it (see below).
+on 2026-08-10. That commit is a permanent spec anchor: the posts' file/line citations and the
+recorded build/test baseline stay pinned to it and are never re-anchored. The fork's **sync
+base** — the point its `dev` has merged upstream through — is a separate, moving thing; it
+advances weekly under the sync policy below and is tracked by the sync PRs themselves, not by
+this file.
 
 - [Making OpenCode dependable for long-running work](https://drafts.draugur.ai/2026-08-10-making-opencode-dependable-for-long-running-work.html) — the product design
 - [Building the OpenCode reliability redesign](https://drafts.draugur.ai/2026-08-10-building-the-opencode-reliability-redesign.html) — the schema/service/protocol map
