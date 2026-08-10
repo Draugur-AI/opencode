@@ -223,3 +223,5 @@ Before stabilizing the client API:
 ## Flagged ambiguities
 
 - Legacy `experimental.chat.system.transform` can mutate the assembled baseline system prompt arbitrarily, but V2 plugins do not yet expose an equivalent hook. Decide separately whether to port it, replace dynamic uses with plugin-defined **Context Sources**, or narrow its semantics.
+
+<!-- TKT-305 CI control-test: verifying which checks run on a fork PR. Safe to close/delete. -->
