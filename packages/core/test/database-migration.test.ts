@@ -24,6 +24,7 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionSchema } from "@opencode-ai/core/session/schema"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import sessionMetadataMigration from "@opencode-ai/core/database/migration/20260511173437_session-metadata"
+import sessionLifecycleMigration from "@opencode-ai/core/database/migration/20260810124427_session_lifecycle"
 import type { SqlClient as SqlClientService } from "effect/unstable/sql/SqlClient"
 import { Database } from "@opencode-ai/core/database/database"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
@@ -127,6 +128,71 @@ describe("DatabaseMigration", () => {
         expect(yield* db.get(sql`SELECT agent FROM session_context_epoch WHERE session_id = 'ses_existing'`)).toEqual({
           agent: "build",
         })
+      }),
+    )
+  })
+
+  /** A pre-lifecycle `session` table: only the columns the lifecycle migration reads or adds. */
+  const legacySessionTable = (db: EffectDrizzleSqlite.EffectSQLiteDatabase) =>
+    db.run(
+      sql`CREATE TABLE session (id text PRIMARY KEY, project_id text NOT NULL, time_created integer NOT NULL, time_updated integer NOT NULL, time_archived integer)`,
+    )
+
+  test("backfills lifecycle from the legacy archived timestamp", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* legacySessionTable(db)
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, time_created, time_updated, time_archived) VALUES ('ses_live', 'p', 1, 1, NULL), ('ses_old', 'p', 1, 1, 1700000000000)`,
+        )
+
+        yield* DatabaseMigration.applyOnly(db, [sessionLifecycleMigration])
+
+        // Without the backfill every previously archived session would reappear in the default
+        // active view the first time a user upgraded.
+        expect(yield* db.get(sql`SELECT lifecycle FROM session WHERE id = 'ses_old'`)).toEqual({
+          lifecycle: "archived",
+        })
+        expect(yield* db.get(sql`SELECT lifecycle FROM session WHERE id = 'ses_live'`)).toEqual({
+          lifecycle: "active",
+        })
+        // Revision 0 means "no lifecycle change has been committed", which is true of every
+        // upgraded row: the state was inferred, not decided by an event.
+        expect(yield* db.get(sql`SELECT lifecycle_revision FROM session WHERE id = 'ses_old'`)).toEqual({
+          lifecycle_revision: 0,
+        })
+      }),
+    )
+  })
+
+  test("applying the lifecycle migration twice changes nothing the second time", async () => {
+    await run(
+      Effect.gen(function* () {
+        const db = yield* makeDb
+        yield* legacySessionTable(db)
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, time_created, time_updated, time_archived) VALUES ('ses_old', 'p', 1, 1, 1700000000000)`,
+        )
+
+        yield* DatabaseMigration.applyOnly(db, [sessionLifecycleMigration])
+        // A row written after the upgrade must survive the second run untouched — an upgrade that
+        // is only safe on an untouched database is not an upgrade users can take twice.
+        yield* db.run(
+          sql`INSERT INTO session (id, project_id, time_created, time_updated, lifecycle, lifecycle_revision) VALUES ('ses_new', 'p', 2, 2, 'trash', 7)`,
+        )
+        yield* DatabaseMigration.applyOnly(db, [sessionLifecycleMigration])
+
+        expect(yield* db.get(sql`SELECT lifecycle, lifecycle_revision FROM session WHERE id = 'ses_new'`)).toEqual({
+          lifecycle: "trash",
+          lifecycle_revision: 7,
+        })
+        expect(yield* db.get(sql`SELECT lifecycle FROM session WHERE id = 'ses_old'`)).toEqual({
+          lifecycle: "archived",
+        })
+        expect(
+          yield* db.all(sql`SELECT id FROM migration WHERE id = ${sessionLifecycleMigration.id}`),
+        ).toHaveLength(1)
       }),
     )
   })

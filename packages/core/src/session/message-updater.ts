@@ -123,6 +123,8 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
         )
       },
       "session.next.moved": () => Effect.void,
+      // A lifecycle change is not part of the conversation, so it projects no transcript message.
+      "session.next.lifecycle.changed": () => Effect.void,
       "session.next.prompted": (event) => {
         return adapter.appendMessage(
           SessionMessage.User.make({

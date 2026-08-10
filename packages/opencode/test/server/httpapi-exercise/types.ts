@@ -57,6 +57,14 @@ export type ScenarioContext = {
   file: (name: string, content: string) => Effect.Effect<void>
   session: (input?: { title?: string; parentID?: SessionID }) => Effect.Effect<SessionInfo>
   sessionGet: (sessionID: SessionID) => Effect.Effect<SessionInfo | undefined>
+  /**
+   * The current lifecycle of a session, read through the V2 service. `sessionGet` returns the V1
+   * shape, which has no lifecycle field, so a compatibility scenario cannot use it to prove that
+   * an old route produced the same durable state as the current one.
+   */
+  sessionLifecycle: (
+    sessionID: SessionID,
+  ) => Effect.Effect<{ readonly state: string; readonly revision: number } | undefined>
   project: () => Effect.Effect<Project.Info>
   message: (sessionID: SessionID, input?: { text?: string }) => Effect.Effect<MessageSeed>
   messages: (sessionID: SessionID) => Effect.Effect<SessionV1.WithParts[]>

@@ -71,6 +71,47 @@ export class MessageNotFoundError extends Schema.TaggedErrorClass<MessageNotFoun
   { httpApiStatus: 404 },
 ) {}
 
+/**
+ * A lifecycle mutation lost to a concurrent one, or carried a stale `expectedLifecycleRevision`.
+ * Carries the revision the session actually holds so a client can retry without a second read.
+ */
+export class SessionLifecycleConflictError extends Schema.TaggedErrorClass<SessionLifecycleConflictError>()(
+  "SessionLifecycleConflictError",
+  {
+    sessionID: Schema.String,
+    lifecycleRevision: Schema.Int,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+/** The requested lifecycle transition is not legal from the state the session is in. */
+export class SessionLifecycleTransitionError extends Schema.TaggedErrorClass<SessionLifecycleTransitionError>()(
+  "SessionLifecycleTransitionError",
+  {
+    sessionID: Schema.String,
+    from: Schema.String,
+    to: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+/**
+ * The session was permanently deleted. Distinct from 404 on purpose: a client that cannot tell
+ * "deleted" from "not fetched yet" will keep a tab open on a session that no longer exists.
+ */
+export class SessionPurgedError extends Schema.TaggedErrorClass<SessionPurgedError>()(
+  "SessionPurgedError",
+  {
+    sessionID: Schema.String,
+    purgedAt: Schema.Finite,
+    lastLifecycleRevision: Schema.Int,
+    message: Schema.String,
+  },
+  { httpApiStatus: 410 },
+) {}
+
 export class InvalidCursorError extends Schema.TaggedErrorClass<InvalidCursorError>()(
   "InvalidCursorError",
   { message: Schema.String },

@@ -1,4 +1,4 @@
-# FORK.md
+# FORK.md — Draugur-AI/opencode
 
 ## What this fork is
 
@@ -49,7 +49,18 @@ retires it without reading every PR.
 
 | Change | Why | Upstream issue/PR | Schema impact | Migration impact | Resolution |
 | --- | --- | --- | --- | --- | --- |
-| _(none yet — add a row per divergence as it lands)_ | | | | | upstream / keep / remove |
+| `.github/workflows/typecheck.yml`: `runs-on: blacksmith-4vcpu-ubuntu-2404` → `ubuntu-latest` | Blacksmith is a hosted-runner service gated by a GitHub App install; `Draugur-AI` does not have it installed, so jobs targeting `blacksmith-*` labels queue forever and never report (confirmed empirically: 15+ min, never left `queued`). See "CI runner reality" below. | none — fork-infra only, upstream's own CI intentionally uses Blacksmith | none | none | **keep** — no Blacksmith app on this org, and GitHub-hosted is the deliberate long-term choice (avoids coupling this repo to infra it doesn't own) |
+| `.github/workflows/test.yml`: `unit` job matrix, both `host:` entries (`blacksmith-4vcpu-ubuntu-2404` / `blacksmith-4vcpu-windows-2025`) → `ubuntu-latest` / `windows-latest` | Same reason. This job also runs `check:generated` and `test:httpapi` (Linux-only steps within it), so fixing it alone covers typecheck + per-package tests + generated-client check. | none — fork-infra only | none | none | **keep** — no Blacksmith app on this org |
+| Session lifecycle domain: `Lifecycle` union + `lifecycleRevision` on `Session.Info`, durable `SessionEvent.LifecycleChanged`, explicit archive/restore/trash/restore-from-trash/purge verbs, tombstones, request deduplication, purge worker ([#4](https://github.com/Draugur-AI/opencode/pull/4)) | Upstream has an archived timestamp but no lifecycle type, grace period or revision, so restore, trash, purge, stale writes and deterministic client reconciliation cannot be expressed at all. Design post, "Fix session lifecycle before session chrome" | not yet filed | Adds `lifecycle`, `lifecycle_revision`, `time_trashed`, `purge_after`, `trash_restore_to` to `session`; adds `session_tombstone` and `session_lifecycle_request`; adds index `(project_id, lifecycle, time_updated, id)`. New durable event type, additive — no existing decoder changed | `20260810124427_session_lifecycle`: additive DDL plus a backfill setting `lifecycle = 'archived'` where `time_archived` is present. Idempotent — tested applied twice with a row written in between | **upstream** — this domain is what we would propose back; file the upstream issue before the first sync that touches it |
+| V1 compatibility shim: `time_archived` retained as a mirror of `lifecycle === 'archived'`, and `PATCH /session/:id { time: { archived } }` rewritten as an adapter over the lifecycle service ([#4](https://github.com/Draugur-AI/opencode/pull/4)) | Old clients must keep working through the migration window, and two paths writing the same state independently is how they drift apart — so the old route translates rather than writing the column itself. Validation post, "Compatibility is a differential test" | n/a — shim, not proposed upstream | `session.time_archived` kept beyond its usefulness to the current domain | none beyond the row above | **remove** — delete the column and the V1 route together once telemetry shows the V1 archive path unused for a full release window. Known limit until then: a **trashed** session still appears in a V1 active list, because V1 filters on `time_archived` and has no representation for trash; it disappears from V1 on purge. Revisit when slice 2 ships the Trash UI |
+
+`e2e` (in `test.yml`), `nix-eval.yml`, `pr-management.yml`'s `check-duplicates` job, and most of
+the release/publish/deploy/beta/docs/notify/storybook/triage/stats workflows are **not** in this
+ledger: they remain untouched and still non-functional on this fork (same `blacksmith-*` problem,
+out of scope for the tickets that touched CI so far). That is inherited non-function, not a
+divergence we introduced — see "CI runner reality" for the full list and why a blanket
+find/replace across all `blacksmith-*` usages would be wrong (some, like `publish.yml`'s ARM64
+cross-compile job, use Blacksmith for a real capability GitHub-hosted can't replicate).
 
 **Resolution** is one of:
 
@@ -82,9 +93,9 @@ been reconciled, not just what is currently outstanding.
 - **Every PR carries its validation dossier** per the validation post: invariants touched,
   fixtures exercised, crash/differential/browser cases added as applicable, performance budget
   before/after where relevant, and compatibility paths retained plus their removal condition.
-- **No automated review exists on fork PRs yet** (tracked in the CI/review bootstrap task). Until
-  that changes, say so explicitly in every PR and report — local per-package tests are the gate,
-  and an absence of review comments is not evidence of a clean diff.
+- **No automated review runs on fork PRs** (see "Does automated review run on fork PRs?" below —
+  confirmed, with evidence, as of TKT-305). Say so explicitly in every PR and report — local
+  per-package tests are the gate, and an absence of review comments is not evidence of a clean diff.
 
 ## Merge-blocking gates
 
@@ -116,3 +127,152 @@ A milestone's PRs are free to land independently, but none of them may claim a g
 on the strength of a green test suite alone — the validation post is explicit that no single green
 suite proves the absence of regressions. Cite the specific evidence (fixture, crash matrix row,
 differential test, telemetry threshold) the gate asks for.
+
+## CI runner reality (read this before trusting `gh run list`)
+
+**Actions is not "on" just because `actions/permissions` says `enabled: true`.** On this fork,
+that flag was already `true` but `GET /repos/Draugur-AI/opencode/actions/workflows` returned
+`total_count: 0` — GitHub had never indexed any of the 26 workflow files, so nothing could fire
+regardless of triggers. Toggling the flag `false` then `true` again (`PUT
+.../actions/permissions` with `-F enabled=false` then `-F enabled=true`) forced a re-index; after
+that, `total_count` jumped to 26 and workflows started firing on PR events. **If a new PR shows
+zero check-runs and it isn't a `CONFLICTING` mergeable state (see below), suspect un-indexed
+workflows and try this toggle before anything else.**
+
+A handful of workflows (`beta`, `close-issues`, `close-prs`, `compliance-close`, `docs-update`,
+`stats`) came back in state `disabled_fork` even after indexing — GitHub still gates schedule/
+release-shaped workflows on forks individually. None of those are part of the PR gate, so this
+was not chased further.
+
+**Most `runs-on:` values in this repo's workflows are `blacksmith-4vcpu-ubuntu-2404` /
+`-windows-2025` (or an `-arm` variant).** Blacksmith is a hosted-runner *replacement* service
+gated by a GitHub App install; `Draugur-AI` does not have it installed (`GET
+/repos/Draugur-AI/opencode/actions/runners` and `GET orgs/Draugur-AI/actions/runners` both show
+no self-hosted runners either). A job targeting a `blacksmith-*` label on this fork queues
+forever — not a failure, not a timeout, just permanently `status: queued, conclusion: null`.
+Confirmed empirically on a control PR: `typecheck`, `unit (linux)`, `unit (windows)`, `e2e
+(linux)`, `e2e (windows)`, and `nix-eval` all sat `queued` for 15+ minutes while the two
+`ubuntu-latest` jobs on the same PR (`check-standards`, `check-compliance` from
+`pr-standards.yml`) completed within seconds. **A permanently-queued check on this fork is a
+runner-label problem, not an infrastructure stall — check `runs-on:` before assuming Actions is
+broken.**
+
+**Also distinguish from the other known silent-failure mode**: a PR whose `mergeable` /
+`mergeStateStatus` is `CONFLICTING` produces **zero** `pull_request`-triggered check-runs at all
+(no merge ref gets built), which looks identical to an Actions outage. Always check
+`gh pr view <n> --json mergeable,mergeStateStatus` before troubleshooting CI as if it were down.
+
+## Does automated review run on fork PRs? — No.
+
+Answer, with evidence, for the standing "assume no review runs" convention already baked into
+every ticket in this tree:
+
+1. **Nothing runs automatically on PR open.** There is no branch protection (`GET
+   .../branches/dev/protection` → 404) and no rulesets (`GET .../rulesets` → `[]`) on this repo —
+   unlike the workspace repo's Copilot-review ruleset. `.github/workflows/review.yml` is the only
+   review-shaped workflow, and it triggers on `issue_comment: [created]` gated to comments
+   starting with `/review` from an `OWNER`/`MEMBER` author — never on `pull_request` itself.
+2. **`pr-standards.yml` and `pr-management.yml` are compliance bots, not code review.** They check
+   PR title format (conventional-commit prefix), template-section presence, linked-issue
+   presence, and duplicate-PR detection — labels and comments only, no line-level code
+   feedback.
+3. **Even the manual `/review` trigger is currently non-functional on this fork, for two
+   independent reasons:**
+   - Its job (`check-guidelines`) is `runs-on: blacksmith-4vcpu-ubuntu-2404` — same queued-forever
+     problem as above. **Left un-retargeted deliberately**: fixing the runner alone would not
+     make it work (see next point), and provisioning secrets is not a worker-level fix.
+   - `OPENCODE_API_KEY` (the secret the review step needs to actually invoke the opencode agent)
+     is not configured on this repo — `gh secret list --repo Draugur-AI/opencode` and `gh
+     variable list --repo Draugur-AI/opencode` both return empty. The step would fail on
+     missing credentials even if the runner picked it up.
+
+**Conclusion: treat review as absent on every fork PR, full stop, exactly as the standing
+per-ticket convention already says.** Local per-package tests (the milestone-1 gate below) are
+the actual quality gate. If `/review` is ever wanted, it needs both a runner-label fix (same
+one-line pattern as `typecheck.yml`) *and* an operator-provisioned `OPENCODE_API_KEY` secret —
+neither is done here.
+
+## PR hygiene: the compliance bot and the 2-hour auto-close
+
+`pr-standards.yml` labels a PR `needs:title` (bad title format) or `needs:compliance` (missing
+`pull_request_template.md` sections, or fewer than 2 checked checklist boxes) and posts an
+explanatory comment. `compliance-close.yml` runs every 30 minutes and **auto-closes** any PR still
+labeled `needs:compliance` more than 2 hours after that comment — **unless the author is exempt**:
+`opencode-agent[bot]`, anyone with `author_association` `OWNER`/`MEMBER`, or anyone listed in
+`.github/TEAM_MEMBERS`.
+
+**Our shared push credential (`sepo-eng`) has `author_association: MEMBER` on this repo** (verified
+via `gh api repos/Draugur-AI/opencode/pulls/<n> --jq .author_association`), so **our PRs are
+exempt from the 2-hour auto-close** — the cron job just strips the label and moves on. The
+labels/comments still appear as cosmetic noise if the PR body doesn't match the template, so
+**write PR bodies against `.github/pull_request_template.md`** (sections: `Issue for this PR`,
+`Type of change`, `What does this PR do?`, `How did you verify your code works?`, `Checklist`
+with ≥2 boxes checked) to avoid the noise, even though nothing will actually get closed.
+Conventional-commit title prefixes (`feat|fix|docs|chore|refactor|test`, optionally
+`(scope):`) avoid the `needs:title` label the same way. **Only `docs`/`refactor`/`feat` skip the
+linked-issue requirement** — a `fix:`/`chore:`/`test:` title still needs `Closes #<number>` in the
+body or the same bot flags it.
+
+## Known-red CI jobs (as of TKT-305)
+
+Turning CI on for the first time on this fork surfaced real, pre-existing, **deterministic**
+failures unrelated to the CI-enablement change itself (confirmed by rerunning each once — both
+reproduced identically). Filed as feedback rather than fixed here, since neither is in scope for
+"CI and automated review on fork PRs." **Read this before assuming a red `unit` job on your PR is
+your own regression** — check whether it matches one of these first.
+
+| CI job | Failing test | Evidence | Feedback | Resolution condition |
+| --- | --- | --- | --- | --- |
+| `unit (windows)` — **mode A, the common one** | A *varying subset of unrelated tests*, each failing at a uniform ~5000–5500ms | Not one test and not one cause. Three runs, failure sets by name: `dev@bd772dd3` (zero fork changes, the control) → `Ripgrep` ×4; `2e8d972` → `i18n parity` ×4, `Git worktrees`, `Git trees`, `LocationServiceMap`, `MoveSession` ×3; and Ripgrep *passed* in that third run. Suites that cannot share a cause (i18n string parity and git worktree creation do not interact) failing at an identical ~5s ceiling is the signature of a contended or underpowered runner hitting a per-test timeout — suspected to be `windows-latest` being smaller than the Blacksmith 4vcpu size upstream tunes these timeouts for. **The control run is the load-bearing evidence: `dev` fails this way with no fork code at all.** | feedback (internal tracker) — characterisation is future work, not scoped to any milestone-1 slice | Resolves when the flake is characterised: either the runner is sized up, or the per-test timeout is raised for Windows, or the affected suites are made timeout-independent. |
+| `unit (windows)` — **mode B, intermittent** | `bun install --linker hoisted` fails applying the `@ai-sdk/openai-compatible@2.0.41` patch | `error: renaming changes to cache dir: ENOTEMPTY: ... Directory not empty (NtSetInformationFile())` — matches the exact race described in [`oven-sh/bun#28147`](https://github.com/oven-sh/bun/issues/28147), which the workflow's own `bun install --linker hoisted` comment already references. Identical failure on 2/2 independent reruns at the time it was recorded. `ubuntu-latest` is unaffected. Listed alongside mode A rather than replaced by it: this mode is real and was observed, it simply is not the only way Windows goes red, and in later runs install succeeded and the job reached the tests instead. | feedback #136 (internal tracker) | Resolves when bun's patch-apply race is fixed upstream, or worked around (e.g. serialize patch application on Windows, or pin an unaffected bun patch-apply path). |
+| `unit (linux)` | `packages/opencode/test/cli/run/run-process.test.ts:79` — "exits nonzero promptly when the model is unknown (regression for #27371)" | `expect(result.durationMs).toBeLessThan(15_000)` received `15285ms` then `15275ms` on two independent reruns — consistently ~275–285ms *over* the `timeoutMs: 15_000` configured two lines above the assertion. The pattern (always just past the exact configured timeout, not randomly distributed) suggests the "unknown model" fast-fail path is not triggering on GitHub Actions' network, and the process is instead being killed by its own `timeoutMs` — which structurally cannot finish before the timeout it races against. Not exercised by TKT-304's local baseline (that baseline ran `packages/core test` + `packages/opencode test:httpapi` + `packages/app test` specifically, not `packages/opencode`'s own broader suite that `bun turbo test` pulls in). | feedback #136 (internal tracker) | Resolves when #136 is triaged — either the fast-fail detection is fixed, or the test's timing assumption is loosened for CI network conditions. |
+
+## The milestone-1 required gate
+
+The **documented milestone-1 merge gate** is:
+
+- `typecheck` check **green** (GitHub-hosted, `bun typecheck` — schema/core/protocol/server/app)
+- `packages/core` suite **green** (`bun test --cwd packages/core`)
+- `packages/app` suite **green** (`bun run --cwd packages/app test` — unit and browser)
+- the **full** `packages/opencode` suite **green** (`bun test --cwd packages/opencode`), with
+  exactly the two known-reds in the table above as named exceptions and nothing else
+- `packages/opencode test:httpapi` **green**, kept named because CI runs it as a distinct step
+  and because it fails the build on any route with no scenario — a property the broader suite
+  does not have
+
+On the CI `unit` jobs specifically:
+
+1. **`unit (linux)`** — reds must be exactly the documented `run-process` timeout, and nothing else.
+2. **`unit (windows)`** — a named exception **in full**, until mode A above is characterised. It is
+   not a signal either way today.
+3. 🛑 **Any Windows failure is compared against a dev-baseline run before being attributed to a
+   PR.** One API call stands between a real regression and a shrug:
+   `gh api "repos/Draugur-AI/opencode/commits/<dev-sha>/check-runs"`, then read the failing test
+   *names* out of the job log and diff them against the PR's. This clause exists because a merge
+   condition of "windows reds exactly the documented ones" was briefly in force and **`dev` itself
+   could not meet it** — a condition the mainline fails is not a gate, it is a lockout. Writing the
+   comparison down rather than leaving it to whoever happens to be careful is the whole point.
+
+**Nothing in this gate is "advisory".** A check is either in the gate, or it has a named, linked
+exception in the known-red table. That rule replaces an earlier scoping of this gate to TKT-304's
+baseline command list, which was narrower than the code it was gating: the baseline ran
+`test:httpapi` (215 route scenarios) but never `packages/opencode`'s own suite (~3280 tests), and
+**three real regressions shipped into that gap** on [#4](https://github.com/Draugur-AI/opencode/pull/4)
+— a public-wire-type count assertion, and a V1 contract regression where the archive adapter
+discarded the caller's timestamp and answered with a wall-clock instant instead. All three were
+invisible to the gate as written and were caught only because the then-advisory `unit` jobs were
+read anyway. The same narrowness shows up twice more: the `unit (linux)` known-red below, and
+`bun run lint` (1 pre-existing error, ~4859 warnings) which no baseline command covered either.
+
+`check-standards` / `check-compliance` (PR hygiene) are real signal if labeled, but not a quality
+gate.
+
+**Local-environment caveat:** `packages/opencode/test/tool/write.test.ts` "sets file permissions
+when writing sensitive data" asserts `0o644` and fails with `0o664` on a machine whose umask is
+`002` (the shared dev box is one). CI's `ubuntu-latest` runner uses umask `022` and passes it.
+That is the environment, not the code — do not chase it, and do not add it to the known-red table.
+
+Not yet part of the functional gate at all (documented above, not silently broken): `e2e
+(linux/windows)`, `nix-eval`, `/review`. There is no branch protection configured, so none of
+this is mechanically enforced yet — reviewers/mergers should read the check-runs list by hand
+until that's set up.

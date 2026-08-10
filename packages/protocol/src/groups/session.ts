@@ -13,9 +13,12 @@ import {
   InvalidRequestError,
   MessageNotFoundError,
   ServiceUnavailableError,
+  SessionLifecycleConflictError,
+  SessionLifecycleTransitionError,
   SessionNotFoundError,
   UnknownError,
 } from "../errors"
+import { SessionLifecycle } from "@opencode-ai/schema/session-lifecycle"
 import { Agent } from "@opencode-ai/schema/agent"
 import { Model } from "@opencode-ai/schema/model"
 import { Location } from "@opencode-ai/schema/location"
@@ -31,6 +34,10 @@ const SessionsQueryFields = {
     description: "Session order for the first page. Use desc for newest first or asc for oldest first.",
   }),
   search: Schema.optional(Schema.String),
+  lifecycle: Schema.optional(Session.LifecycleFilter).annotate({
+    description:
+      "Which lifecycle view to list. Defaults to active, so archived and trashed sessions are absent unless asked for.",
+  }),
 }
 
 const SessionsDirectoryQuery = Schema.Struct({
@@ -103,8 +110,39 @@ export const SessionsQuery = Schema.Struct({
   cursor: SessionsQueryCursor.pipe(Schema.optional),
 }).annotate({ identifier: "SessionsQuery" })
 
-export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLocationMiddleware: Context.Key<I, S>) =>
-  HttpApiGroup.make("server.session")
+/** What every reversible lifecycle mutation accepts. Purge takes a confirmation instead. */
+const LifecyclePayload = Schema.Struct({
+  requestID: SessionLifecycle.RequestID.annotate({
+    description:
+      "Idempotency key. Repeating it after a dropped response resolves to the first outcome rather than applying the mutation twice.",
+  }),
+  expectedLifecycleRevision: NonNegativeInt.pipe(Schema.optional).annotate({
+    description:
+      "The lifecycleRevision the caller believes it is mutating. A stale value is rejected with 409 rather than overwriting a newer state.",
+  }),
+}).annotate({ identifier: "SessionLifecycleMutation" })
+
+export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLocationMiddleware: Context.Key<I, S>) => {
+  /**
+   * One endpoint shape per lifecycle verb. Explicit verbs rather than a general
+   * `update({ time: { archived } })` route: each carries different transition, confirmation and
+   * cleanup semantics, and a single mutable field cannot express any of them.
+   */
+  const lifecycleEndpoint = <const Name extends string>(
+    name: Name,
+    segment: string,
+    docs: { readonly summary: string; readonly description: string },
+  ) =>
+    HttpApiEndpoint.post(name, `/api/session/:sessionID/${segment}` as const, {
+      params: { sessionID: Session.ID },
+      payload: LifecyclePayload,
+      success: Schema.Struct({ data: Session.Info }),
+      error: [SessionLifecycleConflictError, SessionLifecycleTransitionError, SessionNotFoundError],
+    })
+      .middleware(sessionLocationMiddleware)
+      .annotateMerge(OpenApi.annotations({ identifier: `v2.${name}`, ...docs }))
+
+  return HttpApiGroup.make("server.session")
     .add(
       HttpApiEndpoint.get("session.list", "/api/session", {
         query: SessionsQuery,
@@ -166,6 +204,66 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
             identifier: "v2.session.get",
             summary: "Get session",
             description: "Retrieve a session by ID.",
+          }),
+        ),
+    )
+    .add(
+      HttpApiEndpoint.get("session.tombstone", "/api/session/:sessionID/tombstone", {
+        params: { sessionID: Session.ID },
+        success: Schema.Struct({ data: Session.Tombstone }),
+        error: SessionNotFoundError,
+      }).annotateMerge(
+        OpenApi.annotations({
+          identifier: "v2.session.tombstone",
+          summary: "Get session tombstone",
+          description:
+            "Retrieve what a permanently deleted session left behind, while it is within its retention window.",
+        }),
+      ),
+    )
+    .add(
+      lifecycleEndpoint("session.archive", "archive", {
+        summary: "Archive session",
+        description: "Hide a completed session from active views. Reversible with restore.",
+      }),
+    )
+    .add(
+      lifecycleEndpoint("session.restore", "restore", {
+        summary: "Restore session",
+        description: "Return an archived session to active views.",
+      }),
+    )
+    .add(
+      lifecycleEndpoint("session.trash", "trash", {
+        summary: "Move session to trash",
+        description: "Mark a session for deletion after a grace period. Reversible during that period.",
+      }),
+    )
+    .add(
+      lifecycleEndpoint("session.restoreFromTrash", "restore-from-trash", {
+        summary: "Restore session from trash",
+        description: "Take a session out of trash, returning it to whichever state it was in when it went in.",
+      }),
+    )
+    .add(
+      HttpApiEndpoint.post("session.purge", "/api/session/:sessionID/purge", {
+        params: { sessionID: Session.ID },
+        payload: Schema.Struct({
+          requestID: SessionLifecycle.RequestID,
+          confirmation: Session.ID.annotate({
+            description: "The session ID, echoed back. Permanent deletion is not reachable by a stray boolean.",
+          }),
+        }),
+        success: Schema.Struct({ data: Session.Tombstone }),
+        error: [InvalidRequestError, SessionLifecycleTransitionError, SessionNotFoundError],
+      })
+        .middleware(sessionLocationMiddleware)
+        .annotateMerge(
+          OpenApi.annotations({
+            identifier: "v2.session.purge",
+            summary: "Permanently delete session",
+            description:
+              "Delete a trashed session, its transcript, its events, and everything it owns. Not reversible. Retrying an already-purged session returns the same tombstone.",
           }),
         ),
     )
@@ -377,3 +475,4 @@ export const makeSessionGroup = <I extends HttpApiMiddleware.AnyId, S>(sessionLo
         description: "Experimental session routes.",
       }),
     )
+}
