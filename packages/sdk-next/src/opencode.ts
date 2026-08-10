@@ -2,6 +2,7 @@ import { OpenCode } from "@opencode-ai/client/effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { Database } from "@opencode-ai/core/database/database"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionGoal } from "@opencode-ai/core/session/goal"
@@ -23,6 +24,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
         ProjectV2.node,
         SessionGoal.node,
         SessionLedger.node,
+        Database.node,
       ]),
     ),
     memoMap,
@@ -34,6 +36,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
   const events = Context.get(context, EventV2.Service)
   const goal = Context.get(context, SessionGoal.Service)
   const ledger = Context.get(context, SessionLedger.Service)
+  const database = Context.get(context, Database.Service)
   const web = yield* Effect.acquireRelease(
     Effect.sync(() =>
       HttpRouter.toWebHandler(
@@ -45,6 +48,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
               Layer.succeed(EventV2.Service, events),
               Layer.succeed(SessionGoal.Service, goal),
               Layer.succeed(SessionLedger.Service, ledger),
+              Layer.succeed(Database.Service, database),
             ),
           ),
           Layer.provide(HttpServer.layerServices),
