@@ -98,7 +98,7 @@ been reconciled, not just what is currently outstanding.
   confirmed, with evidence, as of TKT-305). Say so explicitly in every PR and report — local
   per-package tests are the gate, and an absence of review comments is not evidence of a clean diff.
 
-## Adding a new global `.node`? Check every assembly site, not just one.
+## Adding a new global `.node`? Check every assembly site that actually serves it.
 
 A `makeGlobalNode`-tagged service (`ProjectV2.node`, `SessionGoal.node`, `EventV2.node`, …) is a
 process-wide singleton, and `AppNodeBuilder`/`AppNodeBuilderV1`'s transitive auto-discovery of a
@@ -108,8 +108,31 @@ type-level resolution in two unrelated packages, and *not* explicitly listing `S
 `SessionLedger.node` in a full-app composition site left those routes returning `500: Service not
 found` at runtime, silently, because nothing forced the omission to surface until something else
 exercised that exact path. **Do not rely on auto-discovery for a new global node. List it
-explicitly at every full-app assembly site below**, the same way `ProjectV2.node` now appears in
-all five.
+explicitly at every full-app assembly site whose runtime can actually reach it.**
+
+**"Every site" is not "every site, uniformly."** The five sites exist because different runtimes
+serve different features — that is the reason there are five instead of one. Adding a node
+everywhere by default defeats the split: it was tried once (an earlier version of this section
+said exactly that), and it is wrong, because it makes "listed" stop meaning "reachable" and turns
+every future audit back into a guess. Before adding a node to a site, trace whether that site's
+own consumers can actually reach the service — grep for direct imports of the service/its data
+type from code the runtime executes (not just from HTTP-only handlers), the way TKT-315 confirmed
+`ProjectV2` for the CLI/TUI runtime via `project/bootstrap.ts` (imported by
+`app-node-builder-v1.ts` itself — always-on, not conditional) and confirmed `SessionGoal`/
+`SessionLedger` via the built-in `goal_get`/`goal_update_progress`/`ledger_add` tools every
+session gets regardless of runtime.
+
+- **If reachable: list it, with a one-line comment naming what reaches it** (a route, a tool, a
+  bootstrap dependency) — so the entry is a traced fact, not a copy-paste.
+- **If not reachable: leave it out, with a one-line comment saying so** (`// absent by decision:
+  this runtime does not serve <feature> — see TKT-nnn`). Absence is a decision, and it needs the
+  same trail a presence does, or the next person can't tell "checked, doesn't apply" from
+  "forgot."
+
+Every global node adds real per-process construction cost at the site that builds it, even when
+it never does I/O — see the eager-construction note in the milestone-1 gate section below
+(feedback #150). Uniform addition does not just blur the checklist, it taxes every runtime for
+every feature whether that runtime uses it or not.
 
 **The five full-app composition sites** (each lists most/all global nodes; found by `grep -rln
 "AppNodeBuilder\.build\|AppNodeBuilderV1\.build\|LayerNode\.group(" packages/ --include="*.ts"
@@ -120,7 +143,13 @@ own node count made clear they were "assemble everything" sites rather than one 
    The V1 `HttpApiApp`; this is what `test:httpapi`'s exerciser actually runs against.
 2. `packages/opencode/src/effect/app-runtime.ts` — `AppLayer` (~52 nodes). Powers the interactive
    CLI/TUI (`opencode` run directly, not through the HTTP server) — a gap here is invisible to any
-   HTTP-shaped test.
+   HTTP-shaped test. `ProjectV2.node`/`SessionGoal.node`/`SessionLedger.node` are listed here,
+   traced reachable: `ProjectV2` through the V1 `project/project.ts` adapter, imported by
+   `project/bootstrap.ts`, which `app-node-builder-v1.ts` (this site's own builder) depends on
+   unconditionally; `SessionGoal`/`SessionLedger` through the built-in `goal_get`/
+   `goal_update_progress`/`ledger_add` tools, part of the standard toolset every session gets
+   regardless of runtime. Listing them here has a real, measured cost — see feedback #150 in the
+   milestone-1 gate section below.
 3. `packages/server/src/routes.ts` — `applicationServices` (~15 nodes). The current v2
    `createRoutes`/`createEmbeddedRoutes`, used by `packages/cli` and `packages/sdk-next`.
 4. `packages/cli/src/commands/handlers/serve.ts` — the CLI daemon's own explicit
@@ -276,6 +305,7 @@ your own regression** — check whether it matches one of these first.
 | `unit (windows)` — **mode B, intermittent** | `bun install --linker hoisted` fails applying the `@ai-sdk/openai-compatible@2.0.41` patch | `error: renaming changes to cache dir: ENOTEMPTY: ... Directory not empty (NtSetInformationFile())` — matches the exact race described in [`oven-sh/bun#28147`](https://github.com/oven-sh/bun/issues/28147), which the workflow's own `bun install --linker hoisted` comment already references. Identical failure on 2/2 independent reruns at the time it was recorded. `ubuntu-latest` is unaffected. Listed alongside mode A rather than replaced by it: this mode is real and was observed, it simply is not the only way Windows goes red, and in later runs install succeeded and the job reached the tests instead. | feedback #136 (internal tracker) | Resolves when bun's patch-apply race is fixed upstream, or worked around (e.g. serialize patch application on Windows, or pin an unaffected bun patch-apply path). |
 | `unit (linux)` | `packages/opencode/test/cli/run/run-process.test.ts:79` — "exits nonzero promptly when the model is unknown (regression for #27371)" | `expect(result.durationMs).toBeLessThan(15_000)` received `15285ms` then `15275ms` on two independent reruns — consistently ~275–285ms *over* the `timeoutMs: 15_000` configured two lines above the assertion. The pattern (always just past the exact configured timeout, not randomly distributed) suggests the "unknown model" fast-fail path is not triggering on GitHub Actions' network, and the process is instead being killed by its own `timeoutMs` — which structurally cannot finish before the timeout it races against. Not exercised by TKT-304's local baseline (that baseline ran `packages/core test` + `packages/opencode test:httpapi` + `packages/app test` specifically, not `packages/opencode`'s own broader suite that `bun turbo test` pulls in). | feedback #136 (internal tracker) | Resolves when #136 is triaged — either the fast-fail detection is fixed, or the test's timing assumption is loosened for CI network conditions. |
 | `packages/opencode test:httpapi` — **`mode=effect` only** | `GET /api/session/{sessionID}/goal` — `v2.session.goal.get` — "a session with no goal set should report no data" | Was masked by a crash: `session.goal`/`session.ledger` routes 500'd with "Service not found" on every mode, because the app's `LayerNode.group` in `packages/opencode/src/server/routes/instance/httpapi/server.ts` never listed `SessionGoal.node`/`SessionLedger.node` (a gap in [#7](https://github.com/Draugur-AI/opencode/pull/7), fixed standalone once found while working TKT-315). Fixing that crash let this route reach its own assertion, which fails only in `mode=effect` — `mode=coverage` and `mode=auth` both pass. Confirmed deterministic across reruns. | feedback #145 (internal tracker) | Resolves when #145 is triaged against TKT-317's own code — not a node-wiring issue, the route runs now, its behavior is wrong. |
+| `unit (linux)` — **run-process under load, MITIGATED not currently red** | Up to 7 additional tests in `packages/opencode/test/cli/run/run-process.test.ts`, all clustered 700-800ms over the harness's 30\_000ms default `timeoutMs` (e.g. 30740-30800ms) | TKT-315 added `ProjectV2.node`/`SessionGoal.node`/`SessionLedger.node` to `app-runtime.ts`'s `AppLayer` (see "Adding a new global `.node`?" above -- all three traced reachable, not removable). None of the three do eager I/O at layer construction, but building 3 more global nodes has nonzero cost, and `run-process.test.ts` spawns 13 real CLI subprocesses concurrently (`cliIt.concurrent`) -- isolated single-test timing showed no difference between branches (8 runs each, fully overlapping), but 6x full-file runs did: dev-baseline [11.23s-11.69s] vs the branch with these 3 nodes [11.73s-11.91s], non-overlapping. Invisible locally (this machine has headroom the CI runners don't); on CI this plausibly tips several already-borderline subprocess spawns over their timeout at once. A CI rerun of the pre-fix commit came back fully clean (0 fail) on one attempt, so the failure is a mix of this real overhead and environmental variance, not 100% deterministic either way. Interim mitigation landed in the same PR: `timeoutMs` raised from 30\_000 to 45\_000 (and the outer test timeout to match) on the 7 affected tests only, each commented and linked here -- the real fix is lazy node construction, not a rider on a feature PR. | feedback #150 (internal tracker) | Resolves when #150 is triaged and global nodes construct lazily on first use instead of eagerly at `AppLayer` boot; the `timeoutMs` widen reverts once that lands. |
 
 ## The milestone-1 required gate
 
