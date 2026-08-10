@@ -223,7 +223,8 @@ your own regression** — check whether it matches one of these first.
 
 | CI job | Failing test | Evidence | Feedback | Resolution condition |
 | --- | --- | --- | --- | --- |
-| `unit (windows)` | `bun install --linker hoisted` fails applying the `@ai-sdk/openai-compatible@2.0.41` patch | `error: renaming changes to cache dir: ENOTEMPTY: ... Directory not empty (NtSetInformationFile())` — matches the exact race described in [`oven-sh/bun#28147`](https://github.com/oven-sh/bun/issues/28147), which the workflow's own `bun install --linker hoisted` comment already references. Identical failure on 2/2 independent reruns. `ubuntu-latest` is unaffected. | feedback #136 (internal tracker) | Resolves when bun's patch-apply race is fixed upstream, or worked around (e.g. serialize patch application on Windows, or pin an unaffected bun patch-apply path). |
+| `unit (windows)` — **mode A, the common one** | A *varying subset of unrelated tests*, each failing at a uniform ~5000–5500ms | Not one test and not one cause. Three runs, failure sets by name: `dev@bd772dd3` (zero fork changes, the control) → `Ripgrep` ×4; `2e8d972` → `i18n parity` ×4, `Git worktrees`, `Git trees`, `LocationServiceMap`, `MoveSession` ×3; and Ripgrep *passed* in that third run. Suites that cannot share a cause (i18n string parity and git worktree creation do not interact) failing at an identical ~5s ceiling is the signature of a contended or underpowered runner hitting a per-test timeout — suspected to be `windows-latest` being smaller than the Blacksmith 4vcpu size upstream tunes these timeouts for. **The control run is the load-bearing evidence: `dev` fails this way with no fork code at all.** | feedback (internal tracker) — characterisation is future work, not scoped to any milestone-1 slice | Resolves when the flake is characterised: either the runner is sized up, or the per-test timeout is raised for Windows, or the affected suites are made timeout-independent. |
+| `unit (windows)` — **mode B, intermittent** | `bun install --linker hoisted` fails applying the `@ai-sdk/openai-compatible@2.0.41` patch | `error: renaming changes to cache dir: ENOTEMPTY: ... Directory not empty (NtSetInformationFile())` — matches the exact race described in [`oven-sh/bun#28147`](https://github.com/oven-sh/bun/issues/28147), which the workflow's own `bun install --linker hoisted` comment already references. Identical failure on 2/2 independent reruns at the time it was recorded. `ubuntu-latest` is unaffected. Listed alongside mode A rather than replaced by it: this mode is real and was observed, it simply is not the only way Windows goes red, and in later runs install succeeded and the job reached the tests instead. | feedback #136 (internal tracker) | Resolves when bun's patch-apply race is fixed upstream, or worked around (e.g. serialize patch application on Windows, or pin an unaffected bun patch-apply path). |
 | `unit (linux)` | `packages/opencode/test/cli/run/run-process.test.ts:79` — "exits nonzero promptly when the model is unknown (regression for #27371)" | `expect(result.durationMs).toBeLessThan(15_000)` received `15285ms` then `15275ms` on two independent reruns — consistently ~275–285ms *over* the `timeoutMs: 15_000` configured two lines above the assertion. The pattern (always just past the exact configured timeout, not randomly distributed) suggests the "unknown model" fast-fail path is not triggering on GitHub Actions' network, and the process is instead being killed by its own `timeoutMs` — which structurally cannot finish before the timeout it races against. Not exercised by TKT-304's local baseline (that baseline ran `packages/core test` + `packages/opencode test:httpapi` + `packages/app test` specifically, not `packages/opencode`'s own broader suite that `bun turbo test` pulls in). | feedback #136 (internal tracker) | Resolves when #136 is triaged — either the fast-fail detection is fixed, or the test's timing assumption is loosened for CI network conditions. |
 
 ## The milestone-1 required gate
@@ -238,6 +239,19 @@ The **documented milestone-1 merge gate** is:
 - `packages/opencode test:httpapi` **green**, kept named because CI runs it as a distinct step
   and because it fails the build on any route with no scenario — a property the broader suite
   does not have
+
+On the CI `unit` jobs specifically:
+
+1. **`unit (linux)`** — reds must be exactly the documented `run-process` timeout, and nothing else.
+2. **`unit (windows)`** — a named exception **in full**, until mode A above is characterised. It is
+   not a signal either way today.
+3. 🛑 **Any Windows failure is compared against a dev-baseline run before being attributed to a
+   PR.** One API call stands between a real regression and a shrug:
+   `gh api "repos/Draugur-AI/opencode/commits/<dev-sha>/check-runs"`, then read the failing test
+   *names* out of the job log and diff them against the PR's. This clause exists because a merge
+   condition of "windows reds exactly the documented ones" was briefly in force and **`dev` itself
+   could not meet it** — a condition the mainline fails is not a gate, it is a lockout. Writing the
+   comparison down rather than leaving it to whoever happens to be careful is the whole point.
 
 **Nothing in this gate is "advisory".** A check is either in the gate, or it has a named, linked
 exception in the known-red table. That rule replaces an earlier scoping of this gate to TKT-304's
