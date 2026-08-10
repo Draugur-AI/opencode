@@ -1,0 +1,16 @@
+{
+  "_fixture": "GET /api/session/:sessionID success response — packages/protocol/src/groups/session.ts session.get, Schema.Struct({ data: Session.Info }). Session.Info from packages/schema/src/session.ts.",
+  "data": {
+    "id": "ses_active0000000000000000",
+    "projectID": "git-remote:github.com/draugur-ai/opencode",
+    "agent": "build",
+    "model": { "id": "claude-sonnet-5", "providerID": "anthropic" },
+    "cost": 0.002,
+    "tokens": { "input": 120, "output": 40, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+    "time": { "created": "2025-01-01T00:00:00.000Z", "updated": "2025-01-01T00:01:00.000Z" },
+    "title": "Fix the login bug",
+    "location": {
+      "directory": "/home/user/opencode"
+    }
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "_fixture": "GET /api/session success response — packages/protocol/src/groups/session.ts session.list, Schema.Struct({ data: Session.Info[], cursor: { previous?, next? } }). cursor values are opaque base64url (SessionsCursor.make); this fixture uses a placeholder string since the exact bytes depend on the encoder's field order, not something to hand-author.",
+  "data": [
+    {
+      "id": "ses_active0000000000000000",
+      "projectID": "git-remote:github.com/draugur-ai/opencode",
+      "agent": "build",
+      "model": { "id": "claude-sonnet-5", "providerID": "anthropic" },
+      "cost": 0.002,
+      "tokens": { "input": 120, "output": 40, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+      "time": { "created": "2025-01-01T00:00:00.000Z", "updated": "2025-01-01T00:01:00.000Z" },
+      "title": "Fix the login bug",
+      "location": { "directory": "/home/user/opencode" }
+    },
+    {
+      "id": "ses_archived000000000000",
+      "projectID": "git-remote:github.com/draugur-ai/opencode",
+      "cost": 0,
+      "tokens": { "input": 0, "output": 0, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+      "time": {
+        "created": "2025-01-01T00:00:00.000Z",
+        "updated": "2025-01-01T00:02:00.000Z",
+        "archived": "2025-01-01T00:03:20.000Z"
+      },
+      "title": "Old refactor spike",
+      "location": { "directory": "/home/user/opencode" }
+    }
+  ],
+  "cursor": {}
+}

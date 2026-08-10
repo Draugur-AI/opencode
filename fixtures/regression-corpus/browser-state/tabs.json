@@ -1,0 +1,17 @@
+{
+  "_fixture": "Persisted `tabs` localStorage value (packages/app/src/context/tabs.tsx: persisted(Persist.window(\"tabs\"), createStore<Tab[]>([]))). `tabs` below is an exact Tab[] — no extra keys — matching the real SessionTab shape { type, server, sessionId }. ServerConnection.Key (the `server` field) is the http server's URL for an http connection (server.tsx ServerConnection.key()). Pair with server-snapshot.json: reconciling each tab against that snapshot is what produces the five outcome categories the validation post asks for. The persisted Tab itself carries no status field — status is computed at reconcile time — so the mapping from sessionId to intended category lives in `legend`, not inside the tab objects.",
+  "legend": {
+    "ses_active0000000000000000": "valid — session exists and is active on a reachable server",
+    "ses_archived000000000000": "archived — session exists but its lifecycle is archived",
+    "ses_purged0000000000000000": "stale — session existed but was permanently purged; server holds a tombstone, not a live row",
+    "ses_never_existed00000000": "missing — sessionId the server has never heard of",
+    "ses_on_unreachable_server0": "unavailable-server — the server this tab points at is not reachable at all"
+  },
+  "tabs": [
+    { "type": "session", "server": "http://localhost:4096", "sessionId": "ses_active0000000000000000" },
+    { "type": "session", "server": "http://localhost:4096", "sessionId": "ses_archived000000000000" },
+    { "type": "session", "server": "http://localhost:4096", "sessionId": "ses_purged0000000000000000" },
+    { "type": "session", "server": "http://localhost:4096", "sessionId": "ses_never_existed00000000" },
+    { "type": "session", "server": "http://unreachable-host:4096", "sessionId": "ses_on_unreachable_server0" }
+  ]
+}
