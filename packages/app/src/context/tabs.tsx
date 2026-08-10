@@ -11,6 +11,7 @@ import { SessionTabsRemovedDetail } from "@/components/titlebar-session-events"
 import { sessionHref } from "@/utils/session-route"
 import { createTabMemory } from "./tab-memory"
 import { nextTabAfterClose, pushClosedTab, removeClosedTabs, takeClosedTab, type ClosedTab } from "./closed-tabs"
+import * as SessionEntities from "./session-entities"
 import { createDraftPromptSession, type PromptModel } from "./prompt-state"
 import { migrateTabs } from "./tab-migration"
 
@@ -344,6 +345,79 @@ export const { use: useTabs, provider: TabsProvider } = createSimpleContext({
           )
           if (recent.key && removed.includes(recent.key)) setRecentKey(undefined)
         })
+        for (const key of removed) memory.remove(key)
+        for (const key of removed) removeInfo(key)
+      },
+      /**
+       * Bring browser-local tabs back in line with authoritative session state, after bootstrap
+       * and after every reconnect.
+       *
+       * Tabs stay presentation state — this never asks the server anything and never mutates a
+       * session. It only drops references the entity store says cannot be open, which is what
+       * replaces the `opencode:session-tabs-removed` custom event: a component no longer tells the
+       * tab strip what to close because its own HTTP call succeeded.
+       *
+       * The whole batch is one store write and at most ONE navigation. Removing tabs one at a
+       * time, each deciding independently where to go next, is why closing several sessions used
+       * to bounce the user through intermediate routes.
+       */
+      reconcile(entities: SessionEntities.EntityState) {
+        const doomed = new Map<string, Set<string>>()
+        for (const tab of store) {
+          if (tab.type !== "session") continue
+          const entity = SessionEntities.get(entities, tab.server, tab.sessionId)
+          // `unavailable` deliberately survives: an unreachable server says nothing about whether
+          // the session still exists, and closing tabs because a laptop slept is the bug here.
+          if (SessionEntities.tabSurvives(entity)) continue
+          const forServer = doomed.get(tab.server) ?? new Set<string>()
+          forServer.add(tab.sessionId)
+          doomed.set(tab.server, forServer)
+        }
+
+        // A purged session must also leave the recently-closed stack, or "reopen closed tab"
+        // resurrects a tombstone.
+        updateClosed((stack) =>
+          stack.filter((entry) => {
+            if (entry.tab.type !== "session") return true
+            const entity = SessionEntities.get(entities, entry.tab.server, entry.tab.sessionId)
+            return !SessionEntities.forgetClosed(entity)
+          }),
+        )
+
+        if (doomed.size === 0) return
+
+        const removed = store
+          .filter((tab) => tab.type === "session" && doomed.get(tab.server)?.has(tab.sessionId))
+          .map(tabKey)
+        const currentKey = recent.key
+        const losingCurrent = currentKey !== undefined && removed.includes(currentKey)
+
+        void startTransition(() => {
+          let fallback: Tab | undefined
+          setStore(
+            produce((tabs) => {
+              const currentIndex = currentKey ? tabs.findIndex((tab) => tabKey(tab) === currentKey) : -1
+              for (let i = tabs.length - 1; i >= 0; i--) {
+                const tab = tabs[i]
+                if (!tab || tab.type !== "session") continue
+                if (!doomed.get(tab.server)?.has(tab.sessionId)) continue
+                tabs.splice(i, 1)
+              }
+              if (!losingCurrent) return
+              // Prefer the nearest surviving tab after the one that went away, then before it.
+              fallback =
+                tabs.slice(Math.max(currentIndex, 0)).find((tab) => !!tab) ??
+                tabs.slice(0, Math.max(currentIndex, 0)).findLast((tab) => !!tab)
+            }),
+          )
+          if (losingCurrent) {
+            setRecentKey(undefined)
+            // Exactly one navigation for the whole batch.
+            if (fallback) navigateTab(fallback)
+            else navigate("/")
+          }
+        })
+
         for (const key of removed) memory.remove(key)
         for (const key of removed) removeInfo(key)
       },

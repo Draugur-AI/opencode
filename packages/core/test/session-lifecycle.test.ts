@@ -14,8 +14,8 @@ import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionLifecycle } from "@opencode-ai/core/session/lifecycle"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionLifecycleRequestTable, SessionTable } from "@opencode-ai/core/session/sql"
-import * as Delivery from "./lib/delivery"
-import * as Model from "./lib/lifecycle-model"
+import * as Delivery from "@opencode-ai/test-rig/delivery"
+import * as Model from "@opencode-ai/test-rig/lifecycle-model"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, EventV2.node, SessionProjector.node])))
