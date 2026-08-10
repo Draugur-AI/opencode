@@ -61,6 +61,10 @@ import type {
   ServerLedgerAddOutput,
   ServerLedgerSupersedeInput,
   ServerLedgerSupersedeOutput,
+  ServerHistorySearchInput,
+  ServerHistorySearchOutput,
+  ServerHistoryGetInput,
+  ServerHistoryGetOutput,
   MessagesListInput,
   MessagesListOutput,
   ModelsListInput,
@@ -678,6 +682,32 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "server.history": {
+      search: (input: ServerHistorySearchInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerHistorySearchOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/history/search`,
+            query: { query: input["query"], limit: input["limit"] },
+            successStatus: 200,
+            declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      get: (input: ServerHistoryGetInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerHistoryGetOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/history/${encodeURIComponent(input.messageID)}`,
+            query: { before: input["before"], after: input["after"] },
+            successStatus: 200,
+            declaredStatuses: [404, 500, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
     },
     messages: {
       list: (input: MessagesListInput, requestOptions?: RequestOptions) =>

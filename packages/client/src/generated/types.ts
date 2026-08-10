@@ -985,6 +985,14 @@ export type SessionsContextOutput = {
         readonly reason: "auto" | "manual"
         readonly summary: string
         readonly recent: string
+        readonly tokensBefore?: number
+        readonly retainedTailMessages?: number
+        readonly retainedTailTokens?: number
+        readonly summaryBytes?: number
+        readonly summaryTokens?: number
+        readonly durationMs?: number
+        readonly sourceSeqStart?: number
+        readonly sourceSeqEnd?: number
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly time: { readonly created: number }
@@ -1492,6 +1500,29 @@ export type SessionsHistoryOutput = {
           readonly reason: "auto" | "manual"
           readonly text: string
           readonly recent: string
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.compaction.ended"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly messageID: string
+          readonly reason: "auto" | "manual"
+          readonly text: string
+          readonly recent: string
+          readonly tokensBefore: number
+          readonly retainedTailMessages: number
+          readonly retainedTailTokens: number
+          readonly summaryBytes: number
+          readonly summaryTokens: number
+          readonly durationMs: number
+          readonly sourceSeqStart: number
+          readonly sourceSeqEnd: number
         }
       }
     | {
@@ -2041,6 +2072,29 @@ export type SessionsEventsOutput =
   | {
       readonly id: string
       readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.compaction.ended"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly messageID: string
+        readonly reason: "auto" | "manual"
+        readonly text: string
+        readonly recent: string
+        readonly tokensBefore: number
+        readonly retainedTailMessages: number
+        readonly retainedTailTokens: number
+        readonly summaryBytes: number
+        readonly summaryTokens: number
+        readonly durationMs: number
+        readonly sourceSeqStart: number
+        readonly sourceSeqEnd: number
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.revert.staged"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
       readonly location?: { readonly directory: string; readonly workspaceID?: string }
@@ -2235,6 +2289,14 @@ export type SessionsMessageOutput = {
         readonly reason: "auto" | "manual"
         readonly summary: string
         readonly recent: string
+        readonly tokensBefore?: number
+        readonly retainedTailMessages?: number
+        readonly retainedTailTokens?: number
+        readonly summaryBytes?: number
+        readonly summaryTokens?: number
+        readonly durationMs?: number
+        readonly sourceSeqStart?: number
+        readonly sourceSeqEnd?: number
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly time: { readonly created: number }
@@ -2455,6 +2517,196 @@ export type ServerLedgerSupersedeInput = {
 
 export type ServerLedgerSupersedeOutput = void
 
+export type ServerHistorySearchInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly query: { readonly query: string; readonly limit?: number | undefined }["query"]
+  readonly limit?: { readonly query: string; readonly limit?: number | undefined }["limit"]
+}
+
+export type ServerHistorySearchOutput = {
+  readonly data: {
+    readonly results: ReadonlyArray<{
+      readonly messageID: string
+      readonly seq: number
+      readonly role: string
+      readonly createdAt: number
+      readonly snippet: string
+    }>
+    readonly truncated: boolean
+  }
+}["data"]
+
+export type ServerHistoryGetInput = {
+  readonly sessionID: { readonly sessionID: string; readonly messageID: string }["sessionID"]
+  readonly messageID: { readonly sessionID: string; readonly messageID: string }["messageID"]
+  readonly before?: { readonly before?: number | undefined; readonly after?: number | undefined }["before"]
+  readonly after?: { readonly before?: number | undefined; readonly after?: number | undefined }["after"]
+}
+
+export type ServerHistoryGetOutput = {
+  readonly data: ReadonlyArray<{
+    readonly seq: number
+    readonly message:
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "agent-switched"
+          readonly agent: string
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "model-switched"
+          readonly model: { readonly id: string; readonly providerID: string; readonly variant?: string }
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly text: string
+          readonly files?: ReadonlyArray<{
+            readonly uri: string
+            readonly mime: string
+            readonly name?: string
+            readonly description?: string
+            readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
+          readonly agents?: ReadonlyArray<{
+            readonly name: string
+            readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
+          readonly type: "user"
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly sessionID: string
+          readonly text: string
+          readonly type: "synthetic"
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "system"
+          readonly text: string
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "shell"
+          readonly callID: string
+          readonly command: string
+          readonly output: string
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "assistant"
+          readonly agent: string
+          readonly model: { readonly id: string; readonly providerID: string; readonly variant?: string }
+          readonly content: ReadonlyArray<
+            | { readonly type: "text"; readonly id: string; readonly text: string }
+            | {
+                readonly type: "reasoning"
+                readonly id: string
+                readonly text: string
+                readonly providerMetadata?: { readonly [x: string]: { readonly [x: string]: JsonValue } }
+                readonly time?: { readonly created: number; readonly completed?: number }
+              }
+            | {
+                readonly type: "tool"
+                readonly id: string
+                readonly name: string
+                readonly provider?: {
+                  readonly executed: boolean
+                  readonly metadata?: { readonly [x: string]: { readonly [x: string]: JsonValue } }
+                  readonly resultMetadata?: { readonly [x: string]: { readonly [x: string]: JsonValue } }
+                }
+                readonly state:
+                  | { readonly status: "pending"; readonly input: string }
+                  | {
+                      readonly status: "running"
+                      readonly input: { readonly [x: string]: JsonValue }
+                      readonly structured: { readonly [x: string]: JsonValue }
+                      readonly content: ReadonlyArray<
+                        | { readonly type: "text"; readonly text: string }
+                        | { readonly type: "file"; readonly uri: string; readonly mime: string; readonly name?: string }
+                      >
+                    }
+                  | {
+                      readonly status: "completed"
+                      readonly input: { readonly [x: string]: JsonValue }
+                      readonly attachments?: ReadonlyArray<{
+                        readonly uri: string
+                        readonly mime: string
+                        readonly name?: string
+                        readonly description?: string
+                        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+                      }>
+                      readonly content: ReadonlyArray<
+                        | { readonly type: "text"; readonly text: string }
+                        | { readonly type: "file"; readonly uri: string; readonly mime: string; readonly name?: string }
+                      >
+                      readonly outputPaths?: ReadonlyArray<string>
+                      readonly structured: { readonly [x: string]: JsonValue }
+                      readonly result?: JsonValue
+                    }
+                  | {
+                      readonly status: "error"
+                      readonly input: { readonly [x: string]: JsonValue }
+                      readonly content: ReadonlyArray<
+                        | { readonly type: "text"; readonly text: string }
+                        | { readonly type: "file"; readonly uri: string; readonly mime: string; readonly name?: string }
+                      >
+                      readonly structured: { readonly [x: string]: JsonValue }
+                      readonly error: { readonly type: "unknown"; readonly message: string }
+                      readonly result?: JsonValue
+                    }
+                readonly time: {
+                  readonly created: number
+                  readonly ran?: number
+                  readonly completed?: number
+                  readonly pruned?: number
+                }
+              }
+          >
+          readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
+          readonly finish?: string
+          readonly cost?: number
+          readonly tokens?: {
+            readonly input: number
+            readonly output: number
+            readonly reasoning: number
+            readonly cache: { readonly read: number; readonly write: number }
+          }
+          readonly error?: { readonly type: "unknown"; readonly message: string }
+        }
+      | {
+          readonly type: "compaction"
+          readonly reason: "auto" | "manual"
+          readonly summary: string
+          readonly recent: string
+          readonly tokensBefore?: number
+          readonly retainedTailMessages?: number
+          readonly retainedTailTokens?: number
+          readonly summaryBytes?: number
+          readonly summaryTokens?: number
+          readonly durationMs?: number
+          readonly sourceSeqStart?: number
+          readonly sourceSeqEnd?: number
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+        }
+  }>
+}["data"]
+
 export type MessagesListInput = {
   readonly sessionID: { readonly sessionID: string }["sessionID"]
   readonly limit?: {
@@ -2621,6 +2873,14 @@ export type MessagesListOutput = {
         readonly reason: "auto" | "manual"
         readonly summary: string
         readonly recent: string
+        readonly tokensBefore?: number
+        readonly retainedTailMessages?: number
+        readonly retainedTailTokens?: number
+        readonly summaryBytes?: number
+        readonly summaryTokens?: number
+        readonly durationMs?: number
+        readonly sourceSeqStart?: number
+        readonly sourceSeqEnd?: number
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly time: { readonly created: number }

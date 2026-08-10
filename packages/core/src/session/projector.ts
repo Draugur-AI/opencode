@@ -13,6 +13,7 @@ import { SessionMessageUpdater } from "./message-updater"
 import { SessionInput } from "./input"
 import { SessionLifecycle } from "./lifecycle"
 import { SessionGoal } from "./goal"
+import { SessionHistorySearch } from "./history-search"
 import { SessionLedger } from "./ledger"
 import { WorkspaceV2 } from "../workspace"
 import { SessionContextEpoch } from "./context-epoch"
@@ -120,17 +121,25 @@ function run(db: DatabaseService, event: SessionEvent.Event) {
       if (event.durable === undefined) return Effect.die("Durable Session event is missing aggregate sequence")
       const encoded = encodeMessage(message)
       const { id, type, ...data } = encoded
-      return db
-        .update(SessionMessageTable)
-        .set({ type, time_created: DateTime.toEpochMillis(message.time.created), data })
-        .where(
-          and(
-            eq(SessionMessageTable.id, SessionMessage.ID.make(id)),
-            eq(SessionMessageTable.session_id, event.data.sessionID),
-          ),
-        )
-        .run()
-        .pipe(Effect.orDie)
+      const messageID = SessionMessage.ID.make(id)
+      return Effect.gen(function* () {
+        const updated = yield* db
+          .update(SessionMessageTable)
+          .set({ type, time_created: DateTime.toEpochMillis(message.time.created), data })
+          .where(
+            and(eq(SessionMessageTable.id, messageID), eq(SessionMessageTable.session_id, event.data.sessionID)),
+          )
+          .returning({ seq: SessionMessageTable.seq })
+          .get()
+          .pipe(Effect.orDie)
+        if (!updated) return
+        yield* SessionHistorySearch.index(db, {
+          sessionID: event.data.sessionID,
+          messageID,
+          seq: updated.seq,
+          message,
+        })
+      })
     }
     const appendMessage = (message: SessionMessage.Message) => insertMessage(db, event, message)
     const adapter: SessionMessageUpdater.Adapter = {
@@ -197,18 +206,23 @@ function insertMessage(db: DatabaseService, event: SessionEvent.Event, message: 
   if (event.durable === undefined) return Effect.die("Durable Session event is missing aggregate sequence")
   const encoded = encodeMessage(message)
   const { id, type, ...data } = encoded
-  return db
-    .insert(SessionMessageTable)
-    .values({
-      id: SessionMessage.ID.make(id),
-      session_id: event.data.sessionID,
-      type,
-      seq: event.durable.seq,
-      time_created: DateTime.toEpochMillis(message.time.created),
-      data,
-    })
-    .run()
-    .pipe(Effect.orDie)
+  const messageID = SessionMessage.ID.make(id)
+  const seq = event.durable.seq
+  return Effect.gen(function* () {
+    yield* db
+      .insert(SessionMessageTable)
+      .values({
+        id: messageID,
+        session_id: event.data.sessionID,
+        type,
+        seq,
+        time_created: DateTime.toEpochMillis(message.time.created),
+        data,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    yield* SessionHistorySearch.index(db, { sessionID: event.data.sessionID, messageID, seq, message })
+  })
 }
 
 const layer = Layer.effectDiscard(

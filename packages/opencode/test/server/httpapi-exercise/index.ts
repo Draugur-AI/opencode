@@ -1029,6 +1029,30 @@ const scenarios: Scenario[] = [
       body: { supersededBy: "ledger_httpapi_missing_2" },
     }))
     .json(404, object, "status"),
+  http.protected
+    .get("/api/session/{sessionID}/history/search", "v2.session.history.search")
+    .seeded((ctx) => ctx.session({ title: "History search owner" }))
+    .at((ctx) => ({
+      path: `${route("/api/session/{sessionID}/history/search", { sessionID: ctx.state.id })}?${new URLSearchParams({ query: "nothing indexed yet" })}`,
+      headers: ctx.headers(),
+    }))
+    .json(200, (body) => {
+      object(body)
+      object(body.data)
+      array(body.data.results)
+      boolean(body.data.truncated)
+    }),
+  http.protected
+    .get("/api/session/{sessionID}/history/{messageID}", "v2.session.history.get")
+    .seeded((ctx) => ctx.session({ title: "History get owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/history/{messageID}", {
+        sessionID: ctx.state.id,
+        messageID: "msg_httpapi_missing",
+      }),
+      headers: ctx.headers(),
+    }))
+    .json(404, object, "status"),
   http.protected.get("/api/permission/saved", "v2.permission.saved.list").json(200, (body) => {
     object(body)
     array(body.data)

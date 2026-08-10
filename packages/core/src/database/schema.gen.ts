@@ -344,6 +344,19 @@ export default {
       )
       yield* tx.run(`CREATE INDEX \`session_tombstone_time_purged_idx\` ON \`session_tombstone\` (\`time_purged\`);`)
       yield* tx.run(`CREATE INDEX \`todo_session_idx\` ON \`todo\` (\`session_id\`);`)
+      // Hand-maintained: schema objects with no drizzle representation. See
+      // HAND_MAINTAINED_SCHEMA_ADDITIONS in script/migration.ts -- do not edit this block
+      // directly, it is overwritten on every regeneration from that array.
+      yield* tx.run(`
+        CREATE VIRTUAL TABLE \`session_transcript_search\` USING fts5(
+          session_id UNINDEXED,
+          message_id UNINDEXED,
+          seq UNINDEXED,
+          role UNINDEXED,
+          text,
+          created_at UNINDEXED
+        );
+      `)
     })
   },
 } satisfies Omit<DatabaseMigration.Migration, "id">
