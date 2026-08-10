@@ -27,10 +27,14 @@ jobs:
       fail-fast: false
       matrix:
         settings:
+          # Fork note (TKT-305): blacksmith-* runner labels require the Blacksmith GitHub
+          # App, which is not installed on Draugur-AI, so jobs targeting them queue forever
+          # on this fork. Retargeted to GitHub-hosted runners; the e2e job below is left on
+          # blacksmith deliberately (out of the milestone-1 required gate) — see FORK.md.
           - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
+            host: ubuntu-latest
           - name: windows
-            host: blacksmith-4vcpu-windows-2025
+            host: windows-latest
     runs-on: ${{ matrix.settings.host }}
     defaults:
       run:
