@@ -306,12 +306,13 @@ expected. The operator's directive (2026-08-10) was explicit: skip or fix the sp
 known-failing things, with a comment and an un-skip/resolution condition, so that going forward
 **any red on a clean PR is real** and does not need to be triaged against a table first.
 
-The gate is now simply: **every check on the PR is green.** No named exceptions, no
-dev-baseline comparison step, no "characterise before attributing" ritual. If a PR shows red,
-that is a signal to look at, not a lookup against this file.
+The gate is now simply: **every gated check on the PR is green.** No named exceptions, no
+dev-baseline comparison step, no "characterise before attributing" ritual. If a gated check
+shows red, that is a signal to look at, not a lookup against this file.
 
-`check-standards` / `check-compliance` (PR hygiene) are separate, real signal if labeled, but
-were never part of the test/build quality gate.
+**The gate is `typecheck` + `unit (linux)` + `unit (windows)` + `packages/opencode
+test:httpapi`.** `check-standards` / `check-compliance` (PR hygiene) are separate, real signal
+if labeled, but were never part of the test/build quality gate.
 
 **Local-environment caveat, unchanged:** `packages/opencode/test/tool/write.test.ts` "sets file
 permissions when writing sensitive data" asserts `0o644` and fails with `0o664` on a machine
@@ -319,24 +320,40 @@ whose umask is `002` (the shared dev box is one). CI's `ubuntu-latest` runner us
 and passes it. That is the environment, not the code — do not chase it if you see it locally, and
 it should not appear in CI.
 
-`e2e (linux)` is now part of the gate too (TKT-336 retargeted it off blacksmith; it was never
-running before, just queued forever). `e2e (windows)` is retargeted but its test-execution step
-is Linux-only (see "Resolved CI reds" — a real, systemic-looking Windows-specific failure surfaced
-the first time it ever ran, feedback #156), so it reports green without asserting anything on
-Windows yet. `nix-eval` and `/review` remain outside the gate
-deliberately (see "CI runner reality" and "Does automated review run on fork PRs?" below) — both
-are disabled rather than gated, which is a different thing from a named exception: a disabled
-check does not appear as red at all, it does not appear on the PR.
+## Observational checks (retargeted, running, deliberately NOT in the gate)
 
-There is still no branch protection configured on this repo, so none of this is mechanically
-enforced by GitHub itself — reviewers/mergers read the check-runs list by hand.
+`e2e (linux)` and `e2e (windows)` (both, symmetrically) and `nix-eval` run on every PR but do not
+block merge. This is a narrower, checkable version of the "advisory" status this fork abolished
+for `unit`/`test:httpapi` in TKT-336 — advisory-without-a-rule is exactly how a real regression
+hides (that was the whole reason for abolishing it), so each observational check gets a
+**deterministic reading rule** instead of a judgment call:
+
+- **e2e (`packages/app`'s Playwright regression suite):** first ran on either platform in
+  TKT-336 (previously queued forever on blacksmith on both) and turned out to have ordinary,
+  pre-existing E2E flakiness — a small number of timing-sensitive specs occasionally fail past
+  Playwright's own retries, on both `ubuntu-latest` and `windows-latest`, not a platform-specific
+  gap (an earlier reading called this a Windows-only "~40 systemic failures"; that was a grep
+  artifact counting Playwright's test-discovery listing, not real failures — corrected in
+  feedback #156, real count was 2 failed / 87 passed on Windows, then 1 failed / 96 passed on a
+  later Linux run, different spec each time). Stabilizing genuine E2E flakiness is a different
+  body of work from CI hygiene — it belongs to the milestone-3 real-browser-matrix slice, not
+  this ticket. **The rule: the SAME spec failing on 3 consecutive runs is a real regression, file
+  it — no judgment required. Scattered single-spec flakes across different specs, run to run, are
+  not.** This is checkable by anyone reading the last 3 runs' failure lists side by side; it does
+  not require characterising *why* a test is flaky, only whether the *same* one keeps failing.
+- **`nix-eval`:** disabled (auto-trigger removed, see "Blacksmith runner sweep" below) rather
+  than gated or merely observational — Nix packaging validity is not this fork's concern at all,
+  so there is nothing to read a rule against.
+
+There is still no branch protection configured on this repo, so none of the gate above is
+mechanically enforced by GitHub itself — reviewers/mergers read the check-runs list by hand.
 
 ## Resolved CI reds (history, as of TKT-336)
 
 Kept for anyone who hits the same symptom locally or reads an old PR's CI log — not because any
-of these are still expected. Every row here was either fixed or deliberately skipped, each with
-its own comment and un-skip/resolution condition at the point of change; nothing here is a
-currently-live exception.
+of these are still expected. Every row here was fixed, deliberately skipped, or (the e2e row)
+moved out of the gate entirely once investigation showed the symptom wasn't what it first looked
+like; nothing here is a currently-live gate exception.
 
 | Symptom (as first observed, TKT-305) | Root cause | Resolution |
 | --- | --- | --- |
@@ -346,7 +363,7 @@ currently-live exception.
 | `unit (linux)` — `run-process.test.ts`, "exits nonzero promptly when the model is unknown (regression for #27371)": `expect(result.durationMs).toBeLessThan(15_000)` reliably measures ~15.3s | The pattern (always just past the exact configured 15s timeout, not randomly distributed) suggests the "unknown model" fast-fail path is not triggering on GitHub Actions' network, and the process is instead killed by its own configured timeout. | **Skipped, not widened** (TKT-336, feedback #136): widening the assertion's threshold would mask this exact failure mode (a real fast-fail-not-triggering gap) instead of catching it, so `test.skip` was used directly rather than the shared `cliIt.concurrent` helper (which does not support `.skip` — see its own doc comment). Un-skip condition: feedback #136 is triaged. |
 | `unit (linux)` — 7 additional `run-process.test.ts` tests, briefly, only on TKT-315's own PR: clustered 700-800ms over the harness's 30\_000ms default `timeoutMs` | TKT-315 added `ProjectV2.node`/`SessionGoal.node`/`SessionLedger.node` to `app-runtime.ts`'s CLI/TUI `AppLayer` (see "Adding a new global `.node`?" above — all three traced reachable, not removable). None do eager I/O, but building 3 more global nodes has nonzero per-process construction cost; invisible in isolated timing (8 runs each, branch vs. dev, fully overlapping) but real under `run-process.test.ts`'s 13 concurrent `cliIt.concurrent()` subprocess spawns (6x full-file runs, non-overlapping ranges). | **Interim `timeoutMs` widen shipped in the same PR** (30\_000 → 45\_000 on the 7 affected tests only, each commented, feedback #150) — the real fix (lazy node construction so a CLI invocation that never touches project/goal/ledger data pays nothing for them) is still open, tracked in #150. This is the one row here that is not fully closed — it is an accepted, narrow, linked interim, not a currently-observed red. |
 | `packages/opencode test:httpapi`, `mode=effect` only — `v2.session.goal.get`, "a session with no goal set should report no data" | Was masked by a crash (see the `SessionGoal.node`/`SessionLedger.node` wiring gap above) until TKT-315 fixed the wiring and let the route's assertion actually run; the assertion itself then failed, a real bug in TKT-317's goal-get response path (filed as feedback #145). | **Fixed** ([#10](https://github.com/Draugur-AI/opencode/pull/10), Gemma) — confirmed dead on `dev@441ad185`: `test:httpapi --mode effect` went from 227/0 (crash-masked) to 226/1 (this assertion, post-TKT-315) to 229/0 (post-#10, three new scenarios added along the way, zero fail). No exception needed in the simplified gate above. |
-| `e2e (windows)` — ~40 distinct `e2e/regression/*.spec.ts` files, `toBeVisible()`/"element(s) not found", consistent across Playwright's own automatic retries | Never ran before TKT-336 (queued forever on blacksmith, same as every other job in this table). Retargeting it to `windows-latest` was the first time it ever executed on Windows, and the volume plus consistency (not flaky — the exact same specs fail every retry) reads as systemic (a Windows-Playwright rendering/timing gap, or a setup gap) rather than 40 independent app bugs. `e2e (linux)` — the identical suite on `ubuntu-latest`, same CI run — passed cleanly, so this is Windows-specific, not a universal regression. | **Skipped** (TKT-336, feedback #156, run artifact with screenshots/traces linked in the feedback entry): the "Run app e2e tests" step in `test.yml`'s `e2e` job is now `if: runner.os == 'Linux'`, same boundary as the Ripgrep finding above — real E2E-environment debugging, out of scope for a CI-hygiene ticket. `e2e (linux)` stays in the gate; `e2e (windows)` does not. Un-skip condition: feedback #156 is root-caused. |
+| `e2e (windows)`, first run only — apparent ~40 `e2e/regression/*.spec.ts` failures | **Misread, not a real symptom** — the ~40 count was a grep artifact (spec-file-path occurrences anywhere in the log, which also matches Playwright's test-discovery listing) mistaken for a failure list. The real first-run result was 2 failed / 87 passed. A subsequent run showed `e2e (linux)` — clean on its first two runs — fail 1 spec too, a *different* spec. Both platforms show the same class of ordinary, low-rate E2E flakiness, pre-existing and simply never observed before (e2e never ran on either platform pre-TKT-336, both queued forever on blacksmith). | **Not a red to resolve — moved out of the gate entirely, symmetrically on both platforms** (Ethan's ruling: stabilizing genuine Playwright flakiness is a different body of work than CI hygiene, belongs to the milestone-3 real-browser-matrix slice). See "Observational checks" above for the deterministic reading rule that replaces the skip. Feedback #156 corrected in place rather than superseded — the correction is part of its own record. |
 
 ## Blacksmith runner sweep (TKT-336)
 
