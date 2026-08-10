@@ -98,6 +98,52 @@ export class SessionLifecycleTransitionError extends Schema.TaggedErrorClass<Ses
 ) {}
 
 /**
+ * A goal mutation lost to a concurrent one, or carried a stale `expectedVersion`. Carries the
+ * version the goal actually holds so a client can retry without a second read.
+ */
+export class SessionGoalConflictError extends Schema.TaggedErrorClass<SessionGoalConflictError>()(
+  "SessionGoalConflictError",
+  {
+    sessionID: Schema.String,
+    version: Schema.Int,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+/** The session has no goal set yet -- distinct from SessionNotFoundError, since the session itself
+ * exists. */
+export class SessionGoalNotSetError extends Schema.TaggedErrorClass<SessionGoalNotSetError>()(
+  "SessionGoalNotSetError",
+  { sessionID: Schema.String, message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
+
+/** The working ledger is at its bounded budget; the caller must supersede an entry before adding
+ * another one. Never silently dropped -- see the design post's ledger cap policy. */
+export class SessionLedgerCapExceededError extends Schema.TaggedErrorClass<SessionLedgerCapExceededError>()(
+  "SessionLedgerCapExceededError",
+  {
+    sessionID: Schema.String,
+    activeCount: Schema.Int,
+    activeBytes: Schema.Int,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}
+
+/** No active ledger entry with this ID -- either it never existed or it is already superseded. */
+export class SessionLedgerEntryNotFoundError extends Schema.TaggedErrorClass<SessionLedgerEntryNotFoundError>()(
+  "SessionLedgerEntryNotFoundError",
+  {
+    sessionID: Schema.String,
+    entryID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+/**
  * The session was permanently deleted. Distinct from 404 on purpose: a client that cannot tell
  * "deleted" from "not fetched yet" will keep a tab open on a session that no longer exists.
  */

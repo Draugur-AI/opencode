@@ -49,6 +49,18 @@ import type {
   SessionsInterruptOutput,
   SessionsMessageInput,
   SessionsMessageOutput,
+  ServerGoalGetInput,
+  ServerGoalGetOutput,
+  ServerGoalUpdateInput,
+  ServerGoalUpdateOutput,
+  ServerGoalStatusInput,
+  ServerGoalStatusOutput,
+  ServerLedgerListInput,
+  ServerLedgerListOutput,
+  ServerLedgerAddInput,
+  ServerLedgerAddOutput,
+  ServerLedgerSupersedeInput,
+  ServerLedgerSupersedeOutput,
   MessagesListInput,
   MessagesListOutput,
   ModelsListInput,
@@ -576,6 +588,87 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+    },
+    "server.goal": {
+      get: (input: ServerGoalGetInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerGoalGetOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/goal`,
+            successStatus: 200,
+            declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      update: (input: ServerGoalUpdateInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerGoalUpdateOutput }>(
+          {
+            method: "PUT",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/goal`,
+            body: {
+              objective: input["objective"],
+              acceptanceCriteria: input["acceptanceCriteria"],
+              constraints: input["constraints"],
+              sourceMessageIDs: input["sourceMessageIDs"],
+              expectedVersion: input["expectedVersion"],
+            },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      status: (input: ServerGoalStatusInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerGoalStatusOutput }>(
+          {
+            method: "PUT",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/goal/status`,
+            body: { status: input["status"], expectedVersion: input["expectedVersion"] },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+    },
+    "server.ledger": {
+      list: (input: ServerLedgerListInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerLedgerListOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/ledger`,
+            query: { status: input["status"] },
+            successStatus: 200,
+            declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      add: (input: ServerLedgerAddInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerLedgerAddOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/ledger`,
+            body: { kind: input["kind"], text: input["text"], sourceMessageIDs: input["sourceMessageIDs"] },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      supersede: (input: ServerLedgerSupersedeInput, requestOptions?: RequestOptions) =>
+        request<ServerLedgerSupersedeOutput>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/ledger/${encodeURIComponent(input.entryID)}/supersede`,
+            body: { supersededBy: input["supersededBy"] },
+            successStatus: 204,
+            declaredStatuses: [404, 400, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
     },
     messages: {
       list: (input: MessagesListInput, requestOptions?: RequestOptions) =>

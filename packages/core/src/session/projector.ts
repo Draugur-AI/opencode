@@ -12,6 +12,8 @@ import { SessionMessage } from "./message"
 import { SessionMessageUpdater } from "./message-updater"
 import { SessionInput } from "./input"
 import { SessionLifecycle } from "./lifecycle"
+import { SessionGoal } from "./goal"
+import { SessionLedger } from "./ledger"
 import { WorkspaceV2 } from "../workspace"
 import { SessionContextEpoch } from "./context-epoch"
 import { MessageTable, PartTable, SessionInputTable, SessionMessageTable, SessionTable } from "./sql"
@@ -253,6 +255,51 @@ const layer = Layer.effectDiscard(
           aggregateSeq: event.durable.seq,
           timestamp: event.data.timestamp,
         })
+      }),
+    )
+    yield* events.project(SessionEvent.GoalUpdated, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Session event is missing aggregate sequence")
+        yield* SessionGoal.projectUpdated(db, {
+          sessionID: event.data.sessionID,
+          objective: event.data.objective,
+          acceptanceCriteria: event.data.acceptanceCriteria,
+          constraints: event.data.constraints,
+          sourceMessageIDs: event.data.sourceMessageIDs,
+          expectedVersion: event.data.expectedVersion,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(SessionEvent.GoalStatusChanged, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Session event is missing aggregate sequence")
+        yield* SessionGoal.projectStatusChanged(db, {
+          sessionID: event.data.sessionID,
+          status: event.data.status,
+          expectedVersion: event.data.expectedVersion,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(SessionEvent.LedgerAdded, (event) =>
+      SessionLedger.projectAdded(db, {
+        entryID: event.data.entryID,
+        sessionID: event.data.sessionID,
+        kind: event.data.kind,
+        text: event.data.text,
+        sourceMessageIDs: event.data.sourceMessageIDs,
+        timestamp: event.data.timestamp,
+      }),
+    )
+    yield* events.project(SessionEvent.LedgerSuperseded, (event) =>
+      SessionLedger.projectSuperseded(db, {
+        sessionID: event.data.sessionID,
+        entryID: event.data.entryID,
+        supersededBy: event.data.supersededBy,
+        timestamp: event.data.timestamp,
       }),
     )
     yield* events.project(SessionEvent.Moved, (event) =>

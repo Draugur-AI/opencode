@@ -17,12 +17,15 @@ import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionPurge } from "@opencode-ai/core/session/purge"
 import {
   SessionContextEpochTable,
+  SessionGoalTable,
   SessionInputTable,
+  SessionLedgerTable,
   SessionMessageTable,
   SessionTable,
   SessionTombstoneTable,
   TodoTable,
 } from "@opencode-ai/core/session/sql"
+import { SessionLedger } from "@opencode-ai/core/session/ledger"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, EventV2.node, SessionProjector.node])))
@@ -47,6 +50,11 @@ const SESSION_OWNED: Record<string, "purged" | "retained"> = {
   session_input: "purged",
   session_context_epoch: "purged",
   session_lifecycle_request: "purged",
+  // TKT-317: durable agent intent is exactly the content the design post's "Delete permanently"
+  // row names ("Purge transcript, events, goals, ledger..."). Neither table holds anything worth
+  // retaining once the session itself is gone.
+  session_goal: "purged",
+  session_ledger: "purged",
   // Found by this test on the day it was written: a share row holds a live URL and secret for the
   // session. It already cascades, but nothing had ever stated that it must.
   session_share: "purged",
@@ -95,6 +103,30 @@ const seedTrashed = (prefix: string) =>
         prompt: {} as never,
         delivery: "queue",
         admitted_seq: 1,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    yield* db
+      .insert(SessionGoalTable)
+      .values({
+        session_id: id,
+        objective: "goal",
+        acceptance_criteria: [],
+        constraints: [],
+        source_message_ids: [],
+        version: 1,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    yield* db
+      .insert(SessionLedgerTable)
+      .values({
+        id: SessionLedger.ID.create(),
+        session_id: id,
+        kind: "fact",
+        text: "ledger entry",
+        source_message_ids: [],
+        status: "active",
       })
       .run()
       .pipe(Effect.orDie)
