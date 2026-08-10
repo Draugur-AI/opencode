@@ -503,6 +503,7 @@ export namespace Compaction {
    */
   export const EndedV1 = Event.define({
     type: "session.next.compaction.ended",
+    identifier: "session.next.compaction.ended.v1",
     durable: { aggregate: "sessionID", version: 1 },
     schema: {
       ...Base,
@@ -516,6 +517,7 @@ export namespace Compaction {
 
   export const Ended = Event.define({
     type: "session.next.compaction.ended",
+    identifier: "session.next.compaction.ended.v2",
     durable: { aggregate: "sessionID", version: 2 },
     schema: {
       ...Base,

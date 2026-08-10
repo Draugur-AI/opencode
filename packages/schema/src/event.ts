@@ -49,6 +49,14 @@ export function define<
     readonly aggregate: string
   }
   readonly schema: Fields
+  /**
+   * OpenAPI/codegen name override. Defaults to `type`, which is fine as long as `type` is unique
+   * -- a superseded version kept only for old-row decode (see Compaction.EndedV1) shares its
+   * `type` literal with its successor by construction, so both would otherwise annotate the same
+   * `identifier` and collide into numbered duplicate schemas (SessionNextCompactionEnded1/3) the
+   * first time such an event is reachable from a wire-exposed union like SessionEvent.Durable.
+   */
+  readonly identifier?: string
 }) {
   const data = Schema.Struct(input.schema)
   return Schema.Struct({
@@ -59,7 +67,7 @@ export function define<
     location: optional(Location.Ref),
     data,
   })
-    .annotate({ identifier: input.type })
+    .annotate({ identifier: input.identifier ?? input.type })
     .pipe(
       statics(() => ({
         type: input.type,
