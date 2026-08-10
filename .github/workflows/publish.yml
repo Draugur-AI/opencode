@@ -1,14 +1,21 @@
 name: publish
 run-name: "${{ format('release {0}', inputs.bump) }}"
 
+# Fork note (TKT-336): push trigger disabled. This is upstream's real multi-platform
+# npm/binary publish pipeline -- signs with Azure Trusted Signing certs and pushes real
+# artifacts. Every push to dev was queueing the whole pipeline (most jobs blacksmith-*,
+# queuing forever) for a fork that has no business publishing to real distribution
+# channels: an internal architecture-redesign fork accidentally publishing as if it were
+# an official release is a one-way mistake, not just a cost one. Not retargeted for that
+# reason -- this is a safety choice, not (only) a runner-availability one. Also flagged
+# to the lead (TKT-336 report) rather than decided in total silence, since re-enabling
+# touches real credentials and an external distribution channel. workflow_dispatch kept
+# as a manual escape hatch (unaffected by this change). Un-disable condition: an explicit
+# decision that this fork should publish its own releases, plus retargeting every
+# blacksmith-* entry in the matrix below (the linux-arm64 leg has no verified 1:1
+# GitHub-hosted replacement yet -- would need its own carve-out, same shape as the
+# win-arm64 leg already using windows-2025 for its MSVC cross-compile limitation).
 on:
-  push:
-    branches:
-      - ci
-      - dev
-      - beta
-      - fix/npm-native-binary-install
-      - snapshot-*
   workflow_dispatch:
     inputs:
       bump:

@@ -6,6 +6,16 @@ on:
 
 jobs:
   check-duplicates:
+    # Fork note (TKT-336): disabled, not just runner-blocked. Two independent problems,
+    # same as review.yml's /review trigger (see FORK.md, "Does automated review run on
+    # fork PRs? -- No"): runs-on is blacksmith-4vcpu-ubuntu-2404 (queues forever, no
+    # Blacksmith app on this org), AND the step below needs OPENCODE_API_KEY, which is
+    # not configured on this repo -- retargeting the runner alone would just turn a
+    # silent queue into a visible failure on every PR. Fires on every PR open
+    # (pull_request_target: [opened]), so left running would violate "every PR's checks
+    # complete green" regardless of which half is broken. Un-disable condition: both a
+    # GitHub-hosted runs-on AND an operator-provisioned OPENCODE_API_KEY secret.
+    if: false
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       contents: read

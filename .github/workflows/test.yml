@@ -27,10 +27,10 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          # Fork note (TKT-305): blacksmith-* runner labels require the Blacksmith GitHub
-          # App, which is not installed on Draugur-AI, so jobs targeting them queue forever
-          # on this fork. Retargeted to GitHub-hosted runners; the e2e job below is left on
-          # blacksmith deliberately (out of the milestone-1 required gate) — see FORK.md.
+          # Fork note (TKT-305, retargeting extended to the e2e job below in TKT-336):
+          # blacksmith-* runner labels require the Blacksmith GitHub App, which is not
+          # installed on Draugur-AI, so jobs targeting them queue forever on this fork.
+          # Retargeted to GitHub-hosted runners. See FORK.md.
           - name: linux
             host: ubuntu-latest
           - name: windows
@@ -68,6 +68,24 @@ jobs:
             turbo-${{ runner.os }}-
 
       - name: Run unit tests
+        # Fork note (TKT-336): Linux-only. Windows unit was a "varying subset of
+        # unrelated tests" red (FORK.md's old known-red table, mode A/B) that a
+        # per-test timeout raise (packages/core's own missing --timeout, fixed
+        # separately) only partly addressed -- it stabilized the genuinely-slow
+        # suites (i18n parity, Git worktrees/trees, LocationServiceMap,
+        # MoveSession) but exposed a real, deterministic failure underneath:
+        # Ripgrep.Error: ripgrep execution failed on windows-latest, every run,
+        # not a timing margin issue (confirmed: raising the timeout to 30s just
+        # meant it failed at exactly 30000ms instead of ~5000ms -- a genuine
+        # execution failure, not slowness). RipgrepBinary's Windows path
+        # downloads+extracts a zip via PowerShell at first use; root-causing
+        # that is real production-code investigation, out of scope for a CI
+        # hygiene ticket. Per the ticket's own stated fallback ("skip the
+        # windows unit job entirely... if timeouts alone do not stabilize it"),
+        # skipped here rather than chased further. Un-skip condition: the
+        # Ripgrep-on-Windows execution failure is root-caused and fixed
+        # (tracked in the feedback queue, TKT-336's diary has the log excerpt).
+        if: runner.os == 'Linux'
         timeout-minutes: 20
         run: GITHUB_ACTIONS=false bun turbo test
         env:
@@ -89,10 +107,13 @@ jobs:
       fail-fast: false
       matrix:
         settings:
+          # Fork note (TKT-336): was blacksmith-*, queued forever (no Blacksmith app on
+          # this org) and held its whole workflow run open, blocking rerun-failed-jobs for
+          # every job in the run, e2e included. Retargeted to GitHub-hosted. See FORK.md.
           - name: linux
-            host: blacksmith-4vcpu-ubuntu-2404
+            host: ubuntu-latest
           - name: windows
-            host: blacksmith-4vcpu-windows-2025
+            host: windows-latest
     runs-on: ${{ matrix.settings.host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
@@ -138,6 +159,19 @@ jobs:
         run: bunx playwright install chromium
 
       - name: Run app e2e tests
+        # Fork note (TKT-336): runs on both platforms -- an earlier version of this
+        # comment skipped Windows on a mistaken "~40 systemic failures" reading (a grep
+        # artifact counting Playwright's test-discovery listing, not actual failures;
+        # corrected in feedback #156). The real picture: e2e was never run on EITHER
+        # platform before this ticket (both queued forever on blacksmith), and now that
+        # it runs, both show occasional single-spec flakiness -- ordinary E2E flake, not
+        # a platform-specific gap. e2e is intentionally NOT part of this fork's merge
+        # gate (see FORK.md, "The merge gate") -- stabilizing inherent Playwright
+        # flakiness is a different body of work than CI hygiene, and it predates this
+        # ticket. Kept running, symmetric across platforms, as an observational signal
+        # with a deterministic reading rule (FORK.md): the SAME spec failing 3
+        # consecutive runs is a real regression, worth filing; scattered single-spec
+        # flakes across different specs are not.
         run: bun --cwd packages/app test:e2e:local
         env:
           CI: true

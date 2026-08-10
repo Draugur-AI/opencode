@@ -1,9 +1,12 @@
 name: beta
 
+# Fork note (TKT-336): schedule trigger disabled. runs-on is blacksmith-4vcpu-ubuntu-2404,
+# which queues forever on this org -- HOURLY cron made this the single largest
+# contributor to the accumulated queued-run backlog (24/day since Actions enablement).
+# Beta-channel sync is not meaningful on a fork that isn't publishing releases (see
+# publish.yml). workflow_dispatch kept as a manual escape hatch.
 on:
   workflow_dispatch:
-  schedule:
-    - cron: "0 * * * *"
 
 jobs:
   sync:

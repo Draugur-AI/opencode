@@ -1,9 +1,15 @@
 name: generate
 
+# Fork note (TKT-336): auto-trigger disabled. runs-on is blacksmith-4vcpu-ubuntu-2404,
+# which queues forever on this org and was accumulating unstartable runs on every push
+# to dev. Also a deliberate safety choice, not just a runner fix: this job auto-commits
+# and pushes generated output back to whatever branch triggered it, unreviewed -- this
+# fork's own convention (FORK.md) is that generated code is regenerated and committed
+# manually as part of a reviewed PR, never pushed unattended to dev. workflow_dispatch
+# kept as a manual escape hatch. Un-disable condition: retarget runs-on AND restore the
+# push trigger below, only if the unattended-push behavior is deliberately wanted here.
 on:
-  push:
-    branches:
-      - dev
+  workflow_dispatch:
 
 jobs:
   generate:

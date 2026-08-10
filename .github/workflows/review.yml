@@ -6,7 +6,16 @@ on:
 
 jobs:
   check-guidelines:
+    # Fork note (TKT-336): disabled -- the `false &&` below is a one-line, trivially
+    # revertible off-switch that preserves the real condition beneath it. Already
+    # documented in FORK.md ("Does automated review run on fork PRs? -- No") as
+    # double-blocked: runs-on is blacksmith-4vcpu-ubuntu-2404 (queues forever) AND the
+    # step needs OPENCODE_API_KEY, not configured on this repo. Previously left merely
+    # undocumented-broken; explicitly disabled now so a stray /review comment can't add
+    # another permanently-queued run to the backlog. Un-disable condition: both a
+    # GitHub-hosted runs-on AND an operator-provisioned OPENCODE_API_KEY secret.
     if: |
+      false &&
       github.event.issue.pull_request &&
       startsWith(github.event.comment.body, '/review') &&
       contains(fromJson('["OWNER","MEMBER"]'), github.event.comment.author_association)
