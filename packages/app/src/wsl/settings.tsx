@@ -69,6 +69,7 @@ export function useFilteredWslServers(filter: Accessor<string>) {
 export function WslServerSettings(props: {
   controller: Controller
   servers: ReturnType<typeof useFilteredWslServers>
+  onEdit: (key: ServerConnection.Key) => void
 }) {
   const platform = usePlatform()
   const language = useLanguage()
@@ -124,7 +125,7 @@ export function WslServerSettings(props: {
                       disabled={busy() || request.isPending}
                       onClick={() => api && request.mutate(() => api.installOpencode(item.config.distro))}
                     >
-                      {busy() ? language.t("wsl.server.updating") : language.t(label())}
+                      {busy() ? language.t("wsl.server.updating") : label()}
                     </ButtonV2>
                   )}
                 </Show>
@@ -140,6 +141,9 @@ export function WslServerSettings(props: {
                     <MenuV2.Content>
                       <MenuV2.Group>
                         <MenuV2.GroupLabel>{language.t("wsl.server.menu.label")}</MenuV2.GroupLabel>
+                        <MenuV2.Item onSelect={() => props.onEdit(key)}>
+                          {language.t("dialog.server.menu.edit")}
+                        </MenuV2.Item>
                         <Show when={wslRuntimeRetryable(item.runtime)}>
                           <MenuV2.Item onSelect={() => api && request.mutate(() => api.startServer(key))}>
                             {language.t("wsl.server.retryStart")}

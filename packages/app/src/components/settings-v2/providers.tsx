@@ -6,10 +6,12 @@ import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
 import { createMemo, type Accessor, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
-import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
+import { useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { DialogConnectProvider, useProviderConnectController } from "../dialog-connect-provider"
 import { DialogCustomProvider } from "../dialog-custom-provider"
+import { SettingsServerScope } from "../settings-server-picker"
+import { InlineServerSelect } from "./parts/server-select"
 import { SettingsListV2 } from "./parts/list"
 import "./settings-v2.css"
 
@@ -36,20 +38,29 @@ export const SettingsProvidersV2: Component<{
   const dialog = useDialog()
   const language = useLanguage()
   const serverSdk = useServerSDK()
-  const protocol = useServerProtocol()
   const serverSync = useServerSync()
   const providers = useProviders(props.directory)
   const providerConnect = useProviderConnectController({ onBack: props.onBack })
 
   const connect = (provider?: string) => {
     providerConnect.select(provider)
-    void dialog.show(() => <DialogConnectProvider directory={props.directory} controller={providerConnect} />)
+    void dialog.show(() => (
+      <SettingsServerScope>
+        <DialogConnectProvider directory={props.directory} controller={providerConnect} />
+      </SettingsServerScope>
+    ))
   }
 
   const connected = createMemo(() => {
-    return providers
-      .connected()
-      .filter((p) => p.id !== "opencode" || Object.values(p.models).find((m) => m.cost?.input))
+    return providers.connected().filter(
+      (provider) =>
+        provider.id !== "opencode" ||
+        Object.values(provider.models).some((model) => {
+          if (typeof model !== "object" || model === null || !("cost" in model)) return false
+          const cost = model.cost
+          return typeof cost === "object" && cost !== null && "input" in cost
+        }),
+    )
   })
 
   const popular = createMemo(() => {
@@ -81,8 +92,7 @@ export const SettingsProvidersV2: Component<{
     return language.t("settings.providers.tag.other")
   }
 
-  const canDisconnect = (item: ProviderItem) =>
-    source(item) !== "env" && (protocol() === "v1" || !isConfigCustom(item.id))
+  const canDisconnect = (item: ProviderItem) => source(item) !== "env" && !isConfigCustom(item.id)
 
   const note = (id: string) => PROVIDER_NOTES.find((item) => item.match(id))?.key
 
@@ -94,41 +104,16 @@ export const SettingsProvidersV2: Component<{
     return true
   }
 
-  const disableProvider = async (providerID: string, name: string) => {
-    if (protocol() !== "v1") return
-    const before = serverSync().data.config.disabled_providers ?? []
-    const next = before.includes(providerID) ? before : [...before, providerID]
-    serverSync().set("config", "disabled_providers", next)
-
-    await serverSync()
-      .updateConfig({ disabled_providers: next })
-      .then(() => {
-        showToast({
-          variant: "success",
-          icon: "circle-check",
-          title: language.t("provider.disconnect.toast.disconnected.title", { provider: name }),
-          description: language.t("provider.disconnect.toast.disconnected.description", { provider: name }),
-        })
-      })
-      .catch((err: unknown) => {
-        serverSync().set("config", "disabled_providers", before)
-        const message = err instanceof Error ? err.message : String(err)
-        showToast({ title: language.t("common.requestFailed"), description: message })
-      })
-  }
-
   const disconnect = async (providerID: string, name: string) => {
-    if (isConfigCustom(providerID)) {
-      await serverSdk()
-        .client.auth.remove({ providerID })
-        .catch(() => undefined)
-      await disableProvider(providerID, name)
-      return
-    }
+    const location = props.directory() ? { directory: props.directory() } : undefined
     await serverSdk()
-      .client.auth.remove({ providerID })
-      .then(async () => {
-        await serverSdk().client.global.dispose()
+      .api.integration.get({ integrationID: providerID, location })
+      .then(async (integration) => {
+        const credentials = integration.data?.connections.filter((item) => item.type === "credential") ?? []
+        if (credentials.length === 0) throw new Error(`No removable credentials found for ${name}`)
+        await Promise.all(
+          credentials.map((credential) => serverSdk().api.credential.remove({ credentialID: credential.id, location })),
+        )
         showToast({
           variant: "success",
           icon: "circle-check",
@@ -145,7 +130,13 @@ export const SettingsProvidersV2: Component<{
   return (
     <>
       <div class="settings-v2-tab-header">
-        <h2 class="settings-v2-tab-title">{language.t("settings.providers.title")}</h2>
+        <div class="settings-v2-tab-header-row">
+          <div class="flex flex-col gap-1">
+            <h2 class="settings-v2-tab-title">{language.t("settings.providers.title")}</h2>
+            <span class="text-11-regular text-v2-text-text-muted">{language.t("settings.providers.description")}</span>
+          </div>
+          <InlineServerSelect />
+        </div>
       </div>
 
       <div class="settings-v2-tab-body settings-v2-providers">
@@ -224,7 +215,7 @@ export const SettingsProvidersV2: Component<{
               )}
             </For>
 
-            <Show when={protocol() === "v1"}>
+            <Show when={false}>
               <div class="settings-v2-provider-row" data-component="custom-provider-section">
                 <div class="settings-v2-provider-lead">
                   <ProviderIcon
@@ -248,7 +239,11 @@ export const SettingsProvidersV2: Component<{
                   variant="neutral"
                   icon="plus"
                   onClick={() => {
-                    dialog.show(() => <DialogCustomProvider onBack={dialog.close} />)
+                    dialog.show(() => (
+                      <SettingsServerScope>
+                        <DialogCustomProvider onBack={dialog.close} />
+                      </SettingsServerScope>
+                    ))
                   }}
                 >
                   {language.t("common.connect")}
