@@ -14,6 +14,7 @@ import { Timestamps } from "../database/schema.sql"
 import type { SystemContext } from "../system-context/index"
 import { AgentV2 } from "../agent"
 import type { Revert } from "@opencode-ai/schema/revert"
+import type { SessionLifecycle } from "@opencode-ai/schema/session-lifecycle"
 
 type SessionMessageData = Omit<(typeof SessionMessage.Message)["Encoded"], "type" | "id">
 type V1MessageData = Omit<SessionV1.Info, "id" | "sessionID">
@@ -56,12 +57,68 @@ export const SessionTable = sqliteTable(
     }>(),
     ...Timestamps,
     time_compacting: integer(),
+    /** @deprecated Read `lifecycle` instead. Retained for the V1 compatibility window. */
     time_archived: integer(),
+    lifecycle: text().$type<SessionLifecycle.State>().notNull().default("active"),
+    lifecycle_revision: integer().notNull().default(0),
+    time_trashed: integer(),
+    purge_after: integer(),
+    /**
+     * Where `restoreFromTrash` returns this session. Recorded when it enters trash, because
+     * restoring an archived session to `active` would silently undo the archive the user chose.
+     */
+    trash_restore_to: text().$type<Exclude<SessionLifecycle.State, "trash">>(),
   },
   (table) => [
     index("session_project_idx").on(table.project_id),
     index("session_workspace_idx").on(table.workspace_id),
     index("session_parent_idx").on(table.parent_id),
+    index("session_project_lifecycle_updated_id_idx").on(
+      table.project_id,
+      table.lifecycle,
+      table.time_updated,
+      table.id,
+    ),
+  ],
+)
+
+/**
+ * What survives a purge. Lets a client tell "permanently deleted" from "not fetched yet" for a
+ * bounded retention period. It holds no transcript content, by design and by test.
+ */
+export const SessionTombstoneTable = sqliteTable(
+  "session_tombstone",
+  {
+    id: text().$type<SessionSchema.ID>().primaryKey(),
+    project_id: text()
+      .$type<ProjectV2.ID>()
+      .notNull()
+      .references(() => ProjectTable.id, { onDelete: "cascade" }),
+    time_purged: integer().notNull(),
+    last_lifecycle_revision: integer().notNull(),
+  },
+  (table) => [index("session_tombstone_time_purged_idx").on(table.time_purged)],
+)
+
+/**
+ * Bounded record of lifecycle mutations already applied, keyed by the caller's request ID. A
+ * mobile retry after a dropped response resolves to the recorded outcome instead of archiving,
+ * restoring, and archiving again.
+ */
+export const SessionLifecycleRequestTable = sqliteTable(
+  "session_lifecycle_request",
+  {
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    request_id: text().$type<SessionLifecycle.RequestID>().notNull(),
+    lifecycle_revision: integer().notNull(),
+    time_created: integer().notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.session_id, table.request_id] }),
+    index("session_lifecycle_request_session_time_idx").on(table.session_id, table.time_created),
   ],
 )
 

@@ -9,6 +9,7 @@ import { Model } from "./model"
 import { DateTimeUtcFromMillis, NonNegativeInt, RelativePath } from "./schema"
 import { FileAttachment, Prompt } from "./prompt"
 import { SessionID } from "./session-id"
+import { SessionLifecycle } from "./session-lifecycle"
 import { Location } from "./location"
 import { SessionMessage } from "./session-message"
 import { Revert } from "./revert"
@@ -72,6 +73,24 @@ export const ModelSwitched = Event.define({
   },
 })
 export type ModelSwitched = typeof ModelSwitched.Type
+
+export const LifecycleChanged = Event.define({
+  type: "session.next.lifecycle.changed",
+  ...options,
+  schema: {
+    ...Base,
+    from: SessionLifecycle.Value,
+    to: SessionLifecycle.Value,
+    requestID: SessionLifecycle.RequestID,
+    /**
+     * The `lifecycleRevision` the caller believed it was mutating. Absent means an unconditional
+     * mutation. The projector enforces it inside the commit transaction, so a stale writer loses
+     * the race rather than overwriting the winner.
+     */
+    expectedLifecycleRevision: NonNegativeInt.pipe(optional),
+  },
+})
+export type LifecycleChanged = typeof LifecycleChanged.Type
 
 export const Moved = Event.define({
   type: "session.next.moved",
@@ -448,6 +467,7 @@ export namespace RevertEvent {
 export const DurableDefinitions = Event.inventory(
   AgentSwitched,
   ModelSwitched,
+  LifecycleChanged,
   Moved,
   Prompted,
   PromptAdmitted,
@@ -479,6 +499,7 @@ export const DurableDefinitions = Event.inventory(
 export const Definitions = Event.inventory(
   AgentSwitched,
   ModelSwitched,
+  LifecycleChanged,
   Moved,
   Prompted,
   PromptAdmitted,

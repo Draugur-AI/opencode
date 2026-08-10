@@ -11,6 +11,7 @@ import { WorkspaceTable } from "../control-plane/workspace.sql"
 import { SessionMessage } from "./message"
 import { SessionMessageUpdater } from "./message-updater"
 import { SessionInput } from "./input"
+import { SessionLifecycle } from "./lifecycle"
 import { WorkspaceV2 } from "../workspace"
 import { SessionContextEpoch } from "./context-epoch"
 import { MessageTable, PartTable, SessionInputTable, SessionMessageTable, SessionTable } from "./sql"
@@ -239,6 +240,20 @@ const layer = Layer.effectDiscard(
         .where(eq(SessionTable.id, event.data.sessionID))
         .run()
         .pipe(Effect.orDie),
+    )
+    yield* events.project(SessionEvent.LifecycleChanged, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Session event is missing aggregate sequence")
+        yield* SessionLifecycle.project(db, {
+          sessionID: event.data.sessionID,
+          from: event.data.from,
+          to: event.data.to,
+          requestID: event.data.requestID,
+          expectedLifecycleRevision: event.data.expectedLifecycleRevision,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
     )
     yield* events.project(SessionEvent.Moved, (event) =>
       Effect.gen(function* () {

@@ -8,7 +8,8 @@ import type { Config } from "../../../src/config/config"
 import type { MessageV2 } from "../../../src/session/message-v2"
 import { MessageID, PartID } from "../../../src/session/schema"
 import { call, callAuthProbe, disposeApps } from "./backend"
-import { original } from "./environment"
+import { exerciseDatabasePath, original } from "./environment"
+import { Database as SQLite } from "bun:sqlite"
 import { runtime } from "./runtime"
 import type { ActiveScenario, Options, ProjectOptions, Result, Scenario, ScenarioContext, SeededContext } from "./types"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -139,6 +140,20 @@ function withContext<A, E>(
             run(modules.Session.Service.use((svc) => svc.get(sessionID))).pipe(
               Effect.catchCause(() => Effect.succeed(undefined)),
             ),
+          sessionLifecycle: (sessionID) =>
+            // Read the row directly. The V2 Session service is provided into the route pipeline,
+            // not into the layer scenarios run against, and the V1 service has no lifecycle field.
+            Effect.sync(() => {
+              const database = new SQLite(exerciseDatabasePath, { readonly: true })
+              try {
+                const found = database
+                  .query("SELECT lifecycle, lifecycle_revision FROM session WHERE id = ?")
+                  .get(sessionID) as { lifecycle: string; lifecycle_revision: number } | null
+                return found ? { state: found.lifecycle, revision: found.lifecycle_revision } : undefined
+              } finally {
+                database.close()
+              }
+            }),
           project: () =>
             Effect.sync(() => {
               if (!instance) throw new Error("scenario needs a project directory")

@@ -6,19 +6,73 @@ import { SessionsCursor } from "@opencode-ai/protocol/groups/session"
 import {
   ConflictError,
   InvalidCursorError,
+  InvalidRequestError,
   MessageNotFoundError,
   ServiceUnavailableError,
+  SessionLifecycleConflictError,
+  SessionLifecycleTransitionError,
   SessionNotFoundError,
   UnknownError,
 } from "@opencode-ai/protocol/errors"
 import { AbsolutePath } from "@opencode-ai/core/schema"
+import { SessionLifecycle } from "@opencode-ai/core/session/lifecycle"
 
 const DefaultSessionsLimit = 50
 const DefaultSessionHistoryLimit = 50
 
+const transition = (error: SessionV2.LifecycleTransitionError) =>
+  new SessionLifecycleTransitionError({
+    sessionID: error.sessionID,
+    from: error.from,
+    to: error.to,
+    message: `Session cannot move from ${error.from} to ${error.to}`,
+  })
+
 export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handlers) =>
   Effect.gen(function* () {
     const session = yield* SessionV2.Service
+
+    /** The four reversible lifecycle verbs differ only in which core method they call. */
+    const lifecycle =
+      (
+        mutate: (input: {
+          sessionID: SessionV2.ID
+          requestID: SessionLifecycle.RequestID
+          expectedLifecycleRevision?: number
+        }) => Effect.Effect<SessionV2.Info, SessionV2.LifecycleError>,
+      ) =>
+      (ctx: {
+        readonly params: { readonly sessionID: SessionV2.ID }
+        readonly payload: {
+          readonly requestID: SessionLifecycle.RequestID
+          readonly expectedLifecycleRevision?: number
+        }
+      }) =>
+        mutate({
+          sessionID: ctx.params.sessionID,
+          requestID: ctx.payload.requestID,
+          expectedLifecycleRevision: ctx.payload.expectedLifecycleRevision,
+        }).pipe(
+          Effect.map((data) => ({ data })),
+          Effect.catchTag(
+            "Session.NotFoundError",
+            (error) =>
+              new SessionNotFoundError({
+                sessionID: error.sessionID,
+                message: `Session not found: ${error.sessionID}`,
+              }),
+          ),
+          Effect.catchTag(
+            "Session.LifecycleConflictError",
+            (error) =>
+              new SessionLifecycleConflictError({
+                sessionID: error.sessionID,
+                lifecycleRevision: error.lifecycleRevision,
+                message: `Session lifecycle moved to revision ${error.lifecycleRevision}`,
+              }),
+          ),
+          Effect.catchTag("Session.LifecycleTransitionError", (error) => Effect.fail(transition(error))),
+        )
 
     return handlers
       .handle(
@@ -101,6 +155,54 @@ export const SessionHandler = HttpApiBuilder.group(Api, "server.session", (handl
                   }),
               ),
             ),
+          }
+        }),
+      )
+      .handle(
+        "session.tombstone",
+        Effect.fn(function* (ctx) {
+          const found = yield* session.tombstone(ctx.params.sessionID)
+          if (found) return { data: found }
+          return yield* new SessionNotFoundError({
+            sessionID: ctx.params.sessionID,
+            message: `Session not found: ${ctx.params.sessionID}`,
+          })
+        }),
+      )
+      .handle("session.archive", lifecycle((input) => session.archive(input)))
+      .handle("session.restore", lifecycle((input) => session.restore(input)))
+      .handle("session.trash", lifecycle((input) => session.trash(input)))
+      .handle("session.restoreFromTrash", lifecycle((input) => session.restoreFromTrash(input)))
+      .handle(
+        "session.purge",
+        Effect.fn(function* (ctx) {
+          return {
+            data: yield* session
+              .purge({
+                sessionID: ctx.params.sessionID,
+                requestID: ctx.payload.requestID,
+                confirmation: ctx.payload.confirmation,
+              })
+              .pipe(
+                Effect.catchTag(
+                  "Session.NotFoundError",
+                  (error) =>
+                    new SessionNotFoundError({
+                      sessionID: error.sessionID,
+                      message: `Session not found: ${error.sessionID}`,
+                    }),
+                ),
+                Effect.catchTag("Session.LifecycleTransitionError", (error) => Effect.fail(transition(error))),
+                Effect.catchTag(
+                  "Session.ConfirmationRequiredError",
+                  (error) =>
+                    new InvalidRequestError({
+                      message: "Permanent deletion requires the session ID echoed back as confirmation.",
+                      field: "confirmation",
+                      kind: error.sessionID,
+                    }),
+                ),
+              ),
           }
         }),
       )

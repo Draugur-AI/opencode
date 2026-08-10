@@ -51,6 +51,8 @@ retires it without reading every PR.
 | --- | --- | --- | --- | --- | --- |
 | `.github/workflows/typecheck.yml`: `runs-on: blacksmith-4vcpu-ubuntu-2404` → `ubuntu-latest` | Blacksmith is a hosted-runner service gated by a GitHub App install; `Draugur-AI` does not have it installed, so jobs targeting `blacksmith-*` labels queue forever and never report (confirmed empirically: 15+ min, never left `queued`). See "CI runner reality" below. | none — fork-infra only, upstream's own CI intentionally uses Blacksmith | none | none | **keep** — no Blacksmith app on this org, and GitHub-hosted is the deliberate long-term choice (avoids coupling this repo to infra it doesn't own) |
 | `.github/workflows/test.yml`: `unit` job matrix, both `host:` entries (`blacksmith-4vcpu-ubuntu-2404` / `blacksmith-4vcpu-windows-2025`) → `ubuntu-latest` / `windows-latest` | Same reason. This job also runs `check:generated` and `test:httpapi` (Linux-only steps within it), so fixing it alone covers typecheck + per-package tests + generated-client check. | none — fork-infra only | none | none | **keep** — no Blacksmith app on this org |
+| Session lifecycle domain: `Lifecycle` union + `lifecycleRevision` on `Session.Info`, durable `SessionEvent.LifecycleChanged`, explicit archive/restore/trash/restore-from-trash/purge verbs, tombstones, request deduplication, purge worker ([#4](https://github.com/Draugur-AI/opencode/pull/4)) | Upstream has an archived timestamp but no lifecycle type, grace period or revision, so restore, trash, purge, stale writes and deterministic client reconciliation cannot be expressed at all. Design post, "Fix session lifecycle before session chrome" | not yet filed | Adds `lifecycle`, `lifecycle_revision`, `time_trashed`, `purge_after`, `trash_restore_to` to `session`; adds `session_tombstone` and `session_lifecycle_request`; adds index `(project_id, lifecycle, time_updated, id)`. New durable event type, additive — no existing decoder changed | `20260810124427_session_lifecycle`: additive DDL plus a backfill setting `lifecycle = 'archived'` where `time_archived` is present. Idempotent — tested applied twice with a row written in between | **upstream** — this domain is what we would propose back; file the upstream issue before the first sync that touches it |
+| V1 compatibility shim: `time_archived` retained as a mirror of `lifecycle === 'archived'`, and `PATCH /session/:id { time: { archived } }` rewritten as an adapter over the lifecycle service ([#4](https://github.com/Draugur-AI/opencode/pull/4)) | Old clients must keep working through the migration window, and two paths writing the same state independently is how they drift apart — so the old route translates rather than writing the column itself. Validation post, "Compatibility is a differential test" | n/a — shim, not proposed upstream | `session.time_archived` kept beyond its usefulness to the current domain | none beyond the row above | **remove** — delete the column and the V1 route together once telemetry shows the V1 archive path unused for a full release window. Known limit until then: a **trashed** session still appears in a V1 active list, because V1 filters on `time_archived` and has no representation for trash; it disappears from V1 on purge. Revisit when slice 2 ships the Trash UI |
 
 `e2e` (in `test.yml`), `nix-eval.yml`, `pr-management.yml`'s `check-duplicates` job, and most of
 the release/publish/deploy/beta/docs/notify/storybook/triage/stats workflows are **not** in this
@@ -221,24 +223,54 @@ your own regression** — check whether it matches one of these first.
 
 | CI job | Failing test | Evidence | Feedback | Resolution condition |
 | --- | --- | --- | --- | --- |
-| `unit (windows)` | `bun install --linker hoisted` fails applying the `@ai-sdk/openai-compatible@2.0.41` patch | `error: renaming changes to cache dir: ENOTEMPTY: ... Directory not empty (NtSetInformationFile())` — matches the exact race described in [`oven-sh/bun#28147`](https://github.com/oven-sh/bun/issues/28147), which the workflow's own `bun install --linker hoisted` comment already references. Identical failure on 2/2 independent reruns. `ubuntu-latest` is unaffected. | feedback #136 (internal tracker) | Resolves when bun's patch-apply race is fixed upstream, or worked around (e.g. serialize patch application on Windows, or pin an unaffected bun patch-apply path). |
+| `unit (windows)` — **mode A, the common one** | A *varying subset of unrelated tests*, each failing at a uniform ~5000–5500ms | Not one test and not one cause. Three runs, failure sets by name: `dev@bd772dd3` (zero fork changes, the control) → `Ripgrep` ×4; `2e8d972` → `i18n parity` ×4, `Git worktrees`, `Git trees`, `LocationServiceMap`, `MoveSession` ×3; and Ripgrep *passed* in that third run. Suites that cannot share a cause (i18n string parity and git worktree creation do not interact) failing at an identical ~5s ceiling is the signature of a contended or underpowered runner hitting a per-test timeout — suspected to be `windows-latest` being smaller than the Blacksmith 4vcpu size upstream tunes these timeouts for. **The control run is the load-bearing evidence: `dev` fails this way with no fork code at all.** | feedback (internal tracker) — characterisation is future work, not scoped to any milestone-1 slice | Resolves when the flake is characterised: either the runner is sized up, or the per-test timeout is raised for Windows, or the affected suites are made timeout-independent. |
+| `unit (windows)` — **mode B, intermittent** | `bun install --linker hoisted` fails applying the `@ai-sdk/openai-compatible@2.0.41` patch | `error: renaming changes to cache dir: ENOTEMPTY: ... Directory not empty (NtSetInformationFile())` — matches the exact race described in [`oven-sh/bun#28147`](https://github.com/oven-sh/bun/issues/28147), which the workflow's own `bun install --linker hoisted` comment already references. Identical failure on 2/2 independent reruns at the time it was recorded. `ubuntu-latest` is unaffected. Listed alongside mode A rather than replaced by it: this mode is real and was observed, it simply is not the only way Windows goes red, and in later runs install succeeded and the job reached the tests instead. | feedback #136 (internal tracker) | Resolves when bun's patch-apply race is fixed upstream, or worked around (e.g. serialize patch application on Windows, or pin an unaffected bun patch-apply path). |
 | `unit (linux)` | `packages/opencode/test/cli/run/run-process.test.ts:79` — "exits nonzero promptly when the model is unknown (regression for #27371)" | `expect(result.durationMs).toBeLessThan(15_000)` received `15285ms` then `15275ms` on two independent reruns — consistently ~275–285ms *over* the `timeoutMs: 15_000` configured two lines above the assertion. The pattern (always just past the exact configured timeout, not randomly distributed) suggests the "unknown model" fast-fail path is not triggering on GitHub Actions' network, and the process is instead being killed by its own `timeoutMs` — which structurally cannot finish before the timeout it races against. Not exercised by TKT-304's local baseline (that baseline ran `packages/core test` + `packages/opencode test:httpapi` + `packages/app test` specifically, not `packages/opencode`'s own broader suite that `bun turbo test` pulls in). | feedback #136 (internal tracker) | Resolves when #136 is triaged — either the fast-fail detection is fixed, or the test's timing assumption is loosened for CI network conditions. |
 
 ## The milestone-1 required gate
 
-Per TKT-304's local baseline (all green at pinned `0bff28de`, zero pre-existing reds in that
-scope) and the runner fix above, the **documented milestone-1 merge gate** is:
+The **documented milestone-1 merge gate** is:
 
 - `typecheck` check **green** (GitHub-hosted, `bun typecheck` — schema/core/protocol/server/app)
-- the local `core`/`httpapi`/`app` suites **green**, exactly as TKT-304 baselined them
-  (`packages/core test`, `packages/opencode test:httpapi`, `packages/app test`)
+- `packages/core` suite **green** (`bun test --cwd packages/core`)
+- `packages/app` suite **green** (`bun run --cwd packages/app test` — unit and browser)
+- the **full** `packages/opencode` suite **green** (`bun test --cwd packages/opencode`), with
+  exactly the two known-reds in the table above as named exceptions and nothing else
+- `packages/opencode test:httpapi` **green**, kept named because CI runs it as a distinct step
+  and because it fails the build on any route with no scenario — a property the broader suite
+  does not have
 
-The full `unit (linux)`/`unit (windows)` CI jobs (which run the broader `bun turbo test` across
-every package, a wider surface than TKT-304's baseline) are **advisory** until
-feedback #136 (internal tracker) resolves — one known-red test on each platform (table above) means
-those jobs cannot be treated as a hard gate yet without also blocking on a pre-existing,
-unrelated defect. `check-standards` / `check-compliance` (PR hygiene) are real signal if labeled,
-but not a quality gate.
+On the CI `unit` jobs specifically:
+
+1. **`unit (linux)`** — reds must be exactly the documented `run-process` timeout, and nothing else.
+2. **`unit (windows)`** — a named exception **in full**, until mode A above is characterised. It is
+   not a signal either way today.
+3. 🛑 **Any Windows failure is compared against a dev-baseline run before being attributed to a
+   PR.** One API call stands between a real regression and a shrug:
+   `gh api "repos/Draugur-AI/opencode/commits/<dev-sha>/check-runs"`, then read the failing test
+   *names* out of the job log and diff them against the PR's. This clause exists because a merge
+   condition of "windows reds exactly the documented ones" was briefly in force and **`dev` itself
+   could not meet it** — a condition the mainline fails is not a gate, it is a lockout. Writing the
+   comparison down rather than leaving it to whoever happens to be careful is the whole point.
+
+**Nothing in this gate is "advisory".** A check is either in the gate, or it has a named, linked
+exception in the known-red table. That rule replaces an earlier scoping of this gate to TKT-304's
+baseline command list, which was narrower than the code it was gating: the baseline ran
+`test:httpapi` (215 route scenarios) but never `packages/opencode`'s own suite (~3280 tests), and
+**three real regressions shipped into that gap** on [#4](https://github.com/Draugur-AI/opencode/pull/4)
+— a public-wire-type count assertion, and a V1 contract regression where the archive adapter
+discarded the caller's timestamp and answered with a wall-clock instant instead. All three were
+invisible to the gate as written and were caught only because the then-advisory `unit` jobs were
+read anyway. The same narrowness shows up twice more: the `unit (linux)` known-red below, and
+`bun run lint` (1 pre-existing error, ~4859 warnings) which no baseline command covered either.
+
+`check-standards` / `check-compliance` (PR hygiene) are real signal if labeled, but not a quality
+gate.
+
+**Local-environment caveat:** `packages/opencode/test/tool/write.test.ts` "sets file permissions
+when writing sensitive data" asserts `0o644` and fails with `0o664` on a machine whose umask is
+`002` (the shared dev box is one). CI's `ubuntu-latest` runner uses umask `022` and passes it.
+That is the environment, not the code — do not chase it, and do not add it to the known-red table.
 
 Not yet part of the functional gate at all (documented above, not silently broken): `e2e
 (linux/windows)`, `nix-eval`, `/review`. There is no branch protection configured, so none of

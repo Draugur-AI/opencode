@@ -11,6 +11,18 @@ import type {
   SessionsActiveOutput,
   SessionsGetInput,
   SessionsGetOutput,
+  SessionsTombstoneInput,
+  SessionsTombstoneOutput,
+  SessionsArchiveInput,
+  SessionsArchiveOutput,
+  SessionsRestoreInput,
+  SessionsRestoreOutput,
+  SessionsTrashInput,
+  SessionsTrashOutput,
+  SessionsRestoreFromTrashInput,
+  SessionsRestoreFromTrashOutput,
+  SessionsPurgeInput,
+  SessionsPurgeOutput,
   SessionsSwitchAgentInput,
   SessionsSwitchAgentOutput,
   SessionsSwitchModelInput,
@@ -293,6 +305,7 @@ export function make(options: ClientOptions) {
               limit: input?.["limit"],
               order: input?.["order"],
               search: input?.["search"],
+              lifecycle: input?.["lifecycle"],
               directory: input?.["directory"],
               project: input?.["project"],
               subpath: input?.["subpath"],
@@ -339,6 +352,77 @@ export function make(options: ClientOptions) {
             path: `/api/session/${encodeURIComponent(input.sessionID)}`,
             successStatus: 200,
             declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      tombstone: (input: SessionsTombstoneInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionsTombstoneOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/tombstone`,
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      archive: (input: SessionsArchiveInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionsArchiveOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/archive`,
+            body: { requestID: input["requestID"], expectedLifecycleRevision: input["expectedLifecycleRevision"] },
+            successStatus: 200,
+            declaredStatuses: [409, 404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      restore: (input: SessionsRestoreInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionsRestoreOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/restore`,
+            body: { requestID: input["requestID"], expectedLifecycleRevision: input["expectedLifecycleRevision"] },
+            successStatus: 200,
+            declaredStatuses: [409, 404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      trash: (input: SessionsTrashInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionsTrashOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/trash`,
+            body: { requestID: input["requestID"], expectedLifecycleRevision: input["expectedLifecycleRevision"] },
+            successStatus: 200,
+            declaredStatuses: [409, 404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      restoreFromTrash: (input: SessionsRestoreFromTrashInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionsRestoreFromTrashOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/restore-from-trash`,
+            body: { requestID: input["requestID"], expectedLifecycleRevision: input["expectedLifecycleRevision"] },
+            successStatus: 200,
+            declaredStatuses: [409, 404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      purge: (input: SessionsPurgeInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: SessionsPurgeOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/purge`,
+            body: { requestID: input["requestID"], confirmation: input["confirmation"] },
+            successStatus: 200,
+            declaredStatuses: [400, 409, 404, 401],
             empty: false,
           },
           requestOptions,

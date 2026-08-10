@@ -1,6 +1,8 @@
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 import { Agent } from "@/agent/agent"
 import { SessionV1 } from "@opencode-ai/core/v1/session"
+import { SessionV2 } from "@opencode-ai/core/session"
+import { SessionLifecycle } from "@opencode-ai/core/session/lifecycle"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { Command } from "@/command"
 import { Permission } from "@/permission"
@@ -16,7 +18,7 @@ import { SessionSummary } from "@/session/summary"
 import { Todo } from "@/session/todo"
 import { MessageID, PartID, SessionID } from "@/session/schema"
 import { NamedError } from "@opencode-ai/core/util/error"
-import { Cause, Effect, Option, Schema, Scope } from "effect"
+import { Cause, DateTime, Effect, Option, Schema, Scope } from "effect"
 import * as Stream from "effect/Stream"
 import { InstanceState } from "@/effect/instance-state"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
@@ -59,6 +61,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
     const todoSvc = yield* Todo.Service
     const summary = yield* SessionSummary.Service
     const events = yield* EventV2Bridge.Service
+    const sessionV2 = yield* SessionV2.Service
     const scope = yield* Scope.Scope
 
     const list = Effect.fn("SessionHttpApi.list")(function* (ctx: { query: typeof ListQuery.Type }) {
@@ -80,6 +83,45 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
 
     const requireSession = Effect.fn("SessionHttpApi.requireSession")(function* (sessionID: SessionID) {
       return yield* SessionError.mapStorageNotFound(session.get(sessionID))
+    })
+
+    /**
+     * V1 compatibility adapter for `PATCH /session/:id { time: { archived } }`.
+     *
+     * It calls the current lifecycle service rather than writing the archived timestamp itself.
+     * Two paths writing the same state independently is how they drift apart, and the differential
+     * tests in packages/core exist to prove this one does not: the durable event, the aggregate
+     * sequence and the final projection are the same whichever route was used.
+     *
+     * The old route carries no request ID, so one is derived from the session and the timestamp it
+     * sent. An identical V1 retry is then deduplicated exactly as a current client would be.
+     *
+     * The V1 payload can only SET an archived timestamp — it has no representation for clearing
+     * one — so this adapter only ever archives. Restore, trash and purge are reachable only
+     * through the current routes.
+     */
+    const setArchivedThroughLifecycle = Effect.fn("SessionHttpApi.setArchived")(function* (
+      sessionID: SessionID,
+      archived: number,
+    ) {
+      const id = SessionV2.ID.make(sessionID)
+      const current = yield* sessionV2.get(id).pipe(Effect.orDie)
+      // Only an active session is archivable. A session already archived keeps the instant it was
+      // archived at — the lifecycle has no "re-stamp the archive time" transition — and one in
+      // trash must not be quietly resurrected by a client that cannot express trash at all. The
+      // route still answers with the session's real state, so a caller is told the truth either
+      // way rather than being echoed a value that was not stored.
+      if (current.lifecycle.state !== "active") return
+      yield* sessionV2
+        .archive({
+          sessionID: id,
+          requestID: SessionLifecycle.RequestID.make(`v1-archive:${sessionID}:${archived}`),
+          // The V1 contract is "store exactly the timestamp I sent", and its schema deliberately
+          // accepts values no clock produces (the route's own tests pass 1 and -1). Stamping the
+          // current time here instead would silently rewrite what the caller asked for.
+          at: DateTime.makeUnsafe(archived),
+        })
+        .pipe(Effect.orDie)
     })
 
     const get = Effect.fn("SessionHttpApi.get")(function* (ctx: { params: { sessionID: SessionID } }) {
@@ -198,7 +240,7 @@ export const sessionHandlers = HttpApiBuilder.group(InstanceHttpApi, "session", 
         })
       }
       if (ctx.payload.time?.archived !== undefined) {
-        yield* session.setArchived({ sessionID: ctx.params.sessionID, time: ctx.payload.time.archived })
+        yield* setArchivedThroughLifecycle(ctx.params.sessionID, ctx.payload.time.archived)
       }
       return yield* requireSession(ctx.params.sessionID)
     })
