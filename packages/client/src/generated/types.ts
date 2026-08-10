@@ -148,6 +148,23 @@ export type ProjectCopyError = {
 export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
   typeof value === "object" && value !== null && "name" in value && value["name"] === "ProjectCopyError"
 
+export type ProjectNotFoundError = {
+  readonly _tag: "ProjectNotFoundError"
+  readonly projectID: string
+  readonly message: string
+}
+export const isProjectNotFoundError = (value: unknown): value is ProjectNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProjectNotFoundError"
+
+export type ProjectPreferenceConflictError = {
+  readonly _tag: "ProjectPreferenceConflictError"
+  readonly projectID: string
+  readonly revision: number
+  readonly message: string
+}
+export const isProjectPreferenceConflictError = (value: unknown): value is ProjectPreferenceConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProjectPreferenceConflictError"
+
 export type HealthGetOutput = { readonly healthy: true }
 
 export type LocationGetInput = {
@@ -3490,3 +3507,126 @@ export type ProjectCopiesRefreshInput = {
 }
 
 export type ProjectCopiesRefreshOutput = void
+
+export type ServerProjectListOutput = {
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly worktree: string
+    readonly vcs?: "git"
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+    readonly time: { readonly created: number; readonly updated: number; readonly initialized?: number }
+    readonly sandboxes: ReadonlyArray<string>
+  }>
+}["data"]
+
+export type ServerProjectGetInput = { readonly projectID: { readonly projectID: string }["projectID"] }
+
+export type ServerProjectGetOutput = {
+  readonly data: {
+    readonly id: string
+    readonly worktree: string
+    readonly vcs?: "git"
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+    readonly time: { readonly created: number; readonly updated: number; readonly initialized?: number }
+    readonly sandboxes: ReadonlyArray<string>
+  }
+}["data"]
+
+export type ServerProjectUpdateMetadataInput = {
+  readonly projectID: { readonly projectID: string }["projectID"]
+  readonly name?: {
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+  }["name"]
+  readonly icon?: {
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+  }["icon"]
+  readonly commands?: {
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+  }["commands"]
+}
+
+export type ServerProjectUpdateMetadataOutput = {
+  readonly data: {
+    readonly id: string
+    readonly worktree: string
+    readonly vcs?: "git"
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+    readonly time: { readonly created: number; readonly updated: number; readonly initialized?: number }
+    readonly sandboxes: ReadonlyArray<string>
+  }
+}["data"]
+
+export type ServerProjectReadInput = { readonly projectID: { readonly projectID: string }["projectID"] }
+
+export type ServerProjectReadOutput = {
+  readonly data: {
+    readonly projectID: string
+    readonly favorite: boolean
+    readonly rank?: string
+    readonly hidden: boolean
+    readonly lastOpenedAt?: number
+    readonly revision: number
+  }
+}["data"]
+
+export type ServerProjectWriteInput = {
+  readonly projectID: { readonly projectID: string }["projectID"]
+  readonly favorite?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["favorite"]
+  readonly rank?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["rank"]
+  readonly hidden?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["hidden"]
+  readonly lastOpenedAt?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["lastOpenedAt"]
+  readonly expectedRevision?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["expectedRevision"]
+}
+
+export type ServerProjectWriteOutput = {
+  readonly data: {
+    readonly projectID: string
+    readonly favorite: boolean
+    readonly rank?: string
+    readonly hidden: boolean
+    readonly lastOpenedAt?: number
+    readonly revision: number
+  }
+}["data"]

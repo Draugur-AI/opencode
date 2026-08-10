@@ -196,3 +196,24 @@ export class PtyNotFoundError extends Schema.TaggedErrorClass<PtyNotFoundError>(
   },
   { httpApiStatus: 404 },
 ) {}
+
+export class ProjectNotFoundError extends Schema.TaggedErrorClass<ProjectNotFoundError>()(
+  "ProjectNotFoundError",
+  {
+    projectID: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 404 },
+) {}
+
+/** A preference patch lost to a concurrent one, or carried a stale `expectedRevision`. Carries
+ * the revision the row actually holds so a client can retry without a second read. */
+export class ProjectPreferenceConflictError extends Schema.TaggedErrorClass<ProjectPreferenceConflictError>()(
+  "ProjectPreferenceConflictError",
+  {
+    projectID: Schema.String,
+    revision: Schema.Int,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}

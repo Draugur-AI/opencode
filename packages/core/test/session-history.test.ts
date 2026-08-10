@@ -21,6 +21,12 @@ const projects = Layer.succeed(
     resolve: (directory) => Effect.succeed({ id: ProjectV2.ID.global, directory }),
     directories: () => Effect.succeed([]),
     commit: () => Effect.void,
+    list: () => Effect.succeed([]),
+    get: () => Effect.succeed(undefined),
+    updateMetadata: () => Effect.die("not implemented in test fixture"),
+    preferenceGet: (projectID) =>
+      Effect.succeed({ projectID, favorite: false, hidden: false, rank: undefined, lastOpenedAt: undefined, revision: 0 }),
+    preferencePatch: () => Effect.die("not implemented in test fixture"),
   }),
 )
 const it = testEffect(

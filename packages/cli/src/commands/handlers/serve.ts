@@ -3,6 +3,7 @@ import { Credential } from "@opencode-ai/core/credential"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
+import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionGoal } from "@opencode-ai/core/session/goal"
 import { SessionLedger } from "@opencode-ai/core/session/ledger"
 import { Context, Layer, Option } from "effect"
@@ -43,7 +44,15 @@ function bind(hostname: string, port: number, password: string) {
     HttpRouter.serve(createRoutes(password), { disableListenLog: true, disableLogger: true }).pipe(
       Layer.provideMerge(NodeHttpServer.layer(() => createServer(), { port, host: hostname })),
       Layer.provide(
-        AppNodeBuilder.build(LayerNode.group([Credential.node, PermissionSaved.node, SessionGoal.node, SessionLedger.node])),
+        AppNodeBuilder.build(
+          LayerNode.group([
+            Credential.node,
+            PermissionSaved.node,
+            ProjectV2.node,
+            SessionGoal.node,
+            SessionLedger.node,
+          ]),
+        ),
       ),
     ),
   ).pipe(Effect.map((context) => Context.get(context, HttpServer.HttpServer).address))

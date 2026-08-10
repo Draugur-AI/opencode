@@ -333,32 +333,26 @@ const layer = Layer.effect(
       )
     })
 
+    // list/get/update now delegate to ProjectV2, which owns ProjectTable persistence (and
+    // publishes project.updated itself, through EventV2 -- EventV2Bridge relays that into
+    // GlobalBus below unchanged, so existing SSE consumers see no difference). Two paths
+    // writing this state independently is how they drift; keeping exactly one is the point
+    // of the move.
     const list = Effect.fn("Project.list")(function* () {
-      return (yield* db.select().from(ProjectTable).all().pipe(Effect.orDie)).map(fromRow)
+      return yield* projectV2.list()
     })
 
     const get = Effect.fn("Project.get")(function* (id: ProjectV2.ID) {
-      const row = yield* db.select().from(ProjectTable).where(eq(ProjectTable.id, id)).get().pipe(Effect.orDie)
-      return row ? fromRow(row) : undefined
+      return yield* projectV2.get(id)
     })
 
     const update = Effect.fn("Project.update")(function* (input: UpdateInput) {
-      const result = yield* db
-        .update(ProjectTable)
-        .set({
-          name: input.name,
-          icon_url: input.icon?.url,
-          icon_url_override: input.icon?.override,
-          icon_color: input.icon?.color,
-          commands: input.commands,
-          time_updated: Date.now(),
-        })
-        .where(eq(ProjectTable.id, input.projectID))
-        .returning()
-        .get()
-        .pipe(Effect.orDie)
-      if (!result) return yield* new NotFoundError({ projectID: input.projectID })
-      const data = fromRow(result)
+      const data = yield* projectV2.updateMetadata(input).pipe(
+        Effect.catchTag("Project.NotFoundError", (error) => new NotFoundError({ projectID: error.projectID })),
+      )
+      // ProjectV2 does not publish this itself -- see the comment on ProjectV2.Info in
+      // packages/core/src/project.ts (core cannot depend on EventV2 without a circular import).
+      // Every caller of updateMetadata publishes for itself; this is the V1 route's.
       yield* emitUpdated(data)
       return data
     })
