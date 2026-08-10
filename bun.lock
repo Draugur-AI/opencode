@@ -491,6 +491,20 @@
         "vite": "catalog:",
       },
     },
+    "packages/eval": {
+      "name": "@opencode-ai/eval",
+      "dependencies": {
+        "@opencode-ai/core": "workspace:*",
+        "@opencode-ai/llm": "workspace:*",
+        "@opencode-ai/schema": "workspace:*",
+        "effect": "catalog:",
+      },
+      "devDependencies": {
+        "@tsconfig/bun": "catalog:",
+        "@types/bun": "catalog:",
+        "@typescript/native-preview": "catalog:",
+      },
+    },
     "packages/function": {
       "name": "@opencode-ai/function",
       "version": "1.18.16",
@@ -1971,6 +1985,8 @@
     "@opencode-ai/effect-sqlite-node": ["@opencode-ai/effect-sqlite-node@workspace:packages/effect-sqlite-node"],
 
     "@opencode-ai/enterprise": ["@opencode-ai/enterprise@workspace:packages/enterprise"],
+
+    "@opencode-ai/eval": ["@opencode-ai/eval@workspace:packages/eval"],
 
     "@opencode-ai/function": ["@opencode-ai/function@workspace:packages/function"],
 
