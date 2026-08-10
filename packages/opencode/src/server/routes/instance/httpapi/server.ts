@@ -59,6 +59,8 @@ import { ModelsDev } from "@opencode-ai/core/models-dev"
 import { Npm } from "@opencode-ai/core/npm"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
+import { SessionGoal } from "@opencode-ai/core/session/goal"
+import { SessionLedger } from "@opencode-ai/core/session/ledger"
 import { ProjectCopy } from "@opencode-ai/core/project/copy"
 import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { Ripgrep } from "@opencode-ai/core/ripgrep"
@@ -266,6 +268,13 @@ const app = LayerNode.group([
   ProjectV2.node,
   ProjectCopy.node,
   PtyTicket.node,
+  // Pre-existing gap from #7 (TKT-317, goal/ledger): session.goal.* and session.ledger.*
+  // routes 500'd with "Service not found" through this path, because this list -- not
+  // packages/server/routes.ts -- is what the httpapi exerciser and this V1 HttpApiApp
+  // actually build against. Found while working TKT-315; see FORK.md's node-assembly-sites
+  // list for every other place a new global .node needs the same explicit entry.
+  SessionGoal.node,
+  SessionLedger.node,
 ])
 
 export function createRoutes(
