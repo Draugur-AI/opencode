@@ -10,6 +10,8 @@ import { DateTimeUtcFromMillis, NonNegativeInt, RelativePath } from "./schema"
 import { FileAttachment, Prompt } from "./prompt"
 import { SessionID } from "./session-id"
 import { SessionLifecycle } from "./session-lifecycle"
+import { SessionGoal } from "./session-goal"
+import { SessionLedger } from "./session-ledger"
 import { Location } from "./location"
 import { SessionMessage } from "./session-message"
 import { Revert } from "./revert"
@@ -91,6 +93,60 @@ export const LifecycleChanged = Event.define({
   },
 })
 export type LifecycleChanged = typeof LifecycleChanged.Type
+
+export const GoalUpdated = Event.define({
+  type: "session.next.goal.updated",
+  ...options,
+  schema: {
+    ...Base,
+    objective: Schema.String,
+    acceptanceCriteria: Schema.Array(SessionGoal.AcceptanceCriterion),
+    constraints: Schema.Array(SessionGoal.Constraint),
+    sourceMessageIDs: Schema.Array(SessionMessage.ID),
+    /**
+     * The version the caller believed it was replacing -- also serves as "previous version" for
+     * anyone reading this event later. Absent means an unconditional write (goal creation).
+     * The projector enforces it inside the commit transaction, same as expectedLifecycleRevision.
+     */
+    expectedVersion: NonNegativeInt.pipe(optional),
+  },
+})
+export type GoalUpdated = typeof GoalUpdated.Type
+
+export const GoalStatusChanged = Event.define({
+  type: "session.next.goal.status_changed",
+  ...options,
+  schema: {
+    ...Base,
+    status: SessionGoal.Status,
+    expectedVersion: NonNegativeInt.pipe(optional),
+  },
+})
+export type GoalStatusChanged = typeof GoalStatusChanged.Type
+
+export const LedgerAdded = Event.define({
+  type: "session.next.ledger.added",
+  ...options,
+  schema: {
+    ...Base,
+    entryID: SessionLedger.ID,
+    kind: SessionLedger.Kind,
+    text: Schema.String,
+    sourceMessageIDs: Schema.Array(SessionMessage.ID),
+  },
+})
+export type LedgerAdded = typeof LedgerAdded.Type
+
+export const LedgerSuperseded = Event.define({
+  type: "session.next.ledger.superseded",
+  ...options,
+  schema: {
+    ...Base,
+    entryID: SessionLedger.ID,
+    supersededBy: SessionLedger.ID,
+  },
+})
+export type LedgerSuperseded = typeof LedgerSuperseded.Type
 
 export const Moved = Event.define({
   type: "session.next.moved",
@@ -468,6 +524,10 @@ export const DurableDefinitions = Event.inventory(
   AgentSwitched,
   ModelSwitched,
   LifecycleChanged,
+  GoalUpdated,
+  GoalStatusChanged,
+  LedgerAdded,
+  LedgerSuperseded,
   Moved,
   Prompted,
   PromptAdmitted,
@@ -500,6 +560,10 @@ export const Definitions = Event.inventory(
   AgentSwitched,
   ModelSwitched,
   LifecycleChanged,
+  GoalUpdated,
+  GoalStatusChanged,
+  LedgerAdded,
+  LedgerSuperseded,
   Moved,
   Prompted,
   PromptAdmitted,

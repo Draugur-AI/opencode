@@ -3,6 +3,8 @@ import { MessageHandler } from "./handlers/message"
 import { ModelHandler } from "./handlers/model"
 import { ProviderHandler } from "./handlers/provider"
 import { SessionHandler } from "./handlers/session"
+import { GoalHandler } from "./handlers/goal"
+import { LedgerHandler } from "./handlers/ledger"
 import { PermissionHandler } from "./handlers/permission"
 import { FileSystemHandler } from "./handlers/fs"
 import { CommandHandler } from "./handlers/command"
@@ -23,6 +25,8 @@ export const handlers = Layer.mergeAll(
   LocationHandler,
   AgentHandler,
   SessionHandler,
+  GoalHandler,
+  LedgerHandler,
   MessageHandler,
   ModelHandler,
   ProviderHandler,

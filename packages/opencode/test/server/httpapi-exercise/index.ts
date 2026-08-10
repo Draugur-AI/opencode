@@ -890,6 +890,81 @@ const scenarios: Scenario[] = [
       headers: ctx.headers(),
     }))
     .json(404, object, "status"),
+  http.protected
+    .get("/api/session/{sessionID}/goal", "v2.session.goal.get")
+    .seeded((ctx) => ctx.session({ title: "Goal get owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/goal", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, (body) => {
+      object(body)
+      check(body.data === undefined, "a session with no goal set should report no data")
+    }),
+  http.protected
+    .put("/api/session/{sessionID}/goal", "v2.session.goal.update")
+    .seeded((ctx) => ctx.session({ title: "Goal update owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/goal", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: {
+        objective: "Exercise the goal endpoint",
+        acceptanceCriteria: [],
+        constraints: [],
+        sourceMessageIDs: [],
+      },
+    }))
+    .json(200, (body) => {
+      object(body)
+      object(body.data)
+      check(body.data.objective === "Exercise the goal endpoint", "goal update should return the new objective")
+      check(typeof body.data.version === "number" && body.data.version > 0, "goal update should return a version")
+    }),
+  http.protected
+    .put("/api/session/{sessionID}/goal/status", "v2.session.goal.status")
+    .seeded((ctx) => ctx.session({ title: "Goal status owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/goal/status", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: { status: "achieved" },
+    }))
+    // No goal was ever set for this session, so the compare-and-set inside the projector cannot
+    // find a row to transition -- the same conflict path a stale write would hit.
+    .json(409, object, "status"),
+  http.protected
+    .get("/api/session/{sessionID}/ledger", "v2.session.ledger.list")
+    .seeded((ctx) => ctx.session({ title: "Ledger list owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/ledger", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+    }))
+    .json(200, data(array)),
+  http.protected
+    .post("/api/session/{sessionID}/ledger", "v2.session.ledger.add")
+    .seeded((ctx) => ctx.session({ title: "Ledger add owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/ledger", { sessionID: ctx.state.id }),
+      headers: ctx.headers(),
+      body: { kind: "fact", text: "Exercised via httpapi", sourceMessageIDs: [] },
+    }))
+    .json(200, (body) => {
+      object(body)
+      object(body.data)
+      check(typeof body.data.id === "string", "ledger add should return an entry ID")
+      check(body.data.text === "Exercised via httpapi", "ledger add should return the recorded text")
+    }),
+  http.protected
+    .post("/api/session/{sessionID}/ledger/{entryID}/supersede", "v2.session.ledger.supersede")
+    .seeded((ctx) => ctx.session({ title: "Ledger supersede owner" }))
+    .at((ctx) => ({
+      path: route("/api/session/{sessionID}/ledger/{entryID}/supersede", {
+        sessionID: ctx.state.id,
+        entryID: "ledger_httpapi_missing",
+      }),
+      headers: ctx.headers(),
+      body: { supersededBy: "ledger_httpapi_missing_2" },
+    }))
+    .json(404, object, "status"),
   http.protected.get("/api/permission/saved", "v2.permission.saved.list").json(200, (body) => {
     object(body)
     array(body.data)
