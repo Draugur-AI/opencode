@@ -83,6 +83,29 @@ await Effect.runPromise(
               '', 'Pre-worktree-tracking session', 'fixture-legacy', ${T0}, ${T0})
     `)
 
+    // -- Durable event log on the active session: a normal current-version event, then an
+    //    old-event-decoder case. This snapshot (0bff28de-derived dev) has never bumped a
+    //    versioned event type past ".1" (checked: no ".2"+ type exists anywhere in the repo),
+    //    so there is no genuinely-superseded decoder to fixture against yet. What *is*
+    //    real and already relied on elsewhere (packages/core/test/database-migration.test.ts,
+    //    "preserves canonical V1 state and restarts its event stream") is a versioned event
+    //    row with a sparse `data: '{}'` payload -- an event older emitters wrote before a
+    //    field was added, which the current decoder must still load without dying. That's
+    //    the malformed-but-readable property this fixture proves; see README for the
+    //    superseded-version gap this leaves open.
+    yield* db.run(sql`INSERT INTO event_sequence (aggregate_id, seq) VALUES ('ses_active0000000000000000', 1)`)
+    yield* db.run(sql`
+      INSERT INTO event (id, aggregate_id, seq, type, data)
+      VALUES ('evt_created0000000000000', 'ses_active0000000000000000', 0, 'session.created.1', ${JSON.stringify({
+        sessionID: "ses_active0000000000000000",
+        info: { title: "Fix the login bug" },
+      })})
+    `)
+    yield* db.run(sql`
+      INSERT INTO event (id, aggregate_id, seq, type, data)
+      VALUES ('evt_sparse00000000000000', 'ses_active0000000000000000', 1, 'session.updated.1', '{}')
+    `)
+
     // -- V1 message/part rows on the active session: a user message and an assistant
     //    message with a completed tool call, matching the shapes packages/schema/src/v1/session.ts
     //    decodes (SessionV1.Info is a User|Assistant union; Part includes ToolPart).

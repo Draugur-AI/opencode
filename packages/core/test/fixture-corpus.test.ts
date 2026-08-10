@@ -47,11 +47,17 @@ describe("regression corpus: db/baseline.db", () => {
         const v2ByType = yield* db.all<{ type: string; n: number }>(
           sql`SELECT type, COUNT(*) AS n FROM session_message GROUP BY type ORDER BY type`,
         )
+        const events = yield* db.all<{ id: string; seq: number; type: string; data: string }>(
+          sql`SELECT id, seq, type, data FROM event ORDER BY seq`,
+        )
+        const eventSequence = yield* db.get<{ aggregate_id: string; seq: number }>(
+          sql`SELECT aggregate_id, seq FROM event_sequence`,
+        )
         const compaction = yield* db.get<{ data: string }>(
           sql`SELECT data FROM session_message WHERE type = 'compaction' LIMIT 1`,
         )
 
-        return { projects, sessions, v1MessageCount, v1PartCount, v2ByType, compaction }
+        return { projects, sessions, v1MessageCount, v1PartCount, v2ByType, events, eventSequence, compaction }
       }).pipe(Effect.provide(SqliteClient.layer({ filename: copyPath, disableWAL: true })), Effect.scoped),
     )
 
@@ -103,5 +109,20 @@ describe("regression corpus: db/baseline.db", () => {
     const compactionData = JSON.parse(projections.compaction!.data)
     expect(compactionData.reason).toBe("auto")
     expect(compactionData.summary).toContain("500")
+
+    // Durable event log: a normal versioned event, then the old-event-decoder case --
+    // a versioned type with a sparse `data: '{}'` payload (the same shape
+    // database-migration.test.ts already relies on decoding). DatabaseMigration.apply()
+    // above already proved this loads without dying; this proves it's still readable.
+    expect(projections.eventSequence).toEqual({ aggregate_id: "ses_active0000000000000000", seq: 1 })
+    expect(projections.events).toEqual([
+      {
+        id: "evt_created0000000000000",
+        seq: 0,
+        type: "session.created.1",
+        data: JSON.stringify({ sessionID: "ses_active0000000000000000", info: { title: "Fix the login bug" } }),
+      },
+      { id: "evt_sparse00000000000000", seq: 1, type: "session.updated.1", data: "{}" },
+    ])
   })
 })

@@ -25,8 +25,16 @@ file here as append-only.
   project, a legacy-format project (bare root-commit-sha ID), an active session, an archived
   session, a legacy session with an empty `directory` (a documented-valid legacy value —
   `packages/core/src/database/path.ts`), V1 `message`/`part` rows including one sparse
-  `data: '{}'` malformed-but-readable historical row, and V2 `session_message` rows (user,
-  assistant with a completed tool call, and an auto compaction). Loaded and asserted against by
+  `data: '{}'` malformed-but-readable historical row, V2 `session_message` rows (user, assistant
+  with a completed tool call, and an auto compaction), and a two-row durable event log
+  (`event`/`event_sequence`) on the active session: a normal `session.created.1` event, then a
+  `session.updated.1` event with a sparse `data: '{}'` payload — the old-event-decoder case,
+  proving a versioned event an older emitter wrote before a field existed still loads. **Known
+  gap, stated rather than silently omitted**: this snapshot (`0bff28de`-derived `dev`, checked at
+  authoring time) has never bumped a versioned event type past `.1` anywhere in the repo, so there
+  is no genuinely-*superseded* decoder (e.g. a `.1` a `.2` replaced) to fixture against yet. Add
+  that case here — as a new file, per the immutability rule above — the first time a real
+  migration bumps an event version. Loaded and asserted against by
   `packages/core/test/fixture-corpus.test.ts`.
 
 - **`protocol/`** — JSON fixtures for the current (V2) and compatibility (V1) session wire
