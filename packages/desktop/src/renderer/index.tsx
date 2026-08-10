@@ -9,6 +9,7 @@ import {
   type Locale,
   type Platform,
   PlatformProvider,
+  preloadSessionRoute,
   createDraftStore,
   ServerConnection,
   useCommand,
@@ -22,7 +23,7 @@ import { createMemoryHistory, MemoryRouter, type BaseRouterProps } from "@solidj
 import { createEffect, createMemo, createResource, createSignal, onCleanup, Show } from "solid-js"
 import { render } from "solid-js/web"
 import pkg from "../../package.json"
-import { t } from "./i18n"
+import { initI18n, t } from "./i18n"
 import { initializationData } from "./initialization"
 import { DesktopFirstLaunchOnboarding } from "./onboarding"
 import { resetZoom, setPinchZoomEnabled, webviewZoom, zoomIn, zoomOut } from "./webview-zoom"
@@ -59,6 +60,8 @@ if (import.meta.env.VITE_SENTRY_DSN) {
     },
   })
 }
+
+void initI18n()
 
 const [updaterState, setUpdaterState] = createSignal<UpdaterState>({ status: "disabled" })
 void window.api.updater.subscribe(setUpdaterState)
@@ -441,7 +444,9 @@ render(() => {
     const api = window.api as typeof window.api & {
       getWindowID?: () => Promise<string>
     }
-    return { id: await api.getWindowID?.() }
+    const id = await api.getWindowID?.()
+    if (/^\/server\/[^/]+\/session\/[^/]+/.test(getLastActiveUrl(id ?? "browser"))) await preloadSessionRoute()
+    return { id }
   })
 
   return (
