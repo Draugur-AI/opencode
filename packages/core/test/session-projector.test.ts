@@ -298,6 +298,14 @@ describe("SessionProjector", () => {
         reason: "manual",
         text: "summary",
         recent: "recent context",
+        tokensBefore: 100,
+        retainedTailMessages: 1,
+        retainedTailTokens: 10,
+        summaryBytes: 7,
+        summaryTokens: 3,
+        durationMs: 5,
+        sourceSeqStart: 0,
+        sourceSeqEnd: 1,
       })
 
       const rows = yield* db

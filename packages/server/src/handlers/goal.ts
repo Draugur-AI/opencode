@@ -18,7 +18,13 @@ export const GoalHandler = HttpApiBuilder.group(Api, "server.goal", (handlers) =
         "session.goal.get",
         Effect.fn(function* (ctx) {
           const goal = yield* SessionGoal.Service
-          return { data: yield* goal.get(ctx.params.sessionID) }
+          const value = yield* goal.get(ctx.params.sessionID)
+          // A JS object literal `{ data: undefined }` still has the "data" key present (value
+          // undefined) -- the schema's Schema.optional accepts that, but the httpapi JSON encoder
+          // writes it as `data: null` rather than omitting the key, which fails a strict
+          // `=== undefined` check on the wire. Omitting the key entirely, not just its value,
+          // is what actually round-trips as absent.
+          return value === undefined ? {} : { data: value }
         }),
       )
       .handle(

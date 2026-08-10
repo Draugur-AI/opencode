@@ -6,6 +6,7 @@ import { ModelGroup } from "./groups/model"
 import { ProviderGroup } from "./groups/provider"
 import { makeSessionGroup } from "./groups/session"
 import { makeGoalGroup } from "./groups/goal"
+import { makeHistoryGroup } from "./groups/history"
 import { makeLedgerGroup } from "./groups/ledger"
 import { makePermissionGroup } from "./groups/permission"
 import { FileSystemGroup } from "./groups/fs"
@@ -44,6 +45,7 @@ const makeApiFromGroup = <
     .add(makeSessionGroup(sessionLocationMiddleware))
     .add(makeGoalGroup(sessionLocationMiddleware))
     .add(makeLedgerGroup(sessionLocationMiddleware))
+    .add(makeHistoryGroup(sessionLocationMiddleware))
     .add(MessageGroup.middleware(sessionLocationMiddleware))
     .add(ModelGroup.middleware(locationMiddleware))
     .add(ProviderGroup.middleware(locationMiddleware))

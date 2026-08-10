@@ -84,7 +84,9 @@ export const serializeToolContent = (content: SessionMessage.ToolStateCompleted[
     )
     .join("\n")
 
-const serialize = (message: SessionMessage.Message) => {
+// Exported for reuse by history-search.ts: both compaction and full-history search need the same
+// "message -> normalized plain text" rendering, and duplicating it would let the two drift apart.
+export const serialize = (message: SessionMessage.Message) => {
   if (message.type === "user") {
     const files = message.files?.map((file) => `[Attached ${file.mime}: ${file.name ?? file.uri}]`) ?? []
     return [`[User]: ${message.text}`, ...files].join("\n")
@@ -129,7 +131,7 @@ const settings = (documents: readonly Config.Entry[]) => {
 const select = (
   entries: readonly Entry[],
   tokens: number,
-): { readonly head: string; readonly recent: string } | undefined => {
+): { readonly head: string; readonly recent: string; readonly retainedCount: number } | undefined => {
   const conversation = entries
     .filter((entry) => entry.message.type !== "compaction")
     .map((entry) => serialize(entry.message))
@@ -156,6 +158,9 @@ const select = (
   return {
     head: [...conversation.slice(0, split), splitPrefix].filter(Boolean).join("\n\n"),
     recent: [splitSuffix, ...conversation.slice(split)].filter(Boolean).join("\n\n"),
+    // Whole messages retained into the tail. A message straddling the split point (splitSuffix
+    // non-empty) is counted here too -- it is retained, just partially.
+    retainedCount: conversation.length - split,
   }
 }
 
@@ -184,10 +189,16 @@ export const make = (dependencies: Dependencies) => {
     const summaryOutput = Math.min(output || SUMMARY_OUTPUT_TOKENS, SUMMARY_OUTPUT_TOKENS)
     if (Token.estimate(summaryPrompt) > context - summaryOutput) return false
     const messageID = SessionMessage.ID.create()
+    const tokensBefore = estimate({
+      system: input.request.system,
+      messages: input.request.messages,
+      tools: input.request.tools,
+    })
+    const startedAt = yield* DateTime.now
     yield* dependencies.events.publish(SessionEvent.Compaction.Started, {
       sessionID: input.sessionID,
       messageID,
-      timestamp: yield* DateTime.now,
+      timestamp: startedAt,
       reason: "auto",
     })
     // TKT-309 baseline: how often compaction actually runs (past the size checks above),
@@ -219,13 +230,23 @@ export const make = (dependencies: Dependencies) => {
       )
     const summary = chunks.join("")
     if (!summarized || failed || !summary.trim()) return false
+    const endedAt = yield* DateTime.now
+    const seqs = input.entries.map((entry) => entry.seq)
     yield* dependencies.events.publish(SessionEvent.Compaction.Ended, {
       sessionID: input.sessionID,
       messageID,
-      timestamp: yield* DateTime.now,
+      timestamp: endedAt,
       reason: "auto",
       text: summary,
       recent: selected.recent,
+      tokensBefore,
+      retainedTailMessages: selected.retainedCount,
+      retainedTailTokens: Token.estimate(selected.recent),
+      summaryBytes: Buffer.byteLength(summary, "utf8"),
+      summaryTokens: Token.estimate(summary),
+      durationMs: DateTime.toEpochMillis(endedAt) - DateTime.toEpochMillis(startedAt),
+      sourceSeqStart: Math.min(...seqs),
+      sourceSeqEnd: Math.max(...seqs),
     })
     return true
   })

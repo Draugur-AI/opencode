@@ -8,6 +8,7 @@ import { EditTool } from "./edit"
 import { GlobTool } from "./glob"
 import { GoalTool } from "./goal"
 import { GrepTool } from "./grep"
+import { HistoryTool } from "./history"
 import { LedgerTool } from "./ledger"
 import { QuestionTool } from "./question"
 import { ReadTool } from "./read"
@@ -40,6 +41,7 @@ export const node = makeLocationNode({
     GlobTool.node,
     GoalTool.node,
     GrepTool.node,
+    HistoryTool.node,
     LedgerTool.node,
     QuestionTool.node,
     ReadTool.node,

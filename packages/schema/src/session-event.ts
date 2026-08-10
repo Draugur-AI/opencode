@@ -492,15 +492,51 @@ export namespace Compaction {
   })
   export type Delta = typeof Delta.Type
 
-  export const Ended = Event.define({
+  /**
+   * Version 1 of `session.next.compaction.ended`, kept ONLY so old rows still decode on replay.
+   * Never publish this again and never register it with `events.project(...)` -- `project()`
+   * dispatches by the *unversioned* `.type` string (see event.ts), so a second live projector
+   * registered under this same type would fire on every future (v2) publish too, receiving a
+   * payload shape it wasn't built for. Include it in DurableDefinitions/Definitions only, for
+   * `Event.durable(...)`'s versioned decode manifest; `Event.latest(...)` already resolves
+   * `session.next.compaction.ended` to the higher-version `Ended` below automatically.
+   */
+  export const EndedV1 = Event.define({
     type: "session.next.compaction.ended",
-    ...options,
+    identifier: "session.next.compaction.ended.v1",
+    durable: { aggregate: "sessionID", version: 1 },
     schema: {
       ...Base,
       messageID: SessionMessage.ID,
       reason: Started.data.fields.reason,
       text: Schema.String,
       recent: Schema.String,
+    },
+  })
+  export type EndedV1 = typeof EndedV1.Type
+
+  export const Ended = Event.define({
+    type: "session.next.compaction.ended",
+    identifier: "session.next.compaction.ended.v2",
+    durable: { aggregate: "sessionID", version: 2 },
+    schema: {
+      ...Base,
+      messageID: SessionMessage.ID,
+      reason: Started.data.fields.reason,
+      text: Schema.String,
+      recent: Schema.String,
+      /** Context tokens estimated immediately before this compaction ran. */
+      tokensBefore: NonNegativeInt,
+      /** How many non-compaction messages survived into the retained tail (`recent`). */
+      retainedTailMessages: NonNegativeInt,
+      retainedTailTokens: NonNegativeInt,
+      summaryBytes: NonNegativeInt,
+      summaryTokens: NonNegativeInt,
+      /** Wall-clock time from `Started` to this `Ended`, in milliseconds. */
+      durationMs: NonNegativeInt,
+      /** The aggregate-message sequence range this compaction covered. */
+      sourceSeqStart: NonNegativeInt,
+      sourceSeqEnd: NonNegativeInt,
     },
   })
   export type Ended = typeof Ended.Type
@@ -550,6 +586,7 @@ export const DurableDefinitions = Event.inventory(
   Reasoning.Ended,
   Retried,
   Compaction.Started,
+  Compaction.EndedV1,
   Compaction.Ended,
   RevertEvent.Staged,
   RevertEvent.Cleared,

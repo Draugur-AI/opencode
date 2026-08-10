@@ -1,6 +1,6 @@
 export * as SessionPurge from "./purge"
 
-import { and, asc, eq, lte } from "drizzle-orm"
+import { and, asc, eq, lte, sql } from "drizzle-orm"
 import { DateTime, Effect } from "effect"
 import type { Database } from "../database/database"
 import { EventSequenceTable, EventTable } from "../event/sql"
@@ -78,6 +78,10 @@ export const claim = Effect.fn("SessionPurge.claim")(function* (
         // crash between two transactions would leave events for a session that no longer exists.
         yield* db.delete(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, input.sessionID)).run()
         yield* db.delete(EventTable).where(eq(EventTable.aggregate_id, input.sessionID)).run()
+        // FTS5 virtual tables cannot declare a foreign key, so session_transcript_search cannot
+        // cascade like the ordinary relational child tables below -- same reasoning as the
+        // aggregate-keyed event tables just above, deleted explicitly for the same reason.
+        yield* db.run(sql`DELETE FROM session_transcript_search WHERE session_id = ${input.sessionID}`)
         // Every child table declares `onDelete: "cascade"`, and `PRAGMA foreign_keys = ON` is set
         // when the database opens. The purge inventory test is what keeps that true for tables
         // added later.

@@ -3,6 +3,7 @@ import { Credential } from "@opencode-ai/core/credential"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { Database } from "@opencode-ai/core/database/database"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionGoal } from "@opencode-ai/core/session/goal"
@@ -53,6 +54,7 @@ function bind(hostname: string, port: number, password: string) {
             ProjectV2.node,
             SessionGoal.node,
             SessionLedger.node,
+            Database.node,
           ]),
         ),
       ),
