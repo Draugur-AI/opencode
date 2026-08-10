@@ -21,6 +21,7 @@ import { pathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { archiveHomeSession } from "../home-session-archive"
+import { useSessionEntities } from "@/context/session-entities-provider"
 import type { HomeController } from "./home-controller"
 
 const HOME_SESSION_LIMIT = 64
@@ -40,6 +41,7 @@ export type OpenSessionOptions = { background?: boolean }
 
 export function createHomeSessionsController(home: HomeController) {
   const tabs = useTabs()
+  const entities = useSessionEntities()
   const command = useCommand()
   const dialog = useDialog()
   const language = useLanguage()
@@ -92,6 +94,13 @@ export function createHomeSessionsController(home: HomeController) {
       projectDirectories,
       projects: home.project.list,
       projectByID,
+      isListed: (session) => {
+        const entity = entities.get(home.selection.value().server, session.id)
+        // Unknown to the store means the store has not heard about it yet, not that it is gone —
+        // keep showing it rather than blanking the list before the first snapshot lands.
+        if (!entity?.value) return true
+        return entity.value.lifecycle.state === "active"
+      },
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
@@ -219,13 +228,17 @@ export function createHomeSessionsController(home: HomeController) {
               directory: session.directory,
               time: { archived: Date.now() },
             }),
+          // The row leaves the list because the entity store says so, not because this call
+          // returned 200. `archive_pending` is an OPTIMISTIC status, deliberately not a
+          // fabricated `archived` lifecycle: the authoritative state arrives from the server and
+          // replaces it, and a failure rolls the pending back in one place.
           remove: () =>
-            setStore(
-              produce((draft) => {
-                const match = Binary.search(draft.session, session.id, (item) => item.id)
-                if (match.found) draft.session.splice(match.index, 1)
-              }),
-            ),
+            entities.dispatch({
+              type: "pending",
+              serverKey: home.selection.value().server,
+              sessionID: session.id,
+              intent: "archive",
+            }),
           onError: (cause) =>
             showToast({
               title: language.t("common.requestFailed"),
@@ -250,9 +263,17 @@ function buildHomeSessionRecords(input: {
   projectDirectories: () => string[]
   projects: () => LocalProject[]
   projectByID: () => Map<string, LocalProject>
+  /**
+   * Whether the entity store still considers this session part of active views. The home list
+   * asks rather than deciding: a component that removed a row because its own HTTP call returned
+   * 200 is precisely the second source of truth this slice removes.
+   */
+  isListed: (session: Session) => boolean
 }) {
   const directories = new Set(input.projectDirectories().map(pathKey))
-  const sessions = input.sessions().filter((session) => directories.has(pathKey(session.directory)))
+  const sessions = input
+    .sessions()
+    .filter((session) => directories.has(pathKey(session.directory)) && input.isListed(session))
   return [...new Map(sessions.map((session) => [session.id, session] as const)).values()]
     .sort(compareSessionTime)
     .flatMap((session) => {

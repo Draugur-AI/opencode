@@ -135,6 +135,54 @@ describe("session entity reducer", () => {
   })
 })
 
+describe("session entity reducer — optimistic pendings", () => {
+  test("a pending intent hides the row from active views WITHOUT claiming the final state", () => {
+    let state = Entities.reduce(Entities.empty, snapshot([session("s1", "active", 1)]))
+    state = Entities.reduce(state, { type: "pending", serverKey: SERVER, sessionID: "s1", intent: "archive" })
+
+    const entity = Entities.get(state, SERVER, "s1")
+    expect(entity?.status).toBe("archive_pending")
+    // The lifecycle is untouched: the server has not agreed, so nothing pretends it has.
+    expect(entity?.value?.lifecycle.state).toBe("active")
+    // The tab stays until the server confirms — a tab that reopens itself on failure is worse
+    // than one that closes a moment later.
+    expect(Entities.tabSurvives(entity)).toBe(true)
+  })
+
+  test("a failed mutation rolls the pending back in one place", () => {
+    let state = Entities.reduce(Entities.empty, snapshot([session("s1", "active", 1)]))
+    state = Entities.reduce(state, { type: "pending", serverKey: SERVER, sessionID: "s1", intent: "trash" })
+    state = Entities.reduce(state, { type: "pendingFailed", serverKey: SERVER, sessionID: "s1" })
+
+    expect(Entities.get(state, SERVER, "s1")?.status).toBe("ready")
+    expect(Entities.get(state, SERVER, "s1")?.value?.lifecycle.state).toBe("active")
+  })
+
+  test("the authoritative lifecycle replaces a pending rather than racing it", () => {
+    let state = Entities.reduce(Entities.empty, snapshot([session("s1", "active", 1)]))
+    state = Entities.reduce(state, { type: "pending", serverKey: SERVER, sessionID: "s1", intent: "archive" })
+    state = Entities.reduce(state, {
+      type: "lifecycle",
+      serverKey: SERVER,
+      sessionID: "s1",
+      revision: 2,
+      to: { state: "archived", at: 1 } as never,
+    })
+
+    expect(Entities.get(state, SERVER, "s1")?.status).toBe("ready")
+    expect(Entities.get(state, SERVER, "s1")?.value?.lifecycle.state).toBe("archived")
+  })
+
+  test("nothing optimistic may override a purge", () => {
+    let state = Entities.reduce(Entities.empty, snapshot([session("s1", "active", 1)]))
+    state = Entities.reduce(state, { type: "purged", serverKey: SERVER, sessionID: "s1" })
+    state = Entities.reduce(state, { type: "pending", serverKey: SERVER, sessionID: "s1", intent: "archive" })
+
+    expect(Entities.get(state, SERVER, "s1")?.status).toBe("purged")
+  })
+})
+
+
 describe("session entity reducer — generated deliveries", () => {
   // Fixed seeds: a failing sequence is only useful as a regression fixture if it replays exactly.
   for (const seed of [1, 7, 42, 1337, 90210]) {
