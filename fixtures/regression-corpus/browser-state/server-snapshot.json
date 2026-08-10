@@ -1,0 +1,16 @@
+{
+  "_fixture": "What the server side actually holds for the sessionIds referenced in tabs.json, at the moment a client would reconcile. Not a real API response shape (no such single endpoint exists yet) — a compact snapshot for a reconciliation test to assert against, covering exactly the five categories the validation post's browser-state fixture class asks for.",
+  "reachableServers": ["http://localhost:4096"],
+  "sessions": {
+    "ses_active0000000000000000": { "lifecycle": "active" },
+    "ses_archived000000000000": { "lifecycle": "archived" },
+    "ses_purged0000000000000000": { "lifecycle": "purged", "tombstone": true }
+  },
+  "expectedReconciliation": {
+    "ses_active0000000000000000": "keep tab, active",
+    "ses_archived000000000000": "remove tab (archived sessions close their tab per the design post's lifecycle table), session remains discoverable in the Archived view",
+    "ses_purged0000000000000000": "remove tab and its recently-closed entry; tombstone means a stable 404, not a transient fetch failure",
+    "ses_never_existed00000000": "remove tab; sessionId absent from `sessions` and has no tombstone — a plain 404 with no history",
+    "ses_on_unreachable_server0": "keep tab in a visibly disconnected state; server key is absent from `reachableServers`, so no lifecycle claim can be made either way"
+  }
+}

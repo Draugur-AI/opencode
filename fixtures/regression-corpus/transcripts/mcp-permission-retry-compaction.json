@@ -1,0 +1,124 @@
+{
+  "_fixture": "A session_message sequence (packages/schema/src/session-message.ts Message union) exercising tool output, an MCP tool call, a permission denial, a retry, plugin-hook metadata, and compaction — the classes the validation post's transcript fixture asks for. Row shape is { type, seq, data } matching the session_message table (packages/core/src/session/sql.ts): `type`/`seq` are DB projection columns, `data` is exactly what's stored in the session_message.data JSON column (Omit<Message, 'type'|'id'>, so 'type' here is shown for readability but is redundant with the row's own `type` column, same as production).",
+  "_caveats": "Two of these (retry, plugin hook) are not first-class message types in the reviewed 0bff28de schema — there is no RetryPart-equivalent or hook-event message in the V2 Message union, and no monitor/hook subsystem exists yet (that's a later milestone). They're represented via the existing `metadata` field on AssistantTool/Assistant (Base.metadata: optional Record<string,unknown>), using the stable `pluginID/hookName` key convention the build post specifies for hooks. Update this fixture once Monitor/hooks land with their real event shape — don't treat `metadata.retryCount`/`metadata.hook` as a contract other code should depend on today.",
+  "sessionId": "ses_transcript_fixture0000",
+  "messages": [
+    {
+      "type": "user",
+      "seq": 0,
+      "data": {
+        "text": "Clean up the temp files in /tmp/build, then check whether GitHub issue #482 is this same bug.",
+        "files": [],
+        "agents": []
+      }
+    },
+    {
+      "type": "assistant",
+      "seq": 1,
+      "data": {
+        "agent": "build",
+        "model": { "id": "claude-sonnet-5", "providerID": "anthropic" },
+        "content": [
+          { "type": "text", "id": "txt_1", "text": "Checking the issue first." },
+          {
+            "type": "tool",
+            "id": "tool_1",
+            "name": "mcp__github__get_issue",
+            "provider": { "executed": true },
+            "state": {
+              "status": "completed",
+              "input": { "owner": "draugur-ai", "repo": "opencode", "issue": 482 },
+              "content": [{ "type": "text", "text": "#482: build/ leaves stale cache files after a failed compile, growing unbounded." }],
+              "structured": { "issue": { "number": 482, "state": "open" } }
+            },
+            "time": { "created": 1735689601000, "ran": 1735689601200, "completed": 1735689601800 }
+          }
+        ],
+        "tokens": { "input": 300, "output": 60, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+        "cost": 0.003,
+        "time": { "created": 1735689601000, "completed": 1735689601800 },
+        "metadata": { "pluginID": "opencode-mcp/github", "hook": "tool.execute.after" }
+      }
+    },
+    {
+      "type": "assistant",
+      "seq": 2,
+      "data": {
+        "agent": "build",
+        "model": { "id": "claude-sonnet-5", "providerID": "anthropic" },
+        "content": [
+          {
+            "type": "tool",
+            "id": "tool_2",
+            "name": "bash",
+            "state": {
+              "status": "error",
+              "input": { "command": "rm -rf /tmp/build/*" },
+              "content": [],
+              "structured": {},
+              "error": { "type": "unknown", "message": "permission denied: refused by policy (destructive rm outside session working directory scope)" }
+            },
+            "time": { "created": 1735689602000, "completed": 1735689602100 }
+          }
+        ],
+        "tokens": { "input": 40, "output": 15, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+        "cost": 0.0005,
+        "time": { "created": 1735689602000, "completed": 1735689602100 },
+        "metadata": { "retryCount": 0 }
+      }
+    },
+    {
+      "type": "assistant",
+      "seq": 3,
+      "data": {
+        "agent": "build",
+        "model": { "id": "claude-sonnet-5", "providerID": "anthropic" },
+        "content": [
+          {
+            "type": "tool",
+            "id": "tool_3",
+            "name": "bash",
+            "state": {
+              "status": "completed",
+              "input": { "command": "rm -rf /tmp/build/cache" },
+              "content": [{ "type": "text", "text": "removed /tmp/build/cache" }],
+              "structured": {}
+            },
+            "time": { "created": 1735689603000, "ran": 1735689603400, "completed": 1735689603600 }
+          }
+        ],
+        "tokens": { "input": 45, "output": 20, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+        "cost": 0.0006,
+        "time": { "created": 1735689603000, "completed": 1735689603600 },
+        "metadata": { "retryCount": 1, "retryReason": "permission_denied_retry_with_narrower_scope" }
+      }
+    },
+    {
+      "type": "assistant",
+      "seq": 4,
+      "data": {
+        "agent": "build",
+        "model": { "id": "claude-sonnet-5", "providerID": "anthropic" },
+        "content": [
+          {
+            "type": "text",
+            "id": "txt_2",
+            "text": "Deleted /tmp/build/cache — left the rest alone since a full rm -rf was declined. Issue #482 matches: it's the same unbounded-cache-growth bug."
+          }
+        ],
+        "tokens": { "input": 20, "output": 35, "reasoning": 0, "cache": { "read": 0, "write": 0 } },
+        "cost": 0.0004,
+        "time": { "created": 1735689604000, "completed": 1735689604300 }
+      }
+    },
+    {
+      "type": "compaction",
+      "seq": 5,
+      "data": {
+        "reason": "auto",
+        "summary": "User asked to clean /tmp/build and cross-check GitHub issue #482. Assistant confirmed #482 matches, deleted /tmp/build/cache (a full rm -rf of /tmp/build was denied by policy and not retried at that scope).",
+        "recent": ""
+      }
+    }
+  ]
+}

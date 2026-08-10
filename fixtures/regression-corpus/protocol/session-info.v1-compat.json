@@ -1,0 +1,10 @@
+{
+  "_fixture": "V1-compatibility session info shape, as published in a SessionV1.Event.Updated payload's `info` field. Verified against packages/core/test/database-migration.test.ts ('preserves canonical V1 state and restarts its event stream'), which publishes this exact object literal through the real EventV2/SessionProjector layer. Distinct from Session.Info (session-get.v2.json) — no cost/tokens/model/location, and directory is a bare string rather than a Location.Ref.",
+  "id": "ses_active0000000000000000",
+  "slug": "active-session",
+  "projectID": "git-remote:github.com/draugur-ai/opencode",
+  "directory": "/home/user/opencode",
+  "title": "Fix the login bug",
+  "version": "fixture",
+  "time": { "created": 1735689600000, "updated": 1735689660000 }
+}
