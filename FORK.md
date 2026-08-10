@@ -228,19 +228,35 @@ your own regression** — check whether it matches one of these first.
 
 ## The milestone-1 required gate
 
-Per TKT-304's local baseline (all green at pinned `0bff28de`, zero pre-existing reds in that
-scope) and the runner fix above, the **documented milestone-1 merge gate** is:
+The **documented milestone-1 merge gate** is:
 
 - `typecheck` check **green** (GitHub-hosted, `bun typecheck` — schema/core/protocol/server/app)
-- the local `core`/`httpapi`/`app` suites **green**, exactly as TKT-304 baselined them
-  (`packages/core test`, `packages/opencode test:httpapi`, `packages/app test`)
+- `packages/core` suite **green** (`bun test --cwd packages/core`)
+- `packages/app` suite **green** (`bun run --cwd packages/app test` — unit and browser)
+- the **full** `packages/opencode` suite **green** (`bun test --cwd packages/opencode`), with
+  exactly the two known-reds in the table above as named exceptions and nothing else
+- `packages/opencode test:httpapi` **green**, kept named because CI runs it as a distinct step
+  and because it fails the build on any route with no scenario — a property the broader suite
+  does not have
 
-The full `unit (linux)`/`unit (windows)` CI jobs (which run the broader `bun turbo test` across
-every package, a wider surface than TKT-304's baseline) are **advisory** until
-feedback #136 (internal tracker) resolves — one known-red test on each platform (table above) means
-those jobs cannot be treated as a hard gate yet without also blocking on a pre-existing,
-unrelated defect. `check-standards` / `check-compliance` (PR hygiene) are real signal if labeled,
-but not a quality gate.
+**Nothing in this gate is "advisory".** A check is either in the gate, or it has a named, linked
+exception in the known-red table. That rule replaces an earlier scoping of this gate to TKT-304's
+baseline command list, which was narrower than the code it was gating: the baseline ran
+`test:httpapi` (215 route scenarios) but never `packages/opencode`'s own suite (~3280 tests), and
+**three real regressions shipped into that gap** on [#4](https://github.com/Draugur-AI/opencode/pull/4)
+— a public-wire-type count assertion, and a V1 contract regression where the archive adapter
+discarded the caller's timestamp and answered with a wall-clock instant instead. All three were
+invisible to the gate as written and were caught only because the then-advisory `unit` jobs were
+read anyway. The same narrowness shows up twice more: the `unit (linux)` known-red below, and
+`bun run lint` (1 pre-existing error, ~4859 warnings) which no baseline command covered either.
+
+`check-standards` / `check-compliance` (PR hygiene) are real signal if labeled, but not a quality
+gate.
+
+**Local-environment caveat:** `packages/opencode/test/tool/write.test.ts` "sets file permissions
+when writing sensitive data" asserts `0o644` and fails with `0o664` on a machine whose umask is
+`002` (the shared dev box is one). CI's `ubuntu-latest` runner uses umask `022` and passes it.
+That is the environment, not the code — do not chase it, and do not add it to the known-red table.
 
 Not yet part of the functional gate at all (documented above, not silently broken): `e2e
 (linux/windows)`, `nix-eval`, `/review`. There is no branch protection configured, so none of
