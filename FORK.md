@@ -98,6 +98,54 @@ been reconciled, not just what is currently outstanding.
   confirmed, with evidence, as of TKT-305). Say so explicitly in every PR and report — local
   per-package tests are the gate, and an absence of review comments is not evidence of a clean diff.
 
+## Adding a new global `.node`? Check every assembly site, not just one.
+
+A `makeGlobalNode`-tagged service (`ProjectV2.node`, `SessionGoal.node`, `EventV2.node`, …) is a
+process-wide singleton, and `AppNodeBuilder`/`AppNodeBuilderV1`'s transitive auto-discovery of a
+new node's *own* dependencies is **not reliable past a certain graph size** — TKT-315 and TKT-317
+independently hit this from both directions: adding `ProjectV2.node`'s own new dependencies broke
+type-level resolution in two unrelated packages, and *not* explicitly listing `SessionGoal.node`/
+`SessionLedger.node` in a full-app composition site left those routes returning `500: Service not
+found` at runtime, silently, because nothing forced the omission to surface until something else
+exercised that exact path. **Do not rely on auto-discovery for a new global node. List it
+explicitly at every full-app assembly site below**, the same way `ProjectV2.node` now appears in
+all five.
+
+**The five full-app composition sites** (each lists most/all global nodes; found by `grep -rln
+"AppNodeBuilder\.build\|AppNodeBuilderV1\.build\|LayerNode\.group(" packages/ --include="*.ts"
+--include="*.tsx" | grep -v "/test/" | grep -v "\.test\.ts$"`, then narrowed to the entries whose
+own node count made clear they were "assemble everything" sites rather than one narrow feature):
+
+1. `packages/opencode/src/server/routes/instance/httpapi/server.ts` — the `app` list (~63 nodes).
+   The V1 `HttpApiApp`; this is what `test:httpapi`'s exerciser actually runs against.
+2. `packages/opencode/src/effect/app-runtime.ts` — `AppLayer` (~52 nodes). Powers the interactive
+   CLI/TUI (`opencode` run directly, not through the HTTP server) — a gap here is invisible to any
+   HTTP-shaped test.
+3. `packages/server/src/routes.ts` — `applicationServices` (~15 nodes). The current v2
+   `createRoutes`/`createEmbeddedRoutes`, used by `packages/cli` and `packages/sdk-next`.
+4. `packages/cli/src/commands/handlers/serve.ts` — the CLI daemon's own explicit
+   `AppNodeBuilder.build(LayerNode.group([...]))` in `bind()`.
+5. `packages/sdk-next/src/opencode.ts` — the embedded-server SDK's own explicit list. Also needs
+   the type-level `HttpRouter.provideRequest(...)` treatment below, not just the node list.
+
+**Not on this list, and shouldn't be added to it:** `packages/core/src/location-services.ts`
+(`locationServices`, ~36 nodes) looks similar by node count but is a **different category** —
+per-location/per-workspace scoped services (`LayerNode.unbound`/`LocationServiceMap`), rebuilt per
+directory, not process-wide singletons. A global `.node` does not belong there. Everything else
+`grep` finds under `packages/` outside `test/` is a narrow, single- or few-node build for one
+specific feature (e.g. `packages/opencode/src/control-plane/workspace.ts`'s two `InstanceStore.node`
+uses) — not a checklist target.
+
+**If the new node is consumed through `HttpRouter.toWebHandler`** (as in `sdk-next/opencode.ts`),
+listing it in the node graph is necessary but not sufficient. `HttpRouter.toWebHandler`'s type
+distinguishes `"Requires"` from `"GlobalRequires"` request-kinds, and only
+`HttpRouter.provideRequest(layer)` discharges the latter — plain `Layer.provide(...)` silently
+leaves it unsatisfied and the handler's call signature shifts from one argument to two
+(`(request, context: Context<...>) => Promise<Response>`), a type error at the call site, not at
+the provide site. `HttpRouter.serve` (used by `packages/cli`'s daemon) does not draw this same
+distinction, which is why the equivalent fix there was just adding the node to the existing
+`Layer.provide(AppNodeBuilder.build(...))` list.
+
 ## Merge-blocking gates
 
 These gates are **merge-blocking conditions**, not aspirations. A PR that trips one does not

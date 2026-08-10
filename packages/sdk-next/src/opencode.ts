@@ -1,5 +1,6 @@
 import { OpenCode } from "@opencode-ai/client/effect"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
@@ -17,6 +18,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
     AppNodeBuilder.build(
       LayerNode.group([
         ApplicationTools.node,
+        EventV2.node,
         PermissionSaved.node,
         ProjectV2.node,
         SessionGoal.node,
@@ -29,6 +31,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
   const tools = Context.get(context, ApplicationTools.Service)
   const permissions = Context.get(context, PermissionSaved.Service)
   const project = Context.get(context, ProjectV2.Service)
+  const events = Context.get(context, EventV2.Service)
   const goal = Context.get(context, SessionGoal.Service)
   const ledger = Context.get(context, SessionLedger.Service)
   const web = yield* Effect.acquireRelease(
@@ -39,6 +42,7 @@ export const create = Effect.fn("OpenCode.create")(function* () {
             Layer.mergeAll(
               Layer.succeed(PermissionSaved.Service, permissions),
               Layer.succeed(ProjectV2.Service, project),
+              Layer.succeed(EventV2.Service, events),
               Layer.succeed(SessionGoal.Service, goal),
               Layer.succeed(SessionLedger.Service, ledger),
             ),

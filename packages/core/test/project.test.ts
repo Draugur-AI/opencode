@@ -330,6 +330,24 @@ describe("ProjectPreference compare-and-set", () => {
     }),
   )
 
+  // Regression: the create path (INSERT into project_preference) used to rely on the table's
+  // FK constraint to reject a nonexistent project, wrapped in Effect.orDie -- so this crashed
+  // with an unhandled SQLite FOREIGN KEY constraint error instead of failing typed. Caught by
+  // the httpapi exerciser's automatic per-route bad-ID probe, not by typecheck (Effect.die's
+  // never trivially satisfies any Effect<A, E, R> signature).
+  it.effect("patch on a nonexistent project fails with ProjectNotFound, not a crash", () =>
+    Effect.gen(function* () {
+      const project = yield* ProjectV2.Service
+      const missing = ProjectV2.ID.make("prj_does_not_exist_either")
+
+      const exit = yield* Effect.exit(project.preferencePatch({ projectID: missing, patch: { favorite: true } }))
+
+      expect(Exit.isFailure(exit)).toBe(true)
+      const failure = Exit.isFailure(exit) ? JSON.stringify(exit.cause) : ""
+      expect(failure).toContain("ProjectPreference.ProjectNotFound")
+    }),
+  )
+
   it.effect("a second create attempt (no expectedRevision) conflicts once a row exists", () =>
     Effect.gen(function* () {
       const id = yield* seedProject("pref-double-create")

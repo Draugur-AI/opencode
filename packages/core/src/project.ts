@@ -107,7 +107,7 @@ export interface Interface {
     readonly projectID: ID
     readonly patch: ProjectPreference.Patch
     readonly expectedRevision?: number
-  }) => Effect.Effect<ProjectPreference.Value, ProjectPreference.Conflict>
+  }) => Effect.Effect<ProjectPreference.Value, ProjectPreference.Conflict | ProjectPreference.ProjectNotFound>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/ProjectV2") {}

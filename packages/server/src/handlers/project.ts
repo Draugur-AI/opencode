@@ -58,6 +58,7 @@ export const ProjectHandler = HttpApiBuilder.group(Api, "server.project", (handl
                 message: `Preference revision conflict for project ${error.projectID}: currently at ${error.revision}`,
               }),
           ),
+          Effect.catchTag("ProjectPreference.ProjectNotFound", (error) => notFound(error.projectID)),
         ),
       ),
   ),

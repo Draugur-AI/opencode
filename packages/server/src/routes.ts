@@ -9,6 +9,9 @@ import { PtyTicket } from "@opencode-ai/core/pty/ticket"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { LocationServiceMap } from "@opencode-ai/core/location-service-map"
+import { ProjectV2 } from "@opencode-ai/core/project"
+import { SessionGoal } from "@opencode-ai/core/session/goal"
+import { SessionLedger } from "@opencode-ai/core/session/ledger"
 import { SessionExecutionLocal } from "@opencode-ai/core/session/execution/local"
 import { ToolOutputStore } from "@opencode-ai/core/tool-output-store"
 import { HttpRouter, HttpServer } from "effect/unstable/http"
@@ -34,6 +37,13 @@ const applicationServices = LayerNode.group([
   Credential.node,
   PtyEnvironment.node,
   LocationServiceMap.node,
+  // Explicit, not relying on transitive auto-discovery: that mechanism is fragile past a
+  // certain graph size (see FORK.md-adjacent findings on TKT-315/TKT-317 -- this exact set
+  // of nodes newly failed to auto-resolve, at runtime ("Service not found") for these three
+  // and at the type level (cli, sdk-next) for ProjectV2, only once both landed together).
+  ProjectV2.node,
+  SessionGoal.node,
+  SessionLedger.node,
 ])
 
 export function createRoutes(password?: string) {

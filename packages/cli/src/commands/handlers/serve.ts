@@ -1,6 +1,7 @@
 import { NodeHttpServer } from "@effect/platform-node"
 import { Credential } from "@opencode-ai/core/credential"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
@@ -47,6 +48,7 @@ function bind(hostname: string, port: number, password: string) {
         AppNodeBuilder.build(
           LayerNode.group([
             Credential.node,
+            EventV2.node,
             PermissionSaved.node,
             ProjectV2.node,
             SessionGoal.node,

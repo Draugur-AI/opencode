@@ -70,7 +70,7 @@ export const ProjectGroup = HttpApiGroup.make("server.project")
       params: { projectID: Project.ID },
       payload: PreferencePatchPayload,
       success: Schema.Struct({ data: ProjectPreference.Value }),
-      error: ProjectPreferenceConflictError,
+      error: [ProjectPreferenceConflictError, ProjectNotFoundError],
     }).annotateMerge(
       OpenApi.annotations({
         identifier: "v2.project.preference.write",

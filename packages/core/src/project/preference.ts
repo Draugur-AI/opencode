@@ -6,7 +6,7 @@ import { ProjectPreference as PreferenceSchema } from "@opencode-ai/schema/proje
 import { NonNegativeInt } from "@opencode-ai/schema/schema"
 import type { Database } from "../database/database"
 import { ProjectSchema } from "./schema"
-import { ProjectPreferenceTable } from "./sql"
+import { ProjectPreferenceTable, ProjectTable } from "./sql"
 
 type DatabaseService = Database.Interface["db"]
 
@@ -21,6 +21,14 @@ export const Event = PreferenceSchema.Event
 export class Conflict extends Schema.TaggedErrorClass<Conflict>()("ProjectPreference.Conflict", {
   projectID: ProjectSchema.ID,
   revision: NonNegativeInt,
+}) {}
+
+/** The referenced project does not exist. Checked explicitly, rather than left to the
+ * project_preference FK constraint: an unhandled constraint violation on the create path (no
+ * prior row, so nothing for the revision check to catch) surfaced as a 500 instead of a 404 --
+ * caught by the httpapi exerciser's automatic per-route bad-ID probe. */
+export class ProjectNotFound extends Schema.TaggedErrorClass<ProjectNotFound>()("ProjectPreference.ProjectNotFound", {
+  projectID: ProjectSchema.ID,
 }) {}
 
 const defaults = (projectID: ProjectSchema.ID): Value => ({
@@ -67,6 +75,14 @@ export const patch = Effect.fn("ProjectPreference.patch")(function* (
     readonly now: number
   },
 ) {
+  const project = yield* db
+    .select({ id: ProjectTable.id })
+    .from(ProjectTable)
+    .where(eq(ProjectTable.id, input.projectID))
+    .get()
+    .pipe(Effect.orDie)
+  if (!project) return yield* new ProjectNotFound({ projectID: input.projectID })
+
   const set = {
     favorite: input.patch.favorite,
     rank: input.patch.rank,

@@ -1226,7 +1226,7 @@ export function make(options: ClientOptions) {
               expectedRevision: input["expectedRevision"],
             },
             successStatus: 200,
-            declaredStatuses: [409, 401, 400],
+            declaredStatuses: [409, 404, 401, 400],
             empty: false,
           },
           requestOptions,
