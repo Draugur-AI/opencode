@@ -9,7 +9,10 @@ on:
 
 jobs:
   typecheck:
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    # Fork note (TKT-305): blacksmith-* runner labels require the Blacksmith GitHub App,
+    # which is not installed on Draugur-AI. Retargeted to a GitHub-hosted runner so this
+    # job actually gets picked up on fork PRs instead of queueing forever. See FORK.md.
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
