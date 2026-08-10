@@ -54,6 +54,9 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilderV1 } from "./app-node-builder-v1"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { ProjectV2 } from "@opencode-ai/core/project"
+import { SessionGoal } from "@opencode-ai/core/session/goal"
+import { SessionLedger } from "@opencode-ai/core/session/ledger"
 
 export const AppLayer = AppNodeBuilderV1.build(
   LayerNode.group([
@@ -105,6 +108,12 @@ export const AppLayer = AppNodeBuilderV1.build(
     Installation.node,
     ShareNext.node,
     SessionShare.node,
+    // Same pre-existing gap as httpapi/server.ts (see the comment there): this full-app
+    // composition site needs every new global .node explicitly too. See FORK.md's
+    // node-assembly-sites list for every other place this same checklist applies.
+    ProjectV2.node,
+    SessionGoal.node,
+    SessionLedger.node,
   ]),
 ).pipe(Layer.provideMerge(AppNodeBuilderV1.build(Ripgrep.node)), Layer.provideMerge(Observability.layer))
 

@@ -125,6 +125,13 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
       "session.next.moved": () => Effect.void,
       // A lifecycle change is not part of the conversation, so it projects no transcript message.
       "session.next.lifecycle.changed": () => Effect.void,
+      // Goal/ledger mutations are durable session state, not conversation transcript -- they
+      // project into SessionGoalTable/SessionLedgerTable directly (see SessionGoal.project /
+      // SessionLedger.project in projector.ts), never into a session_message row.
+      "session.next.goal.updated": () => Effect.void,
+      "session.next.goal.status_changed": () => Effect.void,
+      "session.next.ledger.added": () => Effect.void,
+      "session.next.ledger.superseded": () => Effect.void,
       "session.next.prompted": (event) => {
         return adapter.appendMessage(
           SessionMessage.User.make({
@@ -385,6 +392,14 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
             reason: event.data.reason,
             summary: event.data.text,
             recent: event.data.recent,
+            tokensBefore: event.data.tokensBefore,
+            retainedTailMessages: event.data.retainedTailMessages,
+            retainedTailTokens: event.data.retainedTailTokens,
+            summaryBytes: event.data.summaryBytes,
+            summaryTokens: event.data.summaryTokens,
+            durationMs: event.data.durationMs,
+            sourceSeqStart: event.data.sourceSeqStart,
+            sourceSeqEnd: event.data.sourceSeqEnd,
             time: { created: event.data.timestamp },
           }),
         )

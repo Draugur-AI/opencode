@@ -84,6 +84,12 @@ function projectV2FailureLayer() {
           vcs: { type: "git" as const, store: input },
         }),
       commit: () => Effect.void,
+      list: () => Effect.succeed([]),
+      get: () => Effect.succeed(undefined),
+      updateMetadata: () => Effect.die("not implemented in test fixture"),
+    preferenceGet: (projectID) =>
+      Effect.succeed({ projectID, favorite: false, hidden: false, rank: undefined, lastOpenedAt: undefined, revision: 0 }),
+    preferencePatch: () => Effect.die("not implemented in test fixture"),
     }),
   )
 }

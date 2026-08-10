@@ -3,19 +3,13 @@ name: nix-hashes
 permissions:
   contents: write
 
+# Fork note (TKT-336): push trigger disabled. runs-on is blacksmith-4vcpu-ubuntu-2404,
+# which queues forever on this org, and the path filter includes package.json/bun.lock
+# -- changed often enough to be a real backlog contributor. Nix packaging is not this
+# fork's concern, same reasoning as nix-eval.yml. workflow_dispatch kept as a manual
+# escape hatch.
 on:
   workflow_dispatch:
-  push:
-    branches: [dev, beta]
-    paths:
-      - "bun.lock"
-      - "package.json"
-      - "packages/*/package.json"
-      - "flake.lock"
-      - "nix/node_modules.nix"
-      - "nix/scripts/**"
-      - "patches/**"
-      - ".github/workflows/nix-hashes.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}

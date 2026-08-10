@@ -1,8 +1,12 @@
 name: docs-update
 
+# Fork note (TKT-336): schedule trigger disabled. runs-on is blacksmith-4vcpu-ubuntu-2404,
+# which queues forever on this org -- every-12h cron meant it accumulated a fresh
+# unstartable run twice a day regardless of any push/PR activity. Docs-sync automation
+# is not this fork's concern (not the canonical docs source). workflow_dispatch kept as
+# a manual escape hatch. Un-disable condition: retarget runs-on AND restore the schedule
+# trigger below, if this fork ever needs its own docs-sync cadence.
 on:
-  schedule:
-    - cron: "0 */12 * * *"
   workflow_dispatch:
 
 env:

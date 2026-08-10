@@ -15,6 +15,8 @@ import type { SystemContext } from "../system-context/index"
 import { AgentV2 } from "../agent"
 import type { Revert } from "@opencode-ai/schema/revert"
 import type { SessionLifecycle } from "@opencode-ai/schema/session-lifecycle"
+import type { SessionGoal } from "@opencode-ai/schema/session-goal"
+import type { SessionLedger } from "@opencode-ai/schema/session-ledger"
 
 type SessionMessageData = Omit<(typeof SessionMessage.Message)["Encoded"], "type" | "id">
 type V1MessageData = Omit<SessionV1.Info, "id" | "sessionID">
@@ -231,3 +233,41 @@ export const SessionContextEpochTable = sqliteTable("session_context_epoch", {
   snapshot: text({ mode: "json" }).notNull().$type<SystemContext.Snapshot>(),
   baseline_seq: integer().notNull(),
 })
+
+// Atomic replacement, not append-only: the objective and its criteria/constraints are one value
+// that changes as a unit, queried only by session (one row per session). Arrays stay typed JSON
+// rather than child tables because they're read and written whole, never queried by element.
+export const SessionGoalTable = sqliteTable("session_goal", {
+  session_id: text()
+    .$type<SessionSchema.ID>()
+    .primaryKey()
+    .references(() => SessionTable.id, { onDelete: "cascade" }),
+  objective: text().notNull(),
+  acceptance_criteria: text({ mode: "json" }).notNull().$type<SessionGoal.AcceptanceCriterion[]>(),
+  constraints: text({ mode: "json" }).notNull().$type<SessionGoal.Constraint[]>(),
+  status: text().$type<SessionGoal.Status>().notNull().default("active"),
+  source_message_ids: text({ mode: "json" }).notNull().$type<SessionMessage.ID[]>(),
+  version: integer().notNull().default(0),
+  ...Timestamps,
+})
+
+// Append-only: an entry is never edited in place, only superseded (status flips, supersededBy is
+// set). Indexed for the context renderer's actual query shape -- active entries for one session,
+// newest first.
+export const SessionLedgerTable = sqliteTable(
+  "session_ledger",
+  {
+    id: text().$type<SessionLedger.ID>().primaryKey(),
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    kind: text().$type<SessionLedger.Kind>().notNull(),
+    text: text().notNull(),
+    source_message_ids: text({ mode: "json" }).notNull().$type<SessionMessage.ID[]>(),
+    status: text().$type<SessionLedger.EntryStatus>().notNull().default("active"),
+    superseded_by: text().$type<SessionLedger.ID>(),
+    ...Timestamps,
+  },
+  (table) => [index("session_ledger_session_status_updated_idx").on(table.session_id, table.status, table.time_updated)],
+)

@@ -1,13 +1,12 @@
 name: containers
 
+# Fork note (TKT-336): push trigger disabled. Real container publish pipeline
+# (packages: write, pushes to ghcr.io/${{ github.repository_owner }} -- i.e. this org's
+# own registry namespace). Same safety reasoning as publish.yml: an internal
+# architecture-redesign fork should not auto-publish container images under the org
+# name. package.json is a common change path, so left enabled this would fire often.
+# workflow_dispatch kept as a manual escape hatch.
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - packages/containers/**
-      - .github/workflows/containers.yml
-      - package.json
   workflow_dispatch:
 
 permissions:

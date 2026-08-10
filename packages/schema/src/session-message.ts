@@ -5,7 +5,7 @@ import { optional } from "./schema"
 import { ProviderMetadata, ToolContent } from "./llm"
 import { Model } from "./model"
 import { FileAttachment, Prompt } from "./prompt"
-import { DateTimeUtcFromMillis, RelativePath, statics } from "./schema"
+import { DateTimeUtcFromMillis, NonNegativeInt, RelativePath, statics } from "./schema"
 import { SessionID } from "./session-id"
 import { ascending } from "./identifier"
 
@@ -189,11 +189,22 @@ export const Assistant = Schema.Struct({
 }).annotate({ identifier: "Session.Message.Assistant" })
 
 export interface Compaction extends Schema.Schema.Type<typeof Compaction> {}
+// Telemetry fields are optional so an old (version-1) compaction row -- written before this
+// field set existed -- keeps decoding. Never make these required; that is exactly the "existing
+// decoder changed" mistake the versioned-event mechanism exists to avoid.
 export const Compaction = Schema.Struct({
   type: Schema.Literal("compaction"),
   reason: Schema.Literals(["auto", "manual"]),
   summary: Schema.String,
   recent: Schema.String,
+  tokensBefore: NonNegativeInt.pipe(optional),
+  retainedTailMessages: NonNegativeInt.pipe(optional),
+  retainedTailTokens: NonNegativeInt.pipe(optional),
+  summaryBytes: NonNegativeInt.pipe(optional),
+  summaryTokens: NonNegativeInt.pipe(optional),
+  durationMs: NonNegativeInt.pipe(optional),
+  sourceSeqStart: NonNegativeInt.pipe(optional),
+  sourceSeqEnd: NonNegativeInt.pipe(optional),
   ...Base,
 }).annotate({ identifier: "Session.Message.Compaction" })
 

@@ -1067,6 +1067,14 @@ describe("SessionRunnerLLM", () => {
         reason: "manual",
         text: "summary",
         recent: "",
+        tokensBefore: 100,
+        retainedTailMessages: 0,
+        retainedTailTokens: 0,
+        summaryBytes: 7,
+        summaryTokens: 3,
+        durationMs: 1,
+        sourceSeqStart: 0,
+        sourceSeqEnd: 1,
       })
       systemBaseline = "Replacement context"
       yield* session.prompt({ sessionID, prompt: Prompt.make({ text: "Second" }), resume: false })
@@ -1297,6 +1305,14 @@ describe("SessionRunnerLLM", () => {
         reason: "manual",
         text: "summary",
         recent: "",
+        tokensBefore: 100,
+        retainedTailMessages: 0,
+        retainedTailTokens: 0,
+        summaryBytes: 7,
+        summaryTokens: 3,
+        durationMs: 1,
+        sourceSeqStart: 0,
+        sourceSeqEnd: 1,
       })
       systemUnavailable = true
       yield* session.prompt({ sessionID, prompt: Prompt.make({ text: "Third" }), resume: false })

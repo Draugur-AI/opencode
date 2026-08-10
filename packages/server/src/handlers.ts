@@ -3,6 +3,9 @@ import { MessageHandler } from "./handlers/message"
 import { ModelHandler } from "./handlers/model"
 import { ProviderHandler } from "./handlers/provider"
 import { SessionHandler } from "./handlers/session"
+import { GoalHandler } from "./handlers/goal"
+import { HistoryHandler } from "./handlers/history"
+import { LedgerHandler } from "./handlers/ledger"
 import { PermissionHandler } from "./handlers/permission"
 import { FileSystemHandler } from "./handlers/fs"
 import { CommandHandler } from "./handlers/command"
@@ -17,12 +20,16 @@ import { LocationHandler } from "./handlers/location"
 import { IntegrationHandler } from "./handlers/integration"
 import { CredentialHandler } from "./handlers/credential"
 import { ProjectCopyHandler } from "./handlers/project-copy"
+import { ProjectHandler } from "./handlers/project"
 
 export const handlers = Layer.mergeAll(
   HealthHandler,
   LocationHandler,
   AgentHandler,
   SessionHandler,
+  GoalHandler,
+  LedgerHandler,
+  HistoryHandler,
   MessageHandler,
   ModelHandler,
   ProviderHandler,
@@ -37,4 +44,5 @@ export const handlers = Layer.mergeAll(
   QuestionHandler,
   ReferenceHandler,
   ProjectCopyHandler,
+  ProjectHandler,
 )

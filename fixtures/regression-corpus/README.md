@@ -29,13 +29,20 @@ file here as append-only.
   with a completed tool call, and an auto compaction), and a two-row durable event log
   (`event`/`event_sequence`) on the active session: a normal `session.created.1` event, then a
   `session.updated.1` event with a sparse `data: '{}'` payload — the old-event-decoder case,
-  proving a versioned event an older emitter wrote before a field existed still loads. **Known
-  gap, stated rather than silently omitted**: this snapshot (`0bff28de`-derived `dev`, checked at
-  authoring time) has never bumped a versioned event type past `.1` anywhere in the repo, so there
-  is no genuinely-*superseded* decoder (e.g. a `.1` a `.2` replaced) to fixture against yet. Add
-  that case here — as a new file, per the immutability rule above — the first time a real
-  migration bumps an event version. Loaded and asserted against by
-  `packages/core/test/fixture-corpus.test.ts`.
+  proving a versioned event an older emitter wrote before a field existed still loads.
+
+  `compaction-versioned-events.db` (TKT-318, `build-regression-fixtures-compaction-versioning.ts`)
+  closes the gap this section used to name here as open: the first *genuinely-superseded* decoder
+  in this fork. `Compaction.Ended` was bumped from durable version 1 to version 2 (telemetry
+  fields added) when `session/compaction.ts` gained trigger/token/timing telemetry; the old
+  version-1 definition (`Compaction.EndedV1` in `packages/schema/src/session-event.ts`) is kept
+  purely for decode, never republished. The fixture is one session compacted twice — once by a
+  pre-slice-5 binary (version 1, no telemetry) and once by the current one (version 2, full
+  telemetry) — exactly what a session that lived across the upgrade would contain. Both rows must
+  decode through the real event service; see `packages/core/test/session-compaction-versioning.test.ts`
+  for the live-decode proof this fixture freezes.
+
+  Both files loaded and asserted against by `packages/core/test/fixture-corpus.test.ts`.
 
 - **`protocol/`** — JSON fixtures for the current (V2) and compatibility (V1) session wire
   shapes: `session-get.v2.json` and `session-list.v2.json` match
@@ -61,15 +68,16 @@ file here as append-only.
   key convention rather than a real event shape. Treat those two specifically as illustrative,
   not as a contract.
 
-## Regenerating `db/baseline.db`
+## Regenerating a `db/` fixture
 
-Only ever needed if the fixture was built wrong before merge — see "The rule" above for what to
-do after merge.
+Only ever needed if a fixture was built wrong before merge — see "The rule" above for what to do
+after merge. Each fixture file has its own builder script:
 
 ```bash
 cd packages/core
-bun run script/build-regression-fixtures.ts
+bun run script/build-regression-fixtures.ts                          # db/baseline.db
+bun run script/build-regression-fixtures-compaction-versioning.ts    # db/compaction-versioned-events.db
 ```
 
-The builder is deterministic (fixed timestamps, fixed IDs), so a correct re-run produces a
+Both builders are deterministic (fixed timestamps, fixed IDs), so a correct re-run produces a
 byte-identical file.

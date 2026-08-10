@@ -109,6 +109,19 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`project_preference\` (
+          \`project_id\` text PRIMARY KEY,
+          \`favorite\` integer DEFAULT false NOT NULL,
+          \`rank\` text,
+          \`hidden\` integer DEFAULT false NOT NULL,
+          \`time_last_opened\` integer,
+          \`revision\` integer DEFAULT 0 NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`fk_project_preference_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`project\` (
           \`id\` text PRIMARY KEY,
           \`worktree\` text NOT NULL,
@@ -155,6 +168,20 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`session_goal\` (
+          \`session_id\` text PRIMARY KEY,
+          \`objective\` text NOT NULL,
+          \`acceptance_criteria\` text NOT NULL,
+          \`constraints\` text NOT NULL,
+          \`status\` text DEFAULT 'active' NOT NULL,
+          \`source_message_ids\` text NOT NULL,
+          \`version\` integer DEFAULT 0 NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`fk_session_goal_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`session_input\` (
           \`id\` text PRIMARY KEY,
           \`session_id\` text NOT NULL,
@@ -164,6 +191,20 @@ export default {
           \`promoted_seq\` integer,
           \`time_created\` integer NOT NULL,
           CONSTRAINT \`fk_session_input_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
+        CREATE TABLE \`session_ledger\` (
+          \`id\` text PRIMARY KEY,
+          \`session_id\` text NOT NULL,
+          \`kind\` text NOT NULL,
+          \`text\` text NOT NULL,
+          \`source_message_ids\` text NOT NULL,
+          \`status\` text DEFAULT 'active' NOT NULL,
+          \`superseded_by\` text,
+          \`time_created\` integer NOT NULL,
+          \`time_updated\` integer NOT NULL,
+          CONSTRAINT \`fk_session_ledger_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
         );
       `)
       yield* tx.run(`
@@ -280,6 +321,9 @@ export default {
         `CREATE UNIQUE INDEX \`session_input_session_promoted_seq_idx\` ON \`session_input\` (\`session_id\`,\`promoted_seq\`);`,
       )
       yield* tx.run(
+        `CREATE INDEX \`session_ledger_session_status_updated_idx\` ON \`session_ledger\` (\`session_id\`,\`status\`,\`time_updated\`);`,
+      )
+      yield* tx.run(
         `CREATE INDEX \`session_lifecycle_request_session_time_idx\` ON \`session_lifecycle_request\` (\`session_id\`,\`time_created\`);`,
       )
       yield* tx.run(
@@ -300,6 +344,19 @@ export default {
       )
       yield* tx.run(`CREATE INDEX \`session_tombstone_time_purged_idx\` ON \`session_tombstone\` (\`time_purged\`);`)
       yield* tx.run(`CREATE INDEX \`todo_session_idx\` ON \`todo\` (\`session_id\`);`)
+      // Hand-maintained: schema objects with no drizzle representation. See
+      // HAND_MAINTAINED_SCHEMA_ADDITIONS in script/migration.ts -- do not edit this block
+      // directly, it is overwritten on every regeneration from that array.
+      yield* tx.run(`
+        CREATE VIRTUAL TABLE \`session_transcript_search\` USING fts5(
+          session_id UNINDEXED,
+          message_id UNINDEXED,
+          seq UNINDEXED,
+          role UNINDEXED,
+          text,
+          created_at UNINDEXED
+        );
+      `)
     })
   },
 } satisfies Omit<DatabaseMigration.Migration, "id">

@@ -85,6 +85,34 @@ export type UnknownError = {
 export const isUnknownError = (value: unknown): value is UnknownError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "UnknownError"
 
+export type SessionGoalConflictError = {
+  readonly _tag: "SessionGoalConflictError"
+  readonly sessionID: string
+  readonly version: number
+  readonly message: string
+}
+export const isSessionGoalConflictError = (value: unknown): value is SessionGoalConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionGoalConflictError"
+
+export type SessionLedgerCapExceededError = {
+  readonly _tag: "SessionLedgerCapExceededError"
+  readonly sessionID: string
+  readonly activeCount: number
+  readonly activeBytes: number
+  readonly message: string
+}
+export const isSessionLedgerCapExceededError = (value: unknown): value is SessionLedgerCapExceededError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionLedgerCapExceededError"
+
+export type SessionLedgerEntryNotFoundError = {
+  readonly _tag: "SessionLedgerEntryNotFoundError"
+  readonly sessionID: string
+  readonly entryID: string
+  readonly message: string
+}
+export const isSessionLedgerEntryNotFoundError = (value: unknown): value is SessionLedgerEntryNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "SessionLedgerEntryNotFoundError"
+
 export type ProviderNotFoundError = {
   readonly _tag: "ProviderNotFoundError"
   readonly providerID: string
@@ -119,6 +147,23 @@ export type ProjectCopyError = {
 }
 export const isProjectCopyError = (value: unknown): value is ProjectCopyError =>
   typeof value === "object" && value !== null && "name" in value && value["name"] === "ProjectCopyError"
+
+export type ProjectNotFoundError = {
+  readonly _tag: "ProjectNotFoundError"
+  readonly projectID: string
+  readonly message: string
+}
+export const isProjectNotFoundError = (value: unknown): value is ProjectNotFoundError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProjectNotFoundError"
+
+export type ProjectPreferenceConflictError = {
+  readonly _tag: "ProjectPreferenceConflictError"
+  readonly projectID: string
+  readonly revision: number
+  readonly message: string
+}
+export const isProjectPreferenceConflictError = (value: unknown): value is ProjectPreferenceConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProjectPreferenceConflictError"
 
 export type HealthGetOutput = { readonly healthy: true }
 
@@ -940,6 +985,14 @@ export type SessionsContextOutput = {
         readonly reason: "auto" | "manual"
         readonly summary: string
         readonly recent: string
+        readonly tokensBefore?: number
+        readonly retainedTailMessages?: number
+        readonly retainedTailTokens?: number
+        readonly summaryBytes?: number
+        readonly summaryTokens?: number
+        readonly durationMs?: number
+        readonly sourceSeqStart?: number
+        readonly sourceSeqEnd?: number
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly time: { readonly created: number }
@@ -1000,6 +1053,71 @@ export type SessionsHistoryOutput = {
             | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
           readonly requestID: string
           readonly expectedLifecycleRevision?: number
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.goal.updated"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly objective: string
+          readonly acceptanceCriteria: ReadonlyArray<{
+            readonly id: string
+            readonly text: string
+            readonly status: "open" | "met" | "waived"
+          }>
+          readonly constraints: ReadonlyArray<{
+            readonly id: string
+            readonly text: string
+            readonly sourceMessageID?: string
+          }>
+          readonly sourceMessageIDs: ReadonlyArray<string>
+          readonly expectedVersion?: number
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.goal.status_changed"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly status: "active" | "achieved" | "abandoned"
+          readonly expectedVersion?: number
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.ledger.added"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly entryID: string
+          readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+          readonly text: string
+          readonly sourceMessageIDs: ReadonlyArray<string>
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.ledger.superseded"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly entryID: string
+          readonly supersededBy: string
         }
       }
     | {
@@ -1387,6 +1505,29 @@ export type SessionsHistoryOutput = {
     | {
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
+        readonly type: "session.next.compaction.ended"
+        readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+        readonly location?: { readonly directory: string; readonly workspaceID?: string }
+        readonly data: {
+          readonly timestamp: number
+          readonly sessionID: string
+          readonly messageID: string
+          readonly reason: "auto" | "manual"
+          readonly text: string
+          readonly recent: string
+          readonly tokensBefore: number
+          readonly retainedTailMessages: number
+          readonly retainedTailTokens: number
+          readonly summaryBytes: number
+          readonly summaryTokens: number
+          readonly durationMs: number
+          readonly sourceSeqStart: number
+          readonly sourceSeqEnd: number
+        }
+      }
+    | {
+        readonly id: string
+        readonly metadata?: { readonly [x: string]: JsonValue }
         readonly type: "session.next.revert.staged"
         readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
         readonly location?: { readonly directory: string; readonly workspaceID?: string }
@@ -1479,6 +1620,71 @@ export type SessionsEventsOutput =
           | { readonly state: "trash"; readonly at: number; readonly purgeAfter: number }
         readonly requestID: string
         readonly expectedLifecycleRevision?: number
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.goal.updated"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly objective: string
+        readonly acceptanceCriteria: ReadonlyArray<{
+          readonly id: string
+          readonly text: string
+          readonly status: "open" | "met" | "waived"
+        }>
+        readonly constraints: ReadonlyArray<{
+          readonly id: string
+          readonly text: string
+          readonly sourceMessageID?: string
+        }>
+        readonly sourceMessageIDs: ReadonlyArray<string>
+        readonly expectedVersion?: number
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.goal.status_changed"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly status: "active" | "achieved" | "abandoned"
+        readonly expectedVersion?: number
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.ledger.added"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly entryID: string
+        readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+        readonly text: string
+        readonly sourceMessageIDs: ReadonlyArray<string>
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.ledger.superseded"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly entryID: string
+        readonly supersededBy: string
       }
     }
   | {
@@ -1866,6 +2072,29 @@ export type SessionsEventsOutput =
   | {
       readonly id: string
       readonly metadata?: { readonly [x: string]: unknown }
+      readonly type: "session.next.compaction.ended"
+      readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
+      readonly location?: { readonly directory: string; readonly workspaceID?: string }
+      readonly data: {
+        readonly timestamp: number
+        readonly sessionID: string
+        readonly messageID: string
+        readonly reason: "auto" | "manual"
+        readonly text: string
+        readonly recent: string
+        readonly tokensBefore: number
+        readonly retainedTailMessages: number
+        readonly retainedTailTokens: number
+        readonly summaryBytes: number
+        readonly summaryTokens: number
+        readonly durationMs: number
+        readonly sourceSeqStart: number
+        readonly sourceSeqEnd: number
+      }
+    }
+  | {
+      readonly id: string
+      readonly metadata?: { readonly [x: string]: unknown }
       readonly type: "session.next.revert.staged"
       readonly durable?: { readonly aggregateID: string; readonly seq: number; readonly version: number }
       readonly location?: { readonly directory: string; readonly workspaceID?: string }
@@ -2060,10 +2289,422 @@ export type SessionsMessageOutput = {
         readonly reason: "auto" | "manual"
         readonly summary: string
         readonly recent: string
+        readonly tokensBefore?: number
+        readonly retainedTailMessages?: number
+        readonly retainedTailTokens?: number
+        readonly summaryBytes?: number
+        readonly summaryTokens?: number
+        readonly durationMs?: number
+        readonly sourceSeqStart?: number
+        readonly sourceSeqEnd?: number
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly time: { readonly created: number }
       }
+}["data"]
+
+export type ServerGoalGetInput = { readonly sessionID: { readonly sessionID: string }["sessionID"] }
+
+export type ServerGoalGetOutput = {
+  readonly data?: {
+    readonly sessionID: string
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly status: "active" | "achieved" | "abandoned"
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly version: number
+    readonly time: { readonly created: number; readonly updated: number }
+  } | null
+}["data"]
+
+export type ServerGoalUpdateInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly objective: {
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly expectedVersion?: number | null
+  }["objective"]
+  readonly acceptanceCriteria: {
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly expectedVersion?: number | null
+  }["acceptanceCriteria"]
+  readonly constraints: {
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly expectedVersion?: number | null
+  }["constraints"]
+  readonly sourceMessageIDs: {
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly expectedVersion?: number | null
+  }["sourceMessageIDs"]
+  readonly expectedVersion?: {
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly expectedVersion?: number | null
+  }["expectedVersion"]
+}
+
+export type ServerGoalUpdateOutput = {
+  readonly data: {
+    readonly sessionID: string
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly status: "active" | "achieved" | "abandoned"
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly version: number
+    readonly time: { readonly created: number; readonly updated: number }
+  }
+}["data"]
+
+export type ServerGoalStatusInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly status: {
+    readonly status: "active" | "achieved" | "abandoned"
+    readonly expectedVersion?: number | undefined
+  }["status"]
+  readonly expectedVersion?: {
+    readonly status: "active" | "achieved" | "abandoned"
+    readonly expectedVersion?: number | undefined
+  }["expectedVersion"]
+}
+
+export type ServerGoalStatusOutput = {
+  readonly data: {
+    readonly sessionID: string
+    readonly objective: string
+    readonly acceptanceCriteria: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly status: "open" | "met" | "waived"
+    }>
+    readonly constraints: ReadonlyArray<{
+      readonly id: string
+      readonly text: string
+      readonly sourceMessageID?: string
+    }>
+    readonly status: "active" | "achieved" | "abandoned"
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly version: number
+    readonly time: { readonly created: number; readonly updated: number }
+  }
+}["data"]
+
+export type ServerLedgerListInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly status?: { readonly status?: "active" | "superseded" | "all" | undefined }["status"]
+}
+
+export type ServerLedgerListOutput = {
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly sessionID: string
+    readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+    readonly text: string
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly status: "active" | "superseded"
+    readonly supersededBy?: string
+    readonly time: { readonly created: number; readonly updated: number }
+  }>
+}["data"]
+
+export type ServerLedgerAddInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly kind: {
+    readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+    readonly text: string
+    readonly sourceMessageIDs: ReadonlyArray<string>
+  }["kind"]
+  readonly text: {
+    readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+    readonly text: string
+    readonly sourceMessageIDs: ReadonlyArray<string>
+  }["text"]
+  readonly sourceMessageIDs: {
+    readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+    readonly text: string
+    readonly sourceMessageIDs: ReadonlyArray<string>
+  }["sourceMessageIDs"]
+}
+
+export type ServerLedgerAddOutput = {
+  readonly data: {
+    readonly id: string
+    readonly sessionID: string
+    readonly kind: "decision" | "constraint" | "fact" | "risk" | "next-step"
+    readonly text: string
+    readonly sourceMessageIDs: ReadonlyArray<string>
+    readonly status: "active" | "superseded"
+    readonly supersededBy?: string
+    readonly time: { readonly created: number; readonly updated: number }
+  }
+}["data"]
+
+export type ServerLedgerSupersedeInput = {
+  readonly sessionID: { readonly sessionID: string; readonly entryID: string }["sessionID"]
+  readonly entryID: { readonly sessionID: string; readonly entryID: string }["entryID"]
+  readonly supersededBy: { readonly supersededBy: string }["supersededBy"]
+}
+
+export type ServerLedgerSupersedeOutput = void
+
+export type ServerHistorySearchInput = {
+  readonly sessionID: { readonly sessionID: string }["sessionID"]
+  readonly query: { readonly query: string; readonly limit?: number | undefined }["query"]
+  readonly limit?: { readonly query: string; readonly limit?: number | undefined }["limit"]
+}
+
+export type ServerHistorySearchOutput = {
+  readonly data: {
+    readonly results: ReadonlyArray<{
+      readonly messageID: string
+      readonly seq: number
+      readonly role: string
+      readonly createdAt: number
+      readonly snippet: string
+    }>
+    readonly truncated: boolean
+  }
+}["data"]
+
+export type ServerHistoryGetInput = {
+  readonly sessionID: { readonly sessionID: string; readonly messageID: string }["sessionID"]
+  readonly messageID: { readonly sessionID: string; readonly messageID: string }["messageID"]
+  readonly before?: { readonly before?: number | undefined; readonly after?: number | undefined }["before"]
+  readonly after?: { readonly before?: number | undefined; readonly after?: number | undefined }["after"]
+}
+
+export type ServerHistoryGetOutput = {
+  readonly data: ReadonlyArray<{
+    readonly seq: number
+    readonly message:
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "agent-switched"
+          readonly agent: string
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "model-switched"
+          readonly model: { readonly id: string; readonly providerID: string; readonly variant?: string }
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly text: string
+          readonly files?: ReadonlyArray<{
+            readonly uri: string
+            readonly mime: string
+            readonly name?: string
+            readonly description?: string
+            readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
+          readonly agents?: ReadonlyArray<{
+            readonly name: string
+            readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+          }>
+          readonly type: "user"
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly sessionID: string
+          readonly text: string
+          readonly type: "synthetic"
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+          readonly type: "system"
+          readonly text: string
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "shell"
+          readonly callID: string
+          readonly command: string
+          readonly output: string
+        }
+      | {
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number; readonly completed?: number }
+          readonly type: "assistant"
+          readonly agent: string
+          readonly model: { readonly id: string; readonly providerID: string; readonly variant?: string }
+          readonly content: ReadonlyArray<
+            | { readonly type: "text"; readonly id: string; readonly text: string }
+            | {
+                readonly type: "reasoning"
+                readonly id: string
+                readonly text: string
+                readonly providerMetadata?: { readonly [x: string]: { readonly [x: string]: JsonValue } }
+                readonly time?: { readonly created: number; readonly completed?: number }
+              }
+            | {
+                readonly type: "tool"
+                readonly id: string
+                readonly name: string
+                readonly provider?: {
+                  readonly executed: boolean
+                  readonly metadata?: { readonly [x: string]: { readonly [x: string]: JsonValue } }
+                  readonly resultMetadata?: { readonly [x: string]: { readonly [x: string]: JsonValue } }
+                }
+                readonly state:
+                  | { readonly status: "pending"; readonly input: string }
+                  | {
+                      readonly status: "running"
+                      readonly input: { readonly [x: string]: JsonValue }
+                      readonly structured: { readonly [x: string]: JsonValue }
+                      readonly content: ReadonlyArray<
+                        | { readonly type: "text"; readonly text: string }
+                        | { readonly type: "file"; readonly uri: string; readonly mime: string; readonly name?: string }
+                      >
+                    }
+                  | {
+                      readonly status: "completed"
+                      readonly input: { readonly [x: string]: JsonValue }
+                      readonly attachments?: ReadonlyArray<{
+                        readonly uri: string
+                        readonly mime: string
+                        readonly name?: string
+                        readonly description?: string
+                        readonly source?: { readonly start: number; readonly end: number; readonly text: string }
+                      }>
+                      readonly content: ReadonlyArray<
+                        | { readonly type: "text"; readonly text: string }
+                        | { readonly type: "file"; readonly uri: string; readonly mime: string; readonly name?: string }
+                      >
+                      readonly outputPaths?: ReadonlyArray<string>
+                      readonly structured: { readonly [x: string]: JsonValue }
+                      readonly result?: JsonValue
+                    }
+                  | {
+                      readonly status: "error"
+                      readonly input: { readonly [x: string]: JsonValue }
+                      readonly content: ReadonlyArray<
+                        | { readonly type: "text"; readonly text: string }
+                        | { readonly type: "file"; readonly uri: string; readonly mime: string; readonly name?: string }
+                      >
+                      readonly structured: { readonly [x: string]: JsonValue }
+                      readonly error: { readonly type: "unknown"; readonly message: string }
+                      readonly result?: JsonValue
+                    }
+                readonly time: {
+                  readonly created: number
+                  readonly ran?: number
+                  readonly completed?: number
+                  readonly pruned?: number
+                }
+              }
+          >
+          readonly snapshot?: { readonly start?: string; readonly end?: string; readonly files?: ReadonlyArray<string> }
+          readonly finish?: string
+          readonly cost?: number
+          readonly tokens?: {
+            readonly input: number
+            readonly output: number
+            readonly reasoning: number
+            readonly cache: { readonly read: number; readonly write: number }
+          }
+          readonly error?: { readonly type: "unknown"; readonly message: string }
+        }
+      | {
+          readonly type: "compaction"
+          readonly reason: "auto" | "manual"
+          readonly summary: string
+          readonly recent: string
+          readonly tokensBefore?: number
+          readonly retainedTailMessages?: number
+          readonly retainedTailTokens?: number
+          readonly summaryBytes?: number
+          readonly summaryTokens?: number
+          readonly durationMs?: number
+          readonly sourceSeqStart?: number
+          readonly sourceSeqEnd?: number
+          readonly id: string
+          readonly metadata?: { readonly [x: string]: JsonValue }
+          readonly time: { readonly created: number }
+        }
+  }>
 }["data"]
 
 export type MessagesListInput = {
@@ -2232,6 +2873,14 @@ export type MessagesListOutput = {
         readonly reason: "auto" | "manual"
         readonly summary: string
         readonly recent: string
+        readonly tokensBefore?: number
+        readonly retainedTailMessages?: number
+        readonly retainedTailTokens?: number
+        readonly summaryBytes?: number
+        readonly summaryTokens?: number
+        readonly durationMs?: number
+        readonly sourceSeqStart?: number
+        readonly sourceSeqEnd?: number
         readonly id: string
         readonly metadata?: { readonly [x: string]: JsonValue }
         readonly time: { readonly created: number }
@@ -3118,3 +3767,126 @@ export type ProjectCopiesRefreshInput = {
 }
 
 export type ProjectCopiesRefreshOutput = void
+
+export type ServerProjectListOutput = {
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly worktree: string
+    readonly vcs?: "git"
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+    readonly time: { readonly created: number; readonly updated: number; readonly initialized?: number }
+    readonly sandboxes: ReadonlyArray<string>
+  }>
+}["data"]
+
+export type ServerProjectGetInput = { readonly projectID: { readonly projectID: string }["projectID"] }
+
+export type ServerProjectGetOutput = {
+  readonly data: {
+    readonly id: string
+    readonly worktree: string
+    readonly vcs?: "git"
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+    readonly time: { readonly created: number; readonly updated: number; readonly initialized?: number }
+    readonly sandboxes: ReadonlyArray<string>
+  }
+}["data"]
+
+export type ServerProjectUpdateMetadataInput = {
+  readonly projectID: { readonly projectID: string }["projectID"]
+  readonly name?: {
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+  }["name"]
+  readonly icon?: {
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+  }["icon"]
+  readonly commands?: {
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+  }["commands"]
+}
+
+export type ServerProjectUpdateMetadataOutput = {
+  readonly data: {
+    readonly id: string
+    readonly worktree: string
+    readonly vcs?: "git"
+    readonly name?: string
+    readonly icon?: { readonly url?: string; readonly override?: string; readonly color?: string }
+    readonly commands?: { readonly start?: string }
+    readonly time: { readonly created: number; readonly updated: number; readonly initialized?: number }
+    readonly sandboxes: ReadonlyArray<string>
+  }
+}["data"]
+
+export type ServerProjectReadInput = { readonly projectID: { readonly projectID: string }["projectID"] }
+
+export type ServerProjectReadOutput = {
+  readonly data: {
+    readonly projectID: string
+    readonly favorite: boolean
+    readonly rank?: string
+    readonly hidden: boolean
+    readonly lastOpenedAt?: number
+    readonly revision: number
+  }
+}["data"]
+
+export type ServerProjectWriteInput = {
+  readonly projectID: { readonly projectID: string }["projectID"]
+  readonly favorite?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["favorite"]
+  readonly rank?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["rank"]
+  readonly hidden?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["hidden"]
+  readonly lastOpenedAt?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["lastOpenedAt"]
+  readonly expectedRevision?: {
+    readonly favorite?: boolean
+    readonly rank?: string
+    readonly hidden?: boolean
+    readonly lastOpenedAt?: number
+    readonly expectedRevision?: number | null
+  }["expectedRevision"]
+}
+
+export type ServerProjectWriteOutput = {
+  readonly data: {
+    readonly projectID: string
+    readonly favorite: boolean
+    readonly rank?: string
+    readonly hidden: boolean
+    readonly lastOpenedAt?: number
+    readonly revision: number
+  }
+}["data"]

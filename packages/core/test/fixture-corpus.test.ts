@@ -4,8 +4,12 @@ import path from "path"
 import { fileURLToPath } from "url"
 import { SqliteClient } from "@effect/sql-sqlite-bun"
 import { EffectDrizzleSqlite } from "@opencode-ai/effect-drizzle-sqlite"
+import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { LayerNode } from "@opencode-ai/core/effect/layer-node"
+import { Database } from "@opencode-ai/core/database/database"
 import { DatabaseMigration } from "@opencode-ai/core/database/migration"
-import { Effect } from "effect"
+import { EventV2 } from "@opencode-ai/core/event"
+import { Effect, Stream } from "effect"
 import { sql } from "drizzle-orm"
 import { tmpdir } from "./fixture/tmpdir"
 
@@ -124,5 +128,54 @@ describe("regression corpus: db/baseline.db", () => {
       },
       { id: "evt_sparse00000000000000", seq: 1, type: "session.updated.1", data: "{}" },
     ])
+  })
+})
+
+// TKT-318: closes the gap the block above's comment names -- baseline.db (TKT-308) had no
+// genuinely-superseded decoder to fixture against because nothing had bumped a durable event
+// version past .1 yet. Compaction.Ended is now the first. A NEW file, per the corpus's
+// immutable-input rule -- baseline.db is merged and untouched.
+const compactionVersioningPath = fileURLToPath(
+  new URL("../../../fixtures/regression-corpus/db/compaction-versioned-events.db", import.meta.url),
+)
+
+describe("regression corpus: db/compaction-versioned-events.db", () => {
+  test("both a version-1 and a version-2 Compaction.Ended row decode through the real event service", async () => {
+    await using tmp = await tmpdir()
+    const copyPath = path.join(tmp.path, "compaction-versioning-copy.db")
+    await fs.copyFile(compactionVersioningPath, copyPath)
+
+    const decoded = await Effect.runPromise(
+      Effect.gen(function* () {
+        yield* DatabaseMigration.apply((yield* Database.Service).db)
+        const events = yield* EventV2.Service
+        return yield* events
+          .durable({ aggregateID: "ses_compacted_twice00000" })
+          .pipe(Stream.take(2), Stream.runCollect)
+      }).pipe(
+        Effect.provide(
+          AppNodeBuilder.build(LayerNode.group([Database.node, EventV2.node]), [
+            [Database.node, Database.layerFromPath(copyPath)],
+          ]),
+        ),
+        Effect.scoped,
+      ),
+    )
+
+    const rows = Array.from(decoded)
+    expect(rows).toHaveLength(2)
+
+    expect(rows[0]?.type).toBe("session.next.compaction.ended")
+    expect(rows[0]?.durable?.version).toBe(1)
+    const v1 = rows[0]?.data as { text: string; tokensBefore?: number }
+    expect(v1.text).toContain("Pre-upgrade")
+    expect(v1.tokensBefore).toBeUndefined()
+
+    expect(rows[1]?.type).toBe("session.next.compaction.ended")
+    expect(rows[1]?.durable?.version).toBe(2)
+    const v2 = rows[1]?.data as { text: string; tokensBefore?: number; durationMs?: number }
+    expect(v2.text).toContain("Post-upgrade")
+    expect(v2.tokensBefore).toBe(12_000)
+    expect(v2.durationMs).toBe(4200)
   })
 })

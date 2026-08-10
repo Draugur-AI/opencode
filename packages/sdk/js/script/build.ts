@@ -19,28 +19,60 @@ const document = (await Bun.file("./openapi.json").json()) as {
 }
 const schemas = document.components?.schemas
 if (schemas) {
-  const reachable = new Set<string>()
-  const visit = (value: unknown) => {
+  const refPrefix = "#/components/schemas/"
+
+  // Mutates in place -- `schemas` below stays the same object across passes, so each pass sees
+  // the previous pass's redirected refs without needing to re-thread a rebuilt document.
+  const rewriteRefs = (value: unknown, rename: ReadonlyMap<string, string>): void => {
     if (Array.isArray(value)) {
-      value.forEach(visit)
+      value.forEach((child) => rewriteRefs(child, rename))
       return
     }
     if (typeof value !== "object" || value === null) return
     for (const [key, child] of Object.entries(value)) {
-      if (key === "$ref" && typeof child === "string" && child.startsWith("#/components/schemas/")) {
-        const name = child.slice("#/components/schemas/".length)
-        if (reachable.has(name)) continue
-        reachable.add(name)
-        visit(schemas[name])
+      if (key === "$ref" && typeof child === "string" && child.startsWith(refPrefix)) {
+        const name = child.slice(refPrefix.length)
+        const target = rename.get(name)
+        if (target) (value as Record<string, unknown>)[key] = refPrefix + target
       } else {
-        visit(child)
+        rewriteRefs(child, rename)
       }
     }
   }
-  visit({ ...document, components: { ...document.components, schemas: undefined } })
-  for (const name of Object.keys(schemas)) {
-    if (/^SessionNext\w+1$/.test(name) && !reachable.has(name)) delete schemas[name]
+
+  // hey-api/openapi-ts walks each reference SITE for a shared schema (e.g. SessionEvent.Durable
+  // is used at two separate endpoints) as its own naming pass, so a schema reachable from more
+  // than one site -- or, since our own TKT-318 change, a union whose member now legitimately has
+  // two distinct shapes sharing one discriminant (a versioned successor kept alongside the old
+  // decoder, see Compaction.EndedV1/Ended) -- can come out as two byte-identical schemas under
+  // different names (`SessionDurableEvent` / `SessionDurableEvent1`). Collapsing by structural
+  // equality (not a name pattern) generalizes what used to be a narrow "delete this one
+  // known-unreachable name" check into a fixed-point pass: redirect every $ref at a duplicate to
+  // its first-seen canonical twin, delete the duplicate, and repeat -- a parent union can itself
+  // become a duplicate only once ITS members have already collapsed to shared names.
+  const maxPasses = Object.keys(schemas).length
+  let converged = false
+  for (let pass = 0; pass < maxPasses; pass++) {
+    const byCanonical = new Map<string, string>()
+    const rename = new Map<string, string>()
+    for (const name of Object.keys(schemas).sort()) {
+      const canonical = JSON.stringify(schemas[name])
+      const existing = byCanonical.get(canonical)
+      if (existing) rename.set(name, existing)
+      else byCanonical.set(canonical, name)
+    }
+    if (rename.size === 0) {
+      converged = true
+      break
+    }
+    for (const name of rename.keys()) delete schemas[name]
+    rewriteRefs(document, rename)
   }
+  // Ran out of passes without reaching a fixed point -- either a bug in this loop, or a chain of
+  // duplicates longer than the schema count should ever allow. Fail loudly here rather than
+  // silently shipping unresolved duplicate schemas to codegen.
+  if (!converged) throw new Error("Session event schema dedup did not converge")
+
   await Bun.write("./openapi.json", JSON.stringify(document))
 }
 
@@ -72,9 +104,6 @@ await createClient({
 })
 
 const generatedTypes = await Bun.file("./src/v2/gen/types.gen.ts").text()
-if (/export type SessionNext\w+1 =/.test(generatedTypes)) {
-  throw new Error("Session history generated duplicate Session event variants")
-}
 const historyTypesPatched = generatedTypes.replace(
   /(export type V2SessionHistoryData = \{[\s\S]*?query\?: \{\s*limit\?: )string([;,]\s*after\?: )string/,
   "$1number$2number",

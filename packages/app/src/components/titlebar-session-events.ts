@@ -8,7 +8,19 @@ export type SessionTabsRemovedDetail = {
   sessionIDs: string[]
 }
 
+// TKT-309 baseline: this custom event is the browser-only half of the current archive
+// path (see home-session-archive.ts) that the authoritative-session-entities slice
+// replaces with a server-driven store. Counting its use here, before that change, is
+// the measurement the removal decision hangs on. Additive only — the dispatch below is
+// unchanged.
+let sessionTabsRemovedNotifications = 0
+
 export function notifySessionTabsRemoved(input: SessionTabsRemovedDetail) {
+  sessionTabsRemovedNotifications++
+  console.debug("[baseline] session-tabs-removed dispatch", {
+    total: sessionTabsRemovedNotifications,
+    sessionCount: input.sessionIDs.length,
+  })
   window.dispatchEvent(new CustomEvent(SESSION_TABS_REMOVED_EVENT, { detail: input }))
 }
 

@@ -49,6 +49,22 @@ import type {
   SessionsInterruptOutput,
   SessionsMessageInput,
   SessionsMessageOutput,
+  ServerGoalGetInput,
+  ServerGoalGetOutput,
+  ServerGoalUpdateInput,
+  ServerGoalUpdateOutput,
+  ServerGoalStatusInput,
+  ServerGoalStatusOutput,
+  ServerLedgerListInput,
+  ServerLedgerListOutput,
+  ServerLedgerAddInput,
+  ServerLedgerAddOutput,
+  ServerLedgerSupersedeInput,
+  ServerLedgerSupersedeOutput,
+  ServerHistorySearchInput,
+  ServerHistorySearchOutput,
+  ServerHistoryGetInput,
+  ServerHistoryGetOutput,
   MessagesListInput,
   MessagesListOutput,
   ModelsListInput,
@@ -124,6 +140,15 @@ import type {
   ProjectCopiesRemoveOutput,
   ProjectCopiesRefreshInput,
   ProjectCopiesRefreshOutput,
+  ServerProjectListOutput,
+  ServerProjectGetInput,
+  ServerProjectGetOutput,
+  ServerProjectUpdateMetadataInput,
+  ServerProjectUpdateMetadataOutput,
+  ServerProjectReadInput,
+  ServerProjectReadOutput,
+  ServerProjectWriteInput,
+  ServerProjectWriteOutput,
 } from "./types"
 import { ClientError } from "./client-error"
 
@@ -572,6 +597,113 @@ export function make(options: ClientOptions) {
             path: `/api/session/${encodeURIComponent(input.sessionID)}/message/${encodeURIComponent(input.messageID)}`,
             successStatus: 200,
             declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+    },
+    "server.goal": {
+      get: (input: ServerGoalGetInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerGoalGetOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/goal`,
+            successStatus: 200,
+            declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      update: (input: ServerGoalUpdateInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerGoalUpdateOutput }>(
+          {
+            method: "PUT",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/goal`,
+            body: {
+              objective: input["objective"],
+              acceptanceCriteria: input["acceptanceCriteria"],
+              constraints: input["constraints"],
+              sourceMessageIDs: input["sourceMessageIDs"],
+              expectedVersion: input["expectedVersion"],
+            },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      status: (input: ServerGoalStatusInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerGoalStatusOutput }>(
+          {
+            method: "PUT",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/goal/status`,
+            body: { status: input["status"], expectedVersion: input["expectedVersion"] },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+    },
+    "server.ledger": {
+      list: (input: ServerLedgerListInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerLedgerListOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/ledger`,
+            query: { status: input["status"] },
+            successStatus: 200,
+            declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      add: (input: ServerLedgerAddInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerLedgerAddOutput }>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/ledger`,
+            body: { kind: input["kind"], text: input["text"], sourceMessageIDs: input["sourceMessageIDs"] },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      supersede: (input: ServerLedgerSupersedeInput, requestOptions?: RequestOptions) =>
+        request<ServerLedgerSupersedeOutput>(
+          {
+            method: "POST",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/ledger/${encodeURIComponent(input.entryID)}/supersede`,
+            body: { supersededBy: input["supersededBy"] },
+            successStatus: 204,
+            declaredStatuses: [404, 400, 401],
+            empty: true,
+          },
+          requestOptions,
+        ),
+    },
+    "server.history": {
+      search: (input: ServerHistorySearchInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerHistorySearchOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/history/search`,
+            query: { query: input["query"], limit: input["limit"] },
+            successStatus: 200,
+            declaredStatuses: [404, 400, 401],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      get: (input: ServerHistoryGetInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerHistoryGetOutput }>(
+          {
+            method: "GET",
+            path: `/api/session/${encodeURIComponent(input.sessionID)}/history/${encodeURIComponent(input.messageID)}`,
+            query: { before: input["before"], after: input["after"] },
+            successStatus: 200,
+            declaredStatuses: [404, 500, 400, 401],
             empty: false,
           },
           requestOptions,
@@ -1070,6 +1202,65 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ),
+    },
+    "server.project": {
+      list: (requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectListOutput }>(
+          { method: "GET", path: `/api/project`, successStatus: 200, declaredStatuses: [401, 400], empty: false },
+          requestOptions,
+        ).then((value) => value.data),
+      get: (input: ServerProjectGetInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectGetOutput }>(
+          {
+            method: "GET",
+            path: `/api/project/${encodeURIComponent(input.projectID)}`,
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      updateMetadata: (input: ServerProjectUpdateMetadataInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectUpdateMetadataOutput }>(
+          {
+            method: "PATCH",
+            path: `/api/project/${encodeURIComponent(input.projectID)}`,
+            body: { name: input["name"], icon: input["icon"], commands: input["commands"] },
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      read: (input: ServerProjectReadInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectReadOutput }>(
+          {
+            method: "GET",
+            path: `/api/project/${encodeURIComponent(input.projectID)}/preference`,
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
+      write: (input: ServerProjectWriteInput, requestOptions?: RequestOptions) =>
+        request<{ readonly data: ServerProjectWriteOutput }>(
+          {
+            method: "PATCH",
+            path: `/api/project/${encodeURIComponent(input.projectID)}/preference`,
+            body: {
+              favorite: input["favorite"],
+              rank: input["rank"],
+              hidden: input["hidden"],
+              lastOpenedAt: input["lastOpenedAt"],
+              expectedRevision: input["expectedRevision"],
+            },
+            successStatus: 200,
+            declaredStatuses: [409, 404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ).then((value) => value.data),
     },
   }
 }

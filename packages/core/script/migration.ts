@@ -12,6 +12,33 @@ const snapshot = path.join(root, "packages/core/schema.json")
 const tsDir = path.join(root, "packages/core/src/database/migration")
 const registry = path.join(root, "packages/core/src/database/migration.gen.ts")
 const schema = path.join(root, "packages/core/src/database/schema.gen.ts")
+
+/**
+ * Schema objects with no drizzle sqliteTable() representation (FTS5 virtual tables, and any
+ * future non-relational object) can't be discovered by drizzle-kit's introspection, so they can
+ * never appear in the drizzle-generated part of schema.gen.ts -- but a FRESH database still needs
+ * them to exist, not just be marked "already migrated" (DatabaseMigration.apply's fast path for
+ * an empty database runs schema.gen.ts's up() once and then marks every migration complete
+ * WITHOUT running each one's own up() body). Add an entry here, in the SAME statement, whenever
+ * you add an incremental migration that creates a schema object drizzle cannot see. This keeps
+ * `--check` meaningful (comparing against a reproducible expected output) instead of turning it
+ * into a manual hand-edit that a later regeneration silently discards.
+ *
+ * TKT-318: session_transcript_search (packages/core/src/database/migration/
+ * 20260810170000_session_transcript_search.ts). Keep this array's SQL text byte-identical to that
+ * migration's -- schema.gen.ts is the fresh-DB path, the incremental file is the upgrade path for
+ * an already-existing database; they must describe the same end state.
+ */
+const HAND_MAINTAINED_SCHEMA_ADDITIONS = [
+  `CREATE VIRTUAL TABLE \`session_transcript_search\` USING fts5(
+  session_id UNINDEXED,
+  message_id UNINDEXED,
+  seq UNINDEXED,
+  role UNINDEXED,
+  text,
+  created_at UNINDEXED
+);`,
+]
 const args = parseArgs({
   args: process.argv.slice(2),
   options: {
@@ -140,6 +167,7 @@ ${renderStatements(sql)}
 }
 
 function renderSchema(sql: string) {
+  const handMaintained = HAND_MAINTAINED_SCHEMA_ADDITIONS.map(renderRun).join("\n")
   return `import { Effect } from "effect"
 import type { DatabaseMigration } from "./migration"
 
@@ -147,6 +175,10 @@ export default {
   up(tx) {
     return Effect.gen(function* () {
 ${renderStatements(sql)}
+      // Hand-maintained: schema objects with no drizzle representation. See
+      // HAND_MAINTAINED_SCHEMA_ADDITIONS in script/migration.ts -- do not edit this block
+      // directly, it is overwritten on every regeneration from that array.
+${handMaintained}
     })
   },
 } satisfies Omit<DatabaseMigration.Migration, "id">
