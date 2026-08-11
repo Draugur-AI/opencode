@@ -743,6 +743,7 @@ export const dict = {
   "common.reset": "Tilbakestill",
   "common.archive": "Arkiver",
   "common.delete": "Slett",
+  "common.restore": "Gjenopprett",
   "common.close": "Lukk",
   "common.edit": "Rediger",
   "common.loadMore": "Last inn flere",
@@ -961,6 +962,14 @@ export const dict = {
   "session.delete.title": "Slett sesjon",
   "session.delete.confirm": 'Slette sesjonen "{{name}}"?',
   "session.delete.button": "Slett sesjon",
+
+  "archived.title": "Arkivert",
+  "archived.empty": "Ingen arkiverte sesjoner",
+  "trash.title": "Papirkurv",
+  "trash.empty": "Papirkurven er tom",
+  "trash.deletePermanently": "Slett permanent",
+  "trash.deleteConfirm.title": "Slette permanent?",
+  "trash.deleteConfirm.description": "Dette sletter permanent «{{title}}» og transkriptet, hendelsene, målene, regnskapen og overvåkningspostene den eier. Dette kan ikke angres.",
 
   "workspace.new": "Nytt arbeidsområde",
   "workspace.type.local": "lokal",

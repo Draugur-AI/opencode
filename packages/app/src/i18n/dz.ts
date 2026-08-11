@@ -853,6 +853,7 @@ export const dict: Record<string, string> = {
   "common.reset": "སླར་སྒྲིག་འབད།",
   "common.archive": "གཏན་མཛོད",
   "common.delete": "བཏོན༌གཏང༌བ",
+  "common.restore": "སླར་གསོ།",
   "common.close": "སྒོ་བསྡམ",
   "common.edit": "ཞུན༌དག",
   "common.loadMore": "མངམ་མངོན་གསལ་འབད།",
@@ -1184,4 +1185,12 @@ export const dict: Record<string, string> = {
   "home.inventory.all": "ཆ་མཉམ",
   "home.inventory.favorite": "འོས་འདམ་ལུ་ཁ་སྐོང་རྐྱབ།",
   "home.inventory.unfavorite": "འོས་འདམ་ལས་རྩ་བསྐྲད་གཏང",
+  "archived.title": "གཏན་མཛོད",
+  "archived.empty": "རྒྱུན་ལྡན་ལཱ་ཡུན་ཚུ་གཏན་མཛོད་མེད།",
+  "trash.title": "སེལ་འཐུའི་སྣོད།",
+  "trash.empty": "སེལ་འཐུའི་སྣོད་སྟོང་པ་ཨིན།",
+  "trash.deletePermanently": "རྩ་བསྐྲད་མཇུག་བསྡུ་བཏང་ནི།",
+  "trash.deleteConfirm.title": "མཇུག་བསྡུ་སྦེ་ རྩ་བསྐྲད་གཏངམ་ཨིན་ན?",
+  "trash.deleteConfirm.description": 
+    "\"{{title}}\" དེ་ལས་དེའི་འཕྲིན་དོན་ཡིག་བསྒྱུར། འཁྲིད་ཉིན། འཆར་གཞི། དངོས་པོའི་ཐོ། དོ་དམ་རྩིས་མཛོད། དེ་ལས་ཁྱོད་ཀྱི་དབང་བའི་ཉིན་ཐོ་འཛིན་འཛིན་སྐྱོང་ རྩ་བསྐྲད་བཏང་ཡོད། འདི་སླར་བསྐྱར་གཏང་མི་ཚུགས།",
 }

@@ -776,6 +776,15 @@ export const dict = {
   "home.providerTip":
     "Підключіться до понад 75 провайдерів, щоб використовувати інші моделі, зокрема Claude, GPT, Gemini та інші",
 
+  "archived.title": "Архів",
+  "archived.empty": "Немає заархівованих сесій",
+  "trash.title": "Кошик",
+  "trash.empty": "Кошик порожній",
+  "trash.deletePermanently": "Видалити назавжди",
+  "trash.deleteConfirm.title": "Видалити назавжди?",
+  "trash.deleteConfirm.description":
+    "Це незворотно видалить «{{title}}» та його історію, події, цілі, реєстр і записи моніторів, які йому належать. Цю дію неможливо скасувати.",
+
   "session.tab.session": "Сесія",
   "session.tab.review": "Огляд",
   "session.tab.context": "Контекст",
@@ -932,6 +941,7 @@ export const dict = {
   "common.reset": "Скинути",
   "common.archive": "Архівувати",
   "common.delete": "Видалити",
+  "common.restore": "Відновити",
   "common.close": "Закрити",
   "common.edit": "Редагувати",
   "common.loadMore": "Завантажити більше",

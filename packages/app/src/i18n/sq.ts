@@ -1166,4 +1166,12 @@ export const dict = {
   "workspace.reset.archived.many": "Seancat {{count}} do të arkivohen.",
   "workspace.reset.note": "Kjo do të rivendosë hapësirën e punës që të përputhet me degën e paracaktuar.",
   "dialog.usageExceeded.dontShowAgain": "Mos e shfaq përsëri",
+  "archived.title": "Të arkivuara",
+  "archived.empty": "Nuk ka sesione të arkivuara",
+  "trash.title": "Bërrya",
+  "trash.empty": "Bërrya është bosh",
+  "trash.deletePermanently": "Fshi përgjithmonë",
+  "trash.deleteConfirm.title": "Të fshihet përgjithmonë?",
+  "trash.deleteConfirm.description": "Kjo fshin përgjithmonë \"{{title}}\" dhe transkriptin, eventet, qëllimet, ledhrin, dhe regjistrat e monitoruesve të poseduar. Kjo nuk mund të anulohet.",
+  "common.restore": "Ripërdor",
 }

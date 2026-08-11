@@ -80,6 +80,14 @@ cross-compile job, use Blacksmith for a real capability GitHub-hosted can't repl
 A row is never deleted, only marked resolved — the ledger's value is in showing what has *already*
 been reconciled, not just what is currently outstanding.
 
+## Known issues
+
+- **`dv` (Dhivehi) is missing 8 i18n keys**, carried as a scoped, evidenced exception in
+  `packages/app/src/i18n/parity.test.ts`'s `KNOWN_MISSING` allowlist rather than silently failing
+  parity or being faked with unverified content — see that file for the full round-trip evidence
+  and feedback #171 for the fix-forward (a different model or a human; `litellm/qwen3-6` is
+  disqualified for this locale, two strikes in two different failure modes).
+
 ## PR conventions
 
 - **Vertical slices, package boundaries preserved.** Follow the dependency direction in the build

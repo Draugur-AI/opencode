@@ -1151,4 +1151,13 @@ export const dict = {
   "workspace.reset.archived.many": "ເຊດຊັນ {{count}} ຈະຖືກເກັບໄວ້.",
   "workspace.reset.note": "ນີ້ຈະຣີເຊັດພື້ນທີ່ເຮັດວຽກໃຫ້ກົງກັບສາຂາເລີ່ມຕົ້ນ.",
   "dialog.usageExceeded.dontShowAgain": "ຢ່າສະແດງອີກ",
+
+   "archived.title": "ວາງເກັບ",
+   "archived.empty": "ບໍ່ມີເຊດຊັນທີ່ວາງເກັບ",
+   "trash.title": "ຖังໝໍ້ໄໝ້",
+   "trash.empty": "ຖັງໝໍ້ໄໝ້ເປັນເປົ່າ",
+   "trash.deletePermanently": "ລຶບຖາວອນ",
+   "trash.deleteConfirm.title": "ລຶບຖາວອນບໍ?",
+   "trash.deleteConfirm.description": "ສິ່ງນີ້ຈະລຶບ \"{{title}}\" ແລະຂໍ້ຄວາມ, ເຫດການ, ເປົ້າໝາຍ, ເບີງລາຍຊື້, ແລະ ບັນທຶກ monitor ທີ່ເປເຂົ້າຂອງມັນຢ່າງຖາວອນ. ສິ່ງນີ້ບໍ່ສາມາດຍົກເລີກໄດ້.",
+   "common.restore": "ຟື້ນຟູ",
 }

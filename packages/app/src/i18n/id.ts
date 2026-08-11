@@ -771,6 +771,14 @@ export const dict = {
   "home.providerTip":
     "Hubungkan ke 75+ penyedia untuk menggunakan model lain, termasuk Claude, GPT, Gemini, dan lainnya",
 
+  "archived.title": "Arsip",
+  "archived.empty": "Tidak ada sesi yang diarsipkan",
+  "trash.title": "Sampah",
+  "trash.empty": "Sampah kosong",
+  "trash.deletePermanently": "Hapus permanen",
+  "trash.deleteConfirm.title": "Hapus permanen?",
+  "trash.deleteConfirm.description": "Ini akan menghapus \"{{title}}\" beserta transkrip, peristiwa, tujuan, buku besar, dan catatan monitor yang dimilik secara permanen. Tindakan ini tidak dapat dibatalkan.",
+
   "session.tab.session": "Sesi",
   "session.tab.review": "Tinjauan",
   "session.tab.context": "Konteks",
@@ -919,6 +927,7 @@ export const dict = {
   "common.reset": "Atur ulang",
   "common.archive": "Arsipkan",
   "common.delete": "Hapus",
+  "common.restore": "Pulihkan",
   "common.close": "Tutup",
   "common.edit": "Sunting",
   "common.loadMore": "Muat lebih banyak",

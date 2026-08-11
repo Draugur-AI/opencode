@@ -560,6 +560,7 @@ export const dict = {
   "common.reset": "초기화",
   "common.archive": "보관",
   "common.delete": "삭제",
+  "common.restore": "복원",
   "common.close": "닫기",
   "common.edit": "편집",
   "common.loadMore": "더 불러오기",
@@ -1170,4 +1171,12 @@ export const dict = {
 
   "desktop.picker.error.notSelected": "선택기에서 파일을 선택하지 않았습니다",
   "desktop.picker.error.sizeLimit": "선택한 첨부 파일이 {{limit}} MB 제한을 초과합니다",
+
+  "archived.title": "보관된 세션",
+  "archived.empty": "보관된 세션이 없습니다",
+  "trash.title": "휴지통",
+  "trash.empty": "휴지통이 비어 있습니다",
+  "trash.deletePermanently": "영구 삭제",
+  "trash.deleteConfirm.title": "영구 삭제하시겠습니까?",
+  "trash.deleteConfirm.description": "{{title}} 세션과 해당 기록, 이벤트, 목표, 원장, 보유 모니터 기록이 영구적으로 삭제됩니다. 이 작업은 되돌릴 수 없습니다",
 }

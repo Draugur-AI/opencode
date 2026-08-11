@@ -690,6 +690,15 @@ export const dict = {
   "notification.session.responseReady.title": "Cavab hazırdır",
   "notification.session.error.title": "Sessiya xətası",
   "notification.session.error.fallbackDescription": "Xəta baş verdi",
+
+  "archived.title": "Arxivlənmiş",
+  "archived.empty": "Arxivlənmiş sessiya yoxdur",
+  "trash.title": "Zibil qutusu",
+  "trash.empty": "Zibil qutusu boşdur",
+  "trash.deletePermanently": "Həmişəlik sil",
+  "trash.deleteConfirm.title": "Həmişəlik silinsin?",
+  "trash.deleteConfirm.description": "\"{{title}}\" və onun transkripti, hadisələri, məqsədləri, dəftəri və mülkiyyət monitorinq qeydləri həmişəlik silinəcək. Bu əməliyyatı geri qaytarmaq mümkün deyil.",
+
   "home.recentProjects": "Son layihələr",
   "home.empty.title": "Son layihə yoxdur",
   "home.empty.description": "Yerli layihə açaraq başlayın",
@@ -854,6 +863,7 @@ export const dict = {
   "common.reset": "Sıfırla",
   "common.archive": "Arxivlə",
   "common.delete": "Sil",
+  "common.restore": "Bərpa et",
   "common.close": "Bağla",
   "common.edit": "Redaktə et",
   "common.loadMore": "Daha çox yüklə",

@@ -707,6 +707,15 @@ export const dict = {
   "home.sessions.group.today": "Имруз",
   "home.sessions.group.yesterday": "Дируз",
   "home.sessions.group.older": "калонсолтар",
+
+  "archived.title": "Бойгонӣ",
+  "archived.empty": "Ягон сессияи бойгонӣ нест",
+  "trash.title": "Партов",
+  "trash.empty": "Партов холи аст",
+  "trash.deletePermanently": "Ба таври доимӣ нест кардан",
+  "trash.deleteConfirm.title": "Ба таври доимӣ нест карда шавад?",
+  "trash.deleteConfirm.description": "Ин \"{{title}}\" ва транскрипти онро ба таври доимӣ нест мекунад. Ин амалро бекор кардан ғайриимкон аст.",
+
   "home.providerTip":
     "Барои истифодаи моделҳои дигар, аз ҷумла Claude, GPT, Gemini ва ғайра ба 75+ провайдерҳо пайваст шавед",
   "session.tab.session": "Сессия",
@@ -848,6 +857,7 @@ export const dict = {
   "common.reset": "Бозсозӣ",
   "common.archive": "Архив",
   "common.delete": "Нобуд кунед",
+  "common.restore": "Барқарор кардан",
   "common.close": "Пӯшед",
   "common.edit": "Таҳрир",
   "common.loadMore": "Бештар бор кунед",

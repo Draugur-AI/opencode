@@ -972,6 +972,17 @@ export const dict = {
   "settings.general.row.newInterfaceNotice.description": "Prethodni raspored više nije dostupan",
   "settings.general.row.newInterfaceNotice.dismiss": "Odbaci",
   "settings.general.row.pinchZoom.title": "Zumiranje štipanjem",
+
+  "common.restore": "Vrati",
+
+  "archived.title": "Arhivirane",
+  "archived.empty": "Nema arhiviranih sesija",
+  "trash.title": "Smeće",
+  "trash.empty": "Smeće je prazno",
+  "trash.deletePermanently": "Trajno obriši",
+  "trash.deleteConfirm.title": "Trajno obrisati?",
+  "trash.deleteConfirm.description": "Ovo trajno briše „{{title}}” i njen zapis, događaje, ciljeve, ledger i vlasničke monitor zapise. Ovo se ne može poništiti.",
+
   "settings.general.row.pinchZoom.description":
     "Dozvoli zumiranje gestom štipanja na dodirnoj ploči i pomoću Ctrl-pomjeranja",
   "settings.general.row.wayland.title": "Koristi nativni Wayland",

@@ -883,6 +883,7 @@ export const dict = {
   "common.reset": "Sıfırla",
   "common.archive": "Arşivle",
   "common.delete": "Sil",
+  "common.restore": "Geri yükle",
   "common.close": "Kapat",
   "common.edit": "Düzenle",
   "common.loadMore": "Daha fazla yükle",
@@ -1141,6 +1142,14 @@ export const dict = {
   "session.delete.title": "Oturumu sil",
   "session.delete.confirm": '"{{name}}" oturumu silinsin mi?',
   "session.delete.button": "Oturumu sil",
+
+  "archived.title": "Arşivli",
+  "archived.empty": "Arşivli oturum bulunmuyor",
+  "trash.title": "Çöp Kutusu",
+  "trash.empty": "Çöp kutusu boş",
+  "trash.deletePermanently": "Kalıcı sil",
+  "trash.deleteConfirm.title": "Kalıcı olarak silinsin mi?",
+  "trash.deleteConfirm.description": "\"{{title}}\" ve geçmişi, etkinlikleri, hedefleri, defteri ve sahip gözetim kayıtları kalıcı olarak siliniyor. Bu işlem geri alınamaz.",
 
   "workspace.new": "Yeni çalışma alanı",
   "workspace.type.local": "yerel",

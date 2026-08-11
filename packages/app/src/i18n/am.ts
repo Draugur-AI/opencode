@@ -694,6 +694,16 @@ export const dict = {
   "home.inventory.favorite": "ወደ ምርጥ ጨምር",
   "home.inventory.unfavorite": "ከምርጥ ያስወግድ",
   "home.providerTip": "Claude፣ GPT፣ Gemini፣ ወዘተ] ጨምሮ ሌሎች ሞዴሎችን ለመጠቀም ከ75+ አቅራቢዎች ጋር ይገናኙ",
+
+  "archived.title": "የተቀመጡ",
+  "archived.empty": "ምንም የተቀመጡ ክፍለ ጊዜዎች የሉም",
+  "trash.title": "ፍሳሽ",
+  "trash.empty": "ፍሳሽ ባዶ ነው",
+  "trash.deletePermanently": "ለዘላለም አስወግድ",
+  "trash.deleteConfirm.title": "ለዘላለም ሰርዝ?",
+  "trash.deleteConfirm.description": "ይህ \"{{title}}\"ን እና ትራንስክሪፕት፣ እንግልቶች፣ ዒላማዎች፣ ሌጃር፣ እና ከመነሻ ሞኒተር መዝገቦችን ለዘላለም ያስወግዳል። ይህ አይደገምም።",
+  "common.restore": "ወደነበረበት መልስ",
+
   "session.tab.session": "ክፍለ ጊዜ",
   "session.tab.review": "ግምገማ",
   "session.tab.context": "አውድ",

@@ -1171,4 +1171,12 @@ export const dict = {
   "workspace.reset.archived.many": "{{count}} сессийг архивлах болно.",
   "workspace.reset.note": "Энэ нь ажлын талбарыг анхдагч салбартай тааруулахын тулд дахин тохируулах болно.",
   "dialog.usageExceeded.dontShowAgain": "Дахин бүү харуул",
+  "archived.title": "Архивлагдсан",
+  "archived.empty": "Архивлагдсан сесс байхгүй байна",
+  "trash.title": "Хогийн сав",
+  "trash.empty": "Хогийн сав хоосон байна",
+  "trash.deletePermanently": "Мөнхийн устгах",
+  "trash.deleteConfirm.title": "Мөнхийн устгах уу?",
+  "trash.deleteConfirm.description": "Энэ нь \"{{title}}\" ба түүний хуулбар, үйл явдал, зорилтууд, тоолвор, болон эзэмшиж буй хяналтын бичлэгүүдийг мөнхийн устгана. Энэ ажиллагааг буцаах боломжгүй.",
+  "common.restore": "Сэргээх",
 }

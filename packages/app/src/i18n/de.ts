@@ -592,6 +592,14 @@ export const dict = {
   "home.sessions.group.older": "Älter",
   "home.providerTip":
     "OpenCode mit über 75 Anbietern verbinden, um weitere Modelle wie Claude, GPT, Gemini und andere zu nutzen",
+  "archived.title": "Archiv",
+  "archived.empty": "Keine archivierten Sitzungen",
+  "trash.title": "Papierkorb",
+  "trash.empty": "Papierkorb ist leer",
+  "trash.deletePermanently": "Dauerhaft löschen",
+  "trash.deleteConfirm.title": "Dauerhaft löschen?",
+  "trash.deleteConfirm.description":
+    "Dies löscht \"{{title}}\" dauerhaft zusammen mit Transkript, Ereignissen, Zielen, Ledger und zugehörigen Monitor-Datensätzen. Dies kann nicht rückgängig gemacht werden.",
   "session.tab.session": "Sitzung",
   "session.tab.review": "Überprüfung",
   "session.tab.context": "Kontext",
@@ -708,6 +716,7 @@ export const dict = {
   "common.reset": "Zurücksetzen",
   "common.archive": "Archivieren",
   "common.delete": "Löschen",
+  "common.restore": "Wiederherstellen",
   "common.close": "Schließen",
   "common.edit": "Bearbeiten",
   "common.loadMore": "Mehr laden",

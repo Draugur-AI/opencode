@@ -712,6 +712,15 @@ export const dict = {
   "home.sessions.group.older": "Més vell",
   "home.providerTip":
     "Connecteu-vos a més de 75 proveïdors per utilitzar altres models, inclosos Claude, GPT, Gemini, etc.",
+
+  "archived.title": "Arxivades",
+  "archived.empty": "No hi ha sessions arxivades",
+  "trash.title": "Paperera",
+  "trash.empty": "La paperera és buida",
+  "trash.deletePermanently": "Suprimeix permanentment",
+  "trash.deleteConfirm.title": "Suprimeix permanentment?",
+  "trash.deleteConfirm.description": "Això suprimirà permanentment \"{{title}}\" i la seva transcripció, esdeveniments, objectius, llibre de comptes i els registres de monitors associats. Aquesta acció no es pot desfer.",
+
   "session.tab.session": "Sessió",
   "session.tab.review": "Revisió",
   "session.tab.context": "Context",
@@ -855,6 +864,7 @@ export const dict = {
   "common.reset": "Restableix",
   "common.archive": "Arxiu",
   "common.delete": "Suprimeix",
+  "common.restore": "Restableix",
   "common.close": "Tancar",
   "common.edit": "Edita",
   "common.loadMore": "Carregueu més",

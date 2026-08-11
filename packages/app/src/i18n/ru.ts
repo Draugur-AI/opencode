@@ -753,6 +753,16 @@ export const dict = {
   "home.providerTip":
     "Подключитесь к более чем 75 провайдерам, чтобы использовать другие модели, включая Claude, GPT, Gemini и другие",
 
+  "archived.title": "Архив",
+  "archived.empty": "Нет архивных сессий",
+  "trash.title": "Корзина",
+  "trash.empty": "Корзина пуста",
+  "trash.deletePermanently": "Удалить навсегда",
+  "trash.deleteConfirm.title": "Удалить навсегда?",
+  "trash.deleteConfirm.description": "Это навсегда удалит «{{title}}» и его стенограмму, события, цели, реестр и записи мониторинга. Это действие необратимо",
+
+  "common.restore": "Восстановить",
+
   "session.tab.session": "Сессия",
   "session.tab.review": "Обзор",
   "session.tab.context": "Контекст",
