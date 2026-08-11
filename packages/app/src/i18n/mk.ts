@@ -1163,4 +1163,10 @@ export const dict = {
   "workspace.reset.archived.many": "{{count}} сесиите ќе бидат архивирани.",
   "workspace.reset.note": "Ова ќе го ресетира работниот простор за да одговара на стандардната гранка.",
   "dialog.usageExceeded.dontShowAgain": "Не прикажувај повторно",
+  "home.inventory.servers": "Сервери",
+  "home.inventory.favorites": "Омилени",
+  "home.inventory.recent": "Неодамнешни",
+  "home.inventory.all": "Сите",
+  "home.inventory.favorite": "Додај во омилени",
+  "home.inventory.unfavorite": "Отстрани од омилени",
 }

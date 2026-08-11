@@ -1178,4 +1178,10 @@ export const dict: Record<string, string> = {
   "workspace.reset.archived.many": "{{count}} ལཱ་ཡུན་ཚུ་ཡིག་མཛོད་ནང་བཞག་འོང་།",
   "workspace.reset.note": "འདི་གིས་ སྔོན་སྒྲིག་ཡན་ལག་མཐུན་སྒྲིག་འབད་ནི་ལུ་ ལཱ་གི་ས་སྒོ་འདི་སླར་སྒྲིག་འབད་འོང་།",
   "dialog.usageExceeded.dontShowAgain": "ལོག་སྟེ་མ་སྟོན།",
+  "home.inventory.servers": "སར་བར་ཚུ།",
+  "home.inventory.favorites": "འོས་འདམ།",
+  "home.inventory.recent": "འཕྲལ་བའི",
+  "home.inventory.all": "ཆ་མཉམ",
+  "home.inventory.favorite": "འོས་འདམ་ལུ་ཁ་སྐོང་རྐྱབ།",
+  "home.inventory.unfavorite": "འོས་འདམ་ལས་རྩ་བསྐྲད་གཏང",
 }

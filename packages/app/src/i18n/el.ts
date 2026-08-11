@@ -705,6 +705,12 @@ export const dict = {
   "home.sessions.group.today": "Σήμερα",
   "home.sessions.group.yesterday": "Χθες",
   "home.sessions.group.older": "Παλαιότερο",
+  "home.inventory.servers": "Διακομιστές",
+  "home.inventory.favorites": "Αγαπημένα",
+  "home.inventory.recent": "Πρόσφατα",
+  "home.inventory.all": "Όλα",
+  "home.inventory.favorite": "Προσθήκη στα αγαπημένα",
+  "home.inventory.unfavorite": "Κατάργηση από τα αγαπημένα",
   "home.providerTip":
     "Συνδεθείτε σε 75+ παρόχους για να χρησιμοποιήσετε άλλα μοντέλα, συμπεριλαμβανομένων των Claude, GPT, Gemini, κ.λπ.",
   "session.tab.session": "Συνεδρία",

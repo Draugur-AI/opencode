@@ -8,11 +8,19 @@ on:
 
 jobs:
   opencode:
+    # Fork note (TKT-336): disabled -- same double-blocker as review.yml's /review
+    # trigger (see FORK.md): runs-on is blacksmith-4vcpu-ubuntu-2404 (queues forever)
+    # AND the step needs OPENCODE_API_KEY, not configured on this repo. Fires on any
+    # PR/issue comment containing "/oc" or "/opencode", so left enabled it could add a
+    # permanently-queued run at any time. `false &&` is a one-line, trivially revertible
+    # off-switch that preserves the real condition beneath it. Un-disable condition:
+    # both a GitHub-hosted runs-on AND an operator-provisioned OPENCODE_API_KEY secret.
     if: |
-      contains(github.event.comment.body, ' /oc') ||
+      false &&
+      (contains(github.event.comment.body, ' /oc') ||
       startsWith(github.event.comment.body, '/oc') ||
       contains(github.event.comment.body, ' /opencode') ||
-      startsWith(github.event.comment.body, '/opencode')
+      startsWith(github.event.comment.body, '/opencode'))
     runs-on: blacksmith-4vcpu-ubuntu-2404
     permissions:
       id-token: write

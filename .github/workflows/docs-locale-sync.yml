@@ -1,11 +1,12 @@
 name: docs-locale-sync
 
+# Fork note (TKT-336): push trigger disabled. runs-on is blacksmith-4vcpu-ubuntu-2404,
+# which queues forever on this org. Docs-locale-sync is not this fork's concern (not the
+# canonical docs source). workflow_dispatch added as a manual escape hatch. Un-disable
+# condition: retarget runs-on AND restore the push trigger below, if this fork ever
+# needs its own docs-locale sync.
 on:
-  push:
-    branches:
-      - dev
-    paths:
-      - packages/web/src/content/docs/*.mdx
+  workflow_dispatch:
 
 jobs:
   sync-locales:

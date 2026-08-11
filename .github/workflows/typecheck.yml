@@ -9,10 +9,15 @@ on:
 
 jobs:
   typecheck:
-    # Fork note (TKT-305): blacksmith-* runner labels require the Blacksmith GitHub App,
-    # which is not installed on Draugur-AI. Retargeted to a GitHub-hosted runner so this
-    # job actually gets picked up on fork PRs instead of queueing forever. See FORK.md.
-    runs-on: ubuntu-latest
+    # Fork note (TKT-305, superseded by TKT-338): blacksmith-* runner labels require the
+    # Blacksmith GitHub App, which is not installed on Draugur-AI -- retargeted to
+    # GitHub-hosted, then (TKT-338) to the fork's own self-hosted runner (linux/aarch64) to
+    # stop burning shared GH-hosted minutes.
+    # Fork-PR guard, mandatory on every self-hosted job (see FORK.md's CI section): a
+    # self-hosted runner executes whatever a triggering workflow says, and on a public repo
+    # a pull_request event can come from a fork whose head repo differs from this one.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, opencode-fork, linux, arm64]
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1

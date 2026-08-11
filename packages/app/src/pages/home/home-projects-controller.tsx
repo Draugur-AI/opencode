@@ -11,9 +11,11 @@ import { closeHomeProject, errorMessage, homeProjectDirectories } from "@/pages/
 import { Persist, persisted } from "@/utils/persist"
 import { showToast } from "@/utils/toast"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { createResource } from "solid-js"
+import { createResource, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { HomeController } from "./home-controller"
+
+export type HomeInventoryTab = "servers" | "favorites" | "recent" | "all"
 
 export function createHomeProjectsController(home: HomeController) {
   const platform = usePlatform()
@@ -40,12 +42,22 @@ export function createHomeProjectsController(home: HomeController) {
     return platform.platform === "desktop" && !!platform.openPath && ServerConnection.local(conn)
   }
 
+  const [inventoryTab, setInventoryTab] = createSignal<HomeInventoryTab>("servers")
+
   return {
     copy: {
       language,
     },
     selection: {
       value: home.selection.value,
+    },
+    inventory: {
+      tab: inventoryTab,
+      setTab: setInventoryTab,
+      favorites: home.inventory.favorites,
+      recent: home.inventory.recent,
+      all: home.inventory.all,
+      toggleFavorite: home.inventory.toggleFavorite,
     },
     server: {
       list: home.server.list,
@@ -96,6 +108,13 @@ export function createHomeProjectsController(home: HomeController) {
         })
       },
       close: (conn: ServerConnection.Any, directory: string) => {
+        // Closing is a soft hide, never a delete: mirror it to the server-side preference so it
+        // stays hidden across browsers/devices, not just this one's local project list. Mirrors
+        // pages/layout.tsx's closeProject, which covers the in-session sidebar -- this is the
+        // separate home-page project list's own close path.
+        const projectID = home.server.context(conn).projects.list().find((p) => p.worktree === directory)?.id
+        if (projectID) void home.server.context(conn).sync.project.preference.write({ projectID, hidden: true })
+
         const next = closeHomeProject(
           home.selection.value(),
           ServerConnection.key(conn),

@@ -631,6 +631,12 @@ export const dict = {
   "home.recentProjects": "Nylige prosjekter",
   "home.empty.title": "Ingen nylige prosjekter",
   "home.empty.description": "Kom i gang ved å åpne et lokalt prosjekt",
+  "home.inventory.servers": "Servere",
+  "home.inventory.favorites": "Favoritter",
+  "home.inventory.recent": "Nylig",
+  "home.inventory.all": "Alle",
+  "home.inventory.favorite": "Legg til i favoritter",
+  "home.inventory.unfavorite": "Fjern fra favoritter",
 
   "session.tab.session": "Sesjon",
   "session.tab.review": "Gjennomgang",

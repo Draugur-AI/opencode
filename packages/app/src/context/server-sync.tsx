@@ -46,6 +46,8 @@ import { ServerConnection, useServer } from "./server"
 import { retry } from "@opencode-ai/core/util/retry"
 import type { ServerScope } from "@/utils/server-scope"
 import { createHomeSessionIndexCache } from "./global-sync/home-session-index"
+import { createProjectPreferenceCache } from "./global-sync/project-preferences"
+import { createProjectClient } from "@/utils/project-client"
 import { persisted } from "@/utils/persist"
 import type { ServerApi } from "@/utils/server"
 import type {
@@ -290,6 +292,8 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
 
   const queryClient = useQueryClient()
   const homeSessions = createHomeSessionIndexCache(queryClient, ServerConnection.key(serverSDK.server))
+  const projectClient = createProjectClient(serverSDK.server.http)
+  const projectPreferences = createProjectPreferenceCache(queryClient, serverSDK.scope, projectClient)
   const refreshProviders = () =>
     queryClient.refetchQueries({
       predicate: (query) => query.queryKey[0] === serverSDK.scope && query.queryKey[2] === "providers",
@@ -322,7 +326,18 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     queryFn: async () => {
       await bootstrapGlobal({
         serverSDK: serverSDK.client,
-        serverAPI: serverSDK.api,
+        // serverSDK.api.project.list() is the vendored @opencode-ai/client, typed against the
+        // pre-#8 raw-array response; the live project.list endpoint now wraps in { data }
+        // (packages/server/src/handlers/project.ts), so route the list call through the
+        // generated client instead, which already unwraps it.
+        serverAPI: {
+          ...serverSDK.api,
+          project: {
+            ...serverSDK.api.project,
+            list: () =>
+              projectClient.list().then((data) => data.map((project) => ({ ...project, sandboxes: [...(project.sandboxes ?? [])] }))),
+          },
+        },
         protocol: serverSDK.protocol,
         scope: serverSDK.scope,
         requestFailedTitle: language.t("common.requestFailed"),
@@ -541,6 +556,7 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
       homeSessions.apply(event)
     }
     homeSessions.refresh(event.type)
+    if (eventType === "project.preference.updated") projectPreferences.apply(event)
     if (eventType === "integration.connection.updated") void refreshProviders()
 
     if (directory === "global") {
@@ -655,6 +671,9 @@ export function createServerSyncContextInner(serverSDK: ServerSDK) {
     icon(directory: string, value: string | undefined) {
       children.projectIcon(directory, value)
     },
+    preference: projectPreferences,
+    get: projectClient.get,
+    updateMetadata: projectClient.updateMetadata,
   }
 
   const updateConfigMutation = useMutation(() => ({

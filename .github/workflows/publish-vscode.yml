@@ -1,10 +1,11 @@
 name: publish-vscode
 
+# Fork note (TKT-336): tag-push trigger disabled. Real publish pipeline (VS Code
+# Marketplace), same reasoning as publish.yml (safety, not just runner availability --
+# see there). This fork does not cut vscode-v* release tags; workflow_dispatch kept as
+# a manual escape hatch.
 on:
   workflow_dispatch:
-  push:
-    tags:
-      - "vscode-v*.*.*"
 
 concurrency: ${{ github.workflow }}-${{ github.ref }}
 
