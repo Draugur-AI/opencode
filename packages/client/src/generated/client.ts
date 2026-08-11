@@ -149,6 +149,18 @@ import type {
   ServerProjectReadOutput,
   ServerProjectWriteInput,
   ServerProjectWriteOutput,
+  ConfigDocumentTargetListInput,
+  ConfigDocumentTargetListOutput,
+  ConfigDocumentTargetReadInput,
+  ConfigDocumentTargetReadOutput,
+  ConfigDocumentEffectiveGetInput,
+  ConfigDocumentEffectiveGetOutput,
+  ConfigDocumentTargetValidateInput,
+  ConfigDocumentTargetValidateOutput,
+  ConfigDocumentTargetApplyInput,
+  ConfigDocumentTargetApplyOutput,
+  McpListInput,
+  McpListOutput,
 } from "./types"
 import { ClientError } from "./client-error"
 
@@ -1261,6 +1273,84 @@ export function make(options: ClientOptions) {
           },
           requestOptions,
         ).then((value) => value.data),
+    },
+    configDocument: {
+      targetList: (input?: ConfigDocumentTargetListInput, requestOptions?: RequestOptions) =>
+        request<ConfigDocumentTargetListOutput>(
+          {
+            method: "GET",
+            path: `/api/config/document/target`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      targetRead: (input: ConfigDocumentTargetReadInput, requestOptions?: RequestOptions) =>
+        request<ConfigDocumentTargetReadOutput>(
+          {
+            method: "GET",
+            path: `/api/config/document/target/${encodeURIComponent(input.targetID)}`,
+            query: { location: input["location"] },
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      effectiveGet: (input?: ConfigDocumentEffectiveGetInput, requestOptions?: RequestOptions) =>
+        request<ConfigDocumentEffectiveGetOutput>(
+          {
+            method: "GET",
+            path: `/api/config/document/effective`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      targetValidate: (input: ConfigDocumentTargetValidateInput, requestOptions?: RequestOptions) =>
+        request<ConfigDocumentTargetValidateOutput>(
+          {
+            method: "POST",
+            path: `/api/config/document/target/${encodeURIComponent(input.targetID)}/validate`,
+            query: { location: input["location"] },
+            body: { patch: input["patch"] },
+            successStatus: 200,
+            declaredStatuses: [404, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      targetApply: (input: ConfigDocumentTargetApplyInput, requestOptions?: RequestOptions) =>
+        request<ConfigDocumentTargetApplyOutput>(
+          {
+            method: "POST",
+            path: `/api/config/document/target/${encodeURIComponent(input.targetID)}/apply`,
+            query: { location: input["location"] },
+            body: { expectedHash: input["expectedHash"], patch: input["patch"] },
+            successStatus: 200,
+            declaredStatuses: [404, 409, 401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+    },
+    mcp: {
+      list: (input?: McpListInput, requestOptions?: RequestOptions) =>
+        request<McpListOutput>(
+          {
+            method: "GET",
+            path: `/api/mcp`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
     },
   }
 }

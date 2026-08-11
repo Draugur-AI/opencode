@@ -217,3 +217,23 @@ export class ProjectPreferenceConflictError extends Schema.TaggedErrorClass<Proj
   },
   { httpApiStatus: 409 },
 ) {}
+
+export class ConfigDocumentTargetNotFoundError extends Schema.TaggedErrorClass<ConfigDocumentTargetNotFoundError>()(
+  "ConfigDocumentTargetNotFoundError",
+  { id: Schema.String, message: Schema.String },
+  { httpApiStatus: 404 },
+) {}
+
+/** A patch was applied against a target whose on-disk content changed since it was last read.
+ * Carries the hash the target actually holds so a client can re-read and retry without racing a
+ * concurrent editor's change. */
+export class ConfigDocumentConflictError extends Schema.TaggedErrorClass<ConfigDocumentConflictError>()(
+  "ConfigDocumentConflictError",
+  {
+    id: Schema.String,
+    expectedHash: Schema.String,
+    actualHash: Schema.String,
+    message: Schema.String,
+  },
+  { httpApiStatus: 409 },
+) {}

@@ -793,6 +793,34 @@ const scenarios: Scenario[] = [
     .status(204, undefined, "status"),
   http.protected.get("/api/command", "v2.command.list").json(200, locationData(array)),
   http.protected.get("/api/skill", "v2.skill.list").json(200, locationData(array)),
+  http.protected.get("/api/config/document/target", "v2.config.document.target.list").json(200, locationData(array)),
+  http.protected
+    .get("/api/config/document/target/{targetID}", "v2.config.document.target.read")
+    .at((ctx) => ({
+      path: route("/api/config/document/target/{targetID}", { targetID: "project:missing" }),
+      headers: ctx.headers(),
+    }))
+    .status(404, undefined, "status"),
+  http.protected
+    .get("/api/config/document/effective", "v2.config.document.effective.get")
+    .json(200, locationData(object)),
+  http.protected
+    .post("/api/config/document/target/{targetID}/validate", "v2.config.document.target.validate")
+    .at((ctx) => ({
+      path: route("/api/config/document/target/{targetID}/validate", { targetID: "project:missing" }),
+      headers: ctx.headers(),
+      body: { patch: { op: "mcp.server.remove", name: "missing" } },
+    }))
+    .status(404, undefined, "status"),
+  http.protected
+    .post("/api/config/document/target/{targetID}/apply", "v2.config.document.target.apply")
+    .at((ctx) => ({
+      path: route("/api/config/document/target/{targetID}/apply", { targetID: "project:missing" }),
+      headers: ctx.headers(),
+      body: { expectedHash: "deadbeef", patch: { op: "mcp.server.remove", name: "missing" } },
+    }))
+    .status(404, undefined, "status"),
+  http.protected.get("/api/mcp", "v2.mcp.list").json(200, locationData(array)),
   http.protected
     .get("/api/event", "v2.event.subscribe")
     .stream()
