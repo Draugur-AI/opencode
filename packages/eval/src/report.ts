@@ -34,10 +34,13 @@ export const render = (reports: readonly FixtureReport[]): string => {
   lines.push(`${totalPass} pass, ${totalFail} fail across ${reports.length} fixture run(s)`)
   lines.push("")
   lines.push(
-    "NOTE: this is the PR1 gate report -- scripted-model mode only. A release claim needs the",
-    "real-second-binary comparison (Mode A) and real-model runs, which are TKT-319's PR2 scope.",
-    "Anything not marked [deterministic-approximation, B-mode] ran against the CURRENT",
-    "implementation with a scripted model, not a baseline binary and not a real model.",
+    "NOTE: this is the scripted-model gate report only. Anything not marked",
+    "[deterministic-approximation, B-mode] ran against the CURRENT implementation with a",
+    "scripted model, not a baseline binary and not a real model -- it proves the harness and the",
+    "real compaction pipeline, not model behavior. Mode A (real pre-slice-4 binary, real",
+    "qwen3-6) shipped in PR2 (baseline-arm structural proof) and PR3 (real-model findings,",
+    "gated behind OPENCODE_EVAL_REAL=1) -- see TKT-319's diary for the release-facing summary,",
+    "not this CLI, which only ever exercises the scripted arms.",
   )
 
   return lines.join("\n")

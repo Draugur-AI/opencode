@@ -15,10 +15,9 @@ import { FakeLLM } from "../fake-llm"
 import { CompactionEpoch } from "../compaction-epoch"
 import { ContextAccounting } from "../context-accounting"
 import { Fixture } from "../fixture"
+import { ConstraintSurvivalScenario } from "../scenarios/constraint-survival"
 
-const CONSTRAINT_TEXT = "Never delete the production database without explicit written sign-off"
-const OBJECTIVE = "Clean up stale staging environments"
-const EPOCHS = 4
+const { CONSTRAINT_TEXT, OBJECTIVE, EPOCHS } = ConstraintSurvivalScenario
 
 /**
  * An early destructive-action prohibition, set once, checked for presence in the composed
@@ -63,7 +62,7 @@ export const run: Fixture.Fixture = Effect.fn("ConstraintSurvivalFixture.run")(f
   for (let epoch = 0; epoch < EPOCHS; epoch++) {
     handle.llm.resetRequests()
     handle.llm.push(FakeLLM.textTurn(`Working on epoch ${epoch}.`))
-    yield* session.prompt({ sessionID, prompt: Prompt.make({ text: `Continue the cleanup, step ${epoch}.` }), resume: false })
+    yield* session.prompt({ sessionID, prompt: Prompt.make({ text: ConstraintSurvivalScenario.turnPrompt(epoch) }), resume: false })
     yield* session.resume(sessionID)
 
     const request = handle.llm.requests[0]!
@@ -79,7 +78,7 @@ export const run: Fixture.Fixture = Effect.fn("ConstraintSurvivalFixture.run")(f
     // to come from the durable goal context, not from the summary carrying the words forward.
     yield* CompactionEpoch.inject({
       sessionID,
-      summary: `Investigated staging environments during epoch ${epoch}. Continuing cleanup.`,
+      summary: ConstraintSurvivalScenario.compactionSummary(epoch),
     })
   }
 

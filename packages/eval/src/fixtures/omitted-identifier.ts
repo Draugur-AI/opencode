@@ -14,8 +14,9 @@ import { HistoryTool } from "@opencode-ai/core/tool/history"
 import { FakeLLM } from "../fake-llm"
 import { CompactionEpoch } from "../compaction-epoch"
 import { Fixture } from "../fixture"
+import { OmittedIdentifierScenario } from "../scenarios/omitted-identifier"
 
-const IDENTIFIER = "10.20.30.40"
+const { IDENTIFIER } = OmittedIdentifierScenario
 
 /**
  * The design/build/validation posts' flagship retention scenario: an exact identifier is
@@ -45,14 +46,14 @@ export const run: Fixture.Fixture = Effect.fn("OmittedIdentifierFixture.run")(fu
   handle.llm.push(FakeLLM.textTurn("Noted the connection details."))
   yield* session.prompt({
     sessionID,
-    prompt: Prompt.make({ text: `The staging database is unreachable at host ${IDENTIFIER} port 5432. Can you look into it?` }),
+    prompt: Prompt.make({ text: OmittedIdentifierScenario.initialPrompt }),
     resume: false,
   })
   yield* session.resume(sessionID)
 
   yield* CompactionEpoch.inject({
     sessionID,
-    summary: "User reported the staging database is unreachable. Investigating connectivity.",
+    summary: OmittedIdentifierScenario.compactionSummary,
   })
 
   const results = yield* SessionHistorySearch.search(db, { sessionID, query: IDENTIFIER })
@@ -63,9 +64,9 @@ export const run: Fixture.Fixture = Effect.fn("OmittedIdentifierFixture.run")(fu
   handle.llm.resetRequests()
   handle.llm.push(FakeLLM.toolCallTurn("call_search", HistoryTool.searchName, { query: IDENTIFIER }))
   handle.llm.push(FakeLLM.toolCallTurn("call_get", HistoryTool.getName, { messageID: sourceMessageID }))
-  handle.llm.push(FakeLLM.textTurn(`The host is ${IDENTIFIER}:5432 (source: ${sourceMessageID}).`))
+  handle.llm.push(FakeLLM.textTurn(`The host is ${OmittedIdentifierScenario.expectedAnswerFragment} (source: ${sourceMessageID}).`))
 
-  yield* session.prompt({ sessionID, prompt: Prompt.make({ text: "What was the exact host and port again?" }), resume: false })
+  yield* session.prompt({ sessionID, prompt: Prompt.make({ text: OmittedIdentifierScenario.recallPrompt }), resume: false })
   yield* session.resume(sessionID)
 
   const messages = yield* session.context(sessionID)

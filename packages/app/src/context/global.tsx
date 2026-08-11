@@ -7,8 +7,16 @@ import { useServerHealth } from "@/utils/server-health"
 import { createServerSdkContext } from "./server-sdk"
 import { createServerSyncContext } from "./server-sync"
 import { getOwner } from "solid-js/web"
-import { QueryClient } from "@tanstack/solid-query"
+import { QueryClient, useQueries } from "@tanstack/solid-query"
 import type { ServerScope } from "@/utils/server-scope"
+import { projectPreferenceKey, type ProjectPreferenceValue } from "./global-sync/project-preferences"
+import { compareProjectOrder } from "@/pages/layout/helpers"
+import type { Project } from "@opencode-ai/sdk/v2/client"
+
+export type HomeInventoryRow = Project & {
+  readonly expanded: boolean
+  readonly preference: ProjectPreferenceValue
+}
 
 export const { use: useGlobal, provider: GlobalProvider } = createSimpleContext({
   name: "Global",
@@ -137,6 +145,45 @@ function createServerCtx(
       .map((worktree) => enrich({ worktree, expanded: false }))
   })
 
+  // The full server-side project inventory (not just locally-opened projects), enriched
+  // with preference data and filtered to exclude hidden. Distinct from `projects` above
+  // (which stays untouched for its existing consumers, e.g. the sidebar) -- per the design
+  // post's "a project favorite follows the user to another browser attached to the same
+  // server" success criterion (upstream #13626): a favorite set in one browser must show up
+  // here even if THIS browser never explicitly opened that project.
+  const preferenceQueries = useQueries(() => ({
+    queries: sync.data.project.map((project) => ({
+      queryKey: projectPreferenceKey(scope, project.id),
+      queryFn: () => sync.project.preference.read(project.id),
+      staleTime: Infinity,
+    })),
+  }))
+
+  const homeInventory = createMemo<HomeInventoryRow[]>(() =>
+    sync.data.project.map((project, index) => ({
+      ...enrich({ worktree: project.worktree, expanded: false }),
+      ...project,
+      preference: preferenceQueries[index]?.data ?? sync.project.preference.get(project.id),
+    })),
+  )
+  const homeVisible = createMemo(() => homeInventory().filter((row) => !row.preference.hidden))
+  const homeOrder = (a: HomeInventoryRow, b: HomeInventoryRow) =>
+    compareProjectOrder(
+      { id: a.id, name: a.name, ...a.preference },
+      { id: b.id, name: b.name, ...b.preference },
+    )
+  const homeFavorites = createMemo(() =>
+    homeVisible()
+      .filter((row) => row.preference.favorite)
+      .sort(homeOrder),
+  )
+  const homeRecent = createMemo(() =>
+    homeVisible()
+      .filter((row) => row.preference.lastOpenedAt !== undefined)
+      .sort(homeOrder),
+  )
+  const homeAll = createMemo(() => homeVisible().sort(homeOrder))
+
   const isLocal =
     (conn?.type === "sidecar" && conn.variant === "base") || (conn?.type === "http" && isLocalHost(conn.http.url))
 
@@ -149,6 +196,15 @@ function createServerCtx(
       ...projects,
       list: projectsList,
       recentlyClosed: recentlyClosedList,
+    },
+    home: {
+      favorites: homeFavorites,
+      recent: homeRecent,
+      all: homeAll,
+      toggleFavorite: (projectID: string) => {
+        const current = sync.project.preference.get(projectID)
+        return sync.project.preference.write({ projectID, favorite: !current.favorite })
+      },
     },
   }
 }
