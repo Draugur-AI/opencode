@@ -13,6 +13,10 @@ import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
+import { SessionMessage } from "@opencode-ai/core/session/message"
+import { SessionProfile } from "@opencode-ai/core/session/profile"
+import { SessionProfileBuiltin } from "@opencode-ai/core/session/profile-builtin"
+import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionStore } from "@opencode-ai/core/session/store"
 import { eq } from "drizzle-orm"
@@ -32,6 +36,8 @@ const it = testEffect(
       PermissionSaved.node,
       AgentV2.node,
       PermissionV2.node,
+      SessionProfile.node,
+      SessionProjector.node,
     ]),
     [[Location.node, current]],
   ),
@@ -310,6 +316,70 @@ describe("PermissionV2", () => {
       yield* service.assert(assertion({ id: PermissionV2.ID.create("per_next"), resources: ["src/next.ts"] }))
       yield* saved.remove(id)
       expect(yield* saved.list()).toEqual([])
+    }),
+  )
+
+  // TKT-321: the property the whole profile feature stands or falls on -- hiding a tool from
+  // ToolRegistry.materialize is UX, not enforcement. A profile's deny must reach this leaf check
+  // even when the agent's own ruleset would otherwise allow the call, and even though nothing
+  // here ever touches materialize/the tool listing at all -- proving the rejection doesn't depend
+  // on the client having honored the hidden listing in the first place.
+  it.effect("rejects a call a profile denies even though the agent's own ruleset allows it", () =>
+    Effect.gen(function* () {
+      yield* setup([{ action: "bash", resource: "*", effect: "allow" }])
+      const profiles = yield* SessionProfile.Service
+      yield* profiles.resolve({
+        sessionID: SessionV2.ID.make("ses_test"),
+        messageID: SessionMessage.ID.make("msg_profile_switch"),
+        definition: {
+          id: SessionProfile.ID.create(),
+          title: "chat",
+          toolRules: { bash: "deny" },
+          skillRules: {},
+          mcpRules: {},
+          pluginRules: {},
+          hookRules: {},
+          monitorRules: { allowUser: false, allowPlugin: false, autoStart: false },
+        },
+      })
+
+      const service = yield* PermissionV2.Service
+      const error = yield* service.assert(assertion({ action: "bash", resources: ["ls"] })).pipe(Effect.flip)
+      expect(error).toBeInstanceOf(PermissionV2.BlockedError)
+
+      // The agent's own ruleset is untouched -- an action the profile does NOT mention still
+      // resolves from the agent's rules exactly as before, proving the merge adds a restriction
+      // rather than replacing the agent's ruleset outright.
+      expect(yield* service.ask(assertion({ action: "read" }))).toEqual({
+        id: PermissionV2.ID.create("per_test"),
+        effect: "ask",
+      })
+    }),
+  )
+
+  // The ticket's own demo: a chat-profile session refuses an edit at the leaf while a
+  // coding-profile session performs it, using the actual shipped built-in definitions.
+  it.effect("chat-profile session refuses edit, coding-profile session performs it", () =>
+    Effect.gen(function* () {
+      yield* setup([{ action: "*", resource: "*", effect: "allow" }])
+      const profiles = yield* SessionProfile.Service
+      const service = yield* PermissionV2.Service
+      const edit = () => assertion({ action: "edit", resources: ["src/index.ts"] })
+
+      yield* profiles.resolve({
+        sessionID: SessionV2.ID.make("ses_test"),
+        messageID: SessionMessage.ID.make("msg_chat"),
+        definition: SessionProfileBuiltin.chat,
+      })
+      const chatResult = yield* service.assert(edit()).pipe(Effect.flip)
+      expect(chatResult).toBeInstanceOf(PermissionV2.BlockedError)
+
+      yield* profiles.resolve({
+        sessionID: SessionV2.ID.make("ses_test"),
+        messageID: SessionMessage.ID.make("msg_coding"),
+        definition: SessionProfileBuiltin.coding,
+      })
+      expect(yield* service.assert(edit())).toBeUndefined()
     }),
   )
 })

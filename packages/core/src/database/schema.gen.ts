@@ -230,6 +230,26 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`session_profile_snapshot\` (
+          \`id\` text PRIMARY KEY,
+          \`session_id\` text NOT NULL,
+          \`definition_id\` text NOT NULL,
+          \`definition_hash\` text NOT NULL,
+          \`title\` text NOT NULL,
+          \`agent\` text,
+          \`tool_rules\` text NOT NULL,
+          \`skill_rules\` text NOT NULL,
+          \`mcp_rules\` text NOT NULL,
+          \`plugin_rules\` text NOT NULL,
+          \`hook_rules\` text NOT NULL,
+          \`monitor_rules\` text NOT NULL,
+          \`compaction\` text,
+          \`system_append\` text,
+          \`time_created\` integer NOT NULL,
+          CONSTRAINT \`fk_session_profile_snapshot_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`session\` (
           \`id\` text PRIMARY KEY,
           \`project_id\` text NOT NULL,
@@ -265,6 +285,7 @@ export default {
           \`time_trashed\` integer,
           \`purge_after\` integer,
           \`trash_restore_to\` text,
+          \`profile_snapshot_id\` text,
           CONSTRAINT \`fk_session_project_id_project_id_fk\` FOREIGN KEY (\`project_id\`) REFERENCES \`project\`(\`id\`) ON DELETE CASCADE
         );
       `)
@@ -336,6 +357,9 @@ export default {
         `CREATE INDEX \`session_message_session_time_created_id_idx\` ON \`session_message\` (\`session_id\`,\`time_created\`,\`id\`);`,
       )
       yield* tx.run(`CREATE INDEX \`session_message_time_created_idx\` ON \`session_message\` (\`time_created\`);`)
+      yield* tx.run(
+        `CREATE INDEX \`session_profile_snapshot_session_created_idx\` ON \`session_profile_snapshot\` (\`session_id\`,\`time_created\`);`,
+      )
       yield* tx.run(`CREATE INDEX \`session_project_idx\` ON \`session\` (\`project_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_workspace_idx\` ON \`session\` (\`workspace_id\`);`)
       yield* tx.run(`CREATE INDEX \`session_parent_idx\` ON \`session\` (\`parent_id\`);`)

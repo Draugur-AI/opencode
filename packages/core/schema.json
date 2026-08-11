@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "bdc2daff-9ba4-4ecb-b1a3-0ad1b3c784f7",
+  "id": "9a24ad67-84b1-4b97-9e39-9274d9f114b7",
   "prevIds": [
-    "5f8c8aca-5b2c-42b0-a16f-4c5090078c1f"
+    "bdc2daff-9ba4-4ecb-b1a3-0ad1b3c784f7"
   ],
   "ddl": [
     {
@@ -84,6 +84,10 @@
     },
     {
       "name": "session_message",
+      "entityType": "tables"
+    },
+    {
+      "name": "session_profile_snapshot",
       "entityType": "tables"
     },
     {
@@ -1390,6 +1394,156 @@
       "generated": null,
       "name": "id",
       "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "definition_id",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "definition_hash",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "title",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "agent",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tool_rules",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "skill_rules",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "mcp_rules",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "plugin_rules",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "hook_rules",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "monitor_rules",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "compaction",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "system_append",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
       "table": "session"
     },
     {
@@ -1719,6 +1873,16 @@
       "default": null,
       "generated": null,
       "name": "trash_restore_to",
+      "entityType": "columns",
+      "table": "session"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "profile_snapshot_id",
       "entityType": "columns",
       "table": "session"
     },
@@ -2104,6 +2268,21 @@
     },
     {
       "columns": [
+        "session_id"
+      ],
+      "tableTo": "session",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_session_profile_snapshot_session_id_session_id_fk",
+      "entityType": "fks",
+      "table": "session_profile_snapshot"
+    },
+    {
+      "columns": [
         "project_id"
       ],
       "tableTo": "project",
@@ -2353,6 +2532,15 @@
       "nameExplicit": false,
       "name": "session_message_pk",
       "table": "session_message",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "session_profile_snapshot_pk",
+      "table": "session_profile_snapshot",
       "entityType": "pks"
     },
     {
@@ -2675,6 +2863,24 @@
       "name": "session_message_time_created_idx",
       "entityType": "indexes",
       "table": "session_message"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "session_profile_snapshot_session_created_idx",
+      "entityType": "indexes",
+      "table": "session_profile_snapshot"
     },
     {
       "columns": [

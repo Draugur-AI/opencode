@@ -21,11 +21,13 @@ import {
   SessionInputTable,
   SessionLedgerTable,
   SessionMessageTable,
+  SessionProfileSnapshotTable,
   SessionTable,
   SessionTombstoneTable,
   TodoTable,
 } from "@opencode-ai/core/session/sql"
 import { SessionLedger } from "@opencode-ai/core/session/ledger"
+import { SessionProfile } from "@opencode-ai/core/session/profile"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, EventV2.node, SessionProjector.node])))
@@ -63,6 +65,9 @@ const SESSION_OWNED: Record<string, "purged" | "retained"> = {
   // Found by this test on the day it was written: a share row holds a live URL and secret for the
   // session. It already cascades, but nothing had ever stated that it must.
   session_share: "purged",
+  // TKT-321: a resolved profile snapshot is behavior the session ran under, same class of content
+  // as a goal or ledger entry -- nothing worth keeping once the session itself is gone.
+  session_profile_snapshot: "purged",
   // The tombstone is what replaces the session. It carries identifiers only, never content.
   session_tombstone: "retained",
 }
@@ -140,6 +145,24 @@ const seedTrashed = (prefix: string) =>
         sql`INSERT INTO session_transcript_search (session_id, message_id, seq, role, text, created_at)
             VALUES (${id}, ${`msg_search_${id}`}, 0, 'user', 'searchable purge test text', 1)`,
       )
+      .pipe(Effect.orDie)
+    yield* db
+      .insert(SessionProfileSnapshotTable)
+      .values({
+        id: SessionProfile.SnapshotID.create(),
+        session_id: id,
+        definition_id: SessionProfile.ID.create(),
+        definition_hash: "hash",
+        title: "profile",
+        tool_rules: {},
+        skill_rules: {},
+        mcp_rules: {},
+        plugin_rules: {},
+        hook_rules: {},
+        monitor_rules: { allowUser: true, allowPlugin: true, autoStart: false },
+        time_created: 1,
+      })
+      .run()
       .pipe(Effect.orDie)
     yield* sessions.trash({ sessionID: id, requestID: request(`trash-${id}`) })
     return id

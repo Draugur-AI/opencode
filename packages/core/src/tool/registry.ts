@@ -4,6 +4,7 @@ import { ToolOutput, type ToolCall, type ToolDefinition, type ToolResultValue } 
 import { Context, Effect, Layer, Scope } from "effect"
 import { AgentV2 } from "../agent"
 import { PermissionV2 } from "../permission"
+import { SessionProfile } from "../session/profile"
 import { SessionMessage } from "../session/message"
 import { SessionSchema } from "../session/schema"
 import { ToolOutputStore } from "../tool-output-store"
@@ -20,8 +21,18 @@ export type ExecuteInput = {
   readonly call: ToolCall
 }
 
+export type MaterializeRequest = {
+  readonly permissions?: PermissionV2.Ruleset
+  /** Deny-only profile tool rules, same shape SessionProfile.toolDenyRuleset resolves from a
+   * snapshot. The caller resolves the snapshot (registry.ts has no session/profile dependency of
+   * its own); passing the RuleMap rather than a pre-merged Ruleset keeps the "profile can only
+   * deny, never loosen" invariant enforced in one place (SessionProfile.denyRules) instead of
+   * trusting every caller to have merged correctly. */
+  readonly profileToolRules?: SessionProfile.RuleMap
+}
+
 export interface Interface {
-  readonly materialize: (permissions?: PermissionV2.Ruleset) => Effect.Effect<Materialization>
+  readonly materialize: (request?: MaterializeRequest) => Effect.Effect<Materialization>
   /** Internal registration capability exposed publicly only through Tools.Service. */
   readonly register: (tools: Readonly<Record<string, AnyTool>>) => Effect.Effect<void, RegistrationError, Scope.Scope>
 }
@@ -103,14 +114,21 @@ const registryLayer = Layer.effect(
           }),
         )
       }),
-      materialize: Effect.fn("ToolRegistry.materialize")(function* (permissions = []) {
+      materialize: Effect.fn("ToolRegistry.materialize")(function* (request = {}) {
+        const permissions = request.permissions ?? []
+        // Deny-only, same construction as PermissionV2.configured's leaf-side merge -- see
+        // SessionProfile.denyRules's doc for why placing it last is safe (it can only add a
+        // restriction, never introduce an allow that outranks an agent-level deny).
+        const rules = request.profileToolRules
+          ? [...permissions, ...SessionProfile.denyRules(request.profileToolRules)]
+          : permissions
         const registrations = new Map(applications.entries())
         for (const [name, entries] of local) {
           const registration = entries.at(-1)?.registration
           if (registration) registrations.set(name, registration)
         }
         for (const [name, registration] of registrations)
-          if (whollyDisabled(permission(registration.tool, name), permissions)) registrations.delete(name)
+          if (whollyDisabled(permission(registration.tool, name), rules)) registrations.delete(name)
         return {
           definitions: Array.from(registrations, ([name, registration]) => definition(name, registration.tool)),
           settle: (input) => {
