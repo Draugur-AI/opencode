@@ -111,18 +111,22 @@ jobs:
 
   e2e:
     name: e2e (${{ matrix.settings.name }})
-    # Fork note (TKT-338): mandatory fork-PR guard, see the unit job's comment above.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
         settings:
           # Fork note (TKT-336, superseded by TKT-338): was blacksmith-*, queued forever (no
-          # Blacksmith app on this org). Retargeted to GitHub-hosted, then (TKT-338) linux
-          # again to the fork's self-hosted runner to stop burning shared minutes. Windows
-          # disabled -- no self-hosted windows runner on this fork; see FORK.md.
+          # Blacksmith app on this org). Retargeted to GitHub-hosted (ubuntu-latest). TKT-338
+          # tried moving linux to the fork's self-hosted runner alongside typecheck/unit, but
+          # `bunx playwright install-deps chromium` needs `sudo apt-get install` for 8 missing
+          # packages (xvfb + fonts) and this host's NOPASSWD sudo is scoped to docker/ctr only
+          # -- kept on GitHub-hosted instead. Unlock condition: those 8 packages installed on
+          # the runner host (one-time, operator; the exact command is in TKT-338's diary), then
+          # retarget this matrix entry the same way typecheck/unit already are. e2e is
+          # non-merge-gating (see "The merge gate" below) so it wasn't worth blocking #14 on.
+          # Windows stays disabled -- no self-hosted windows runner on this fork.
           - name: linux
-            host: [self-hosted, opencode-fork, linux, arm64]
+            host: ubuntu-latest
     runs-on: ${{ matrix.settings.host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers

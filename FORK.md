@@ -366,6 +366,14 @@ whose umask is `002` (the shared dev box is one). CI's `ubuntu-latest` runner us
 and passes it. That is the environment, not the code — do not chase it if you see it locally, and
 it should not appear in CI.
 
+**CI parity is now enforced at the unit level too (TKT-338):** `opencode-fork-runner-1`'s login
+shell inherits this host's `002` umask, which surfaced the same failure deterministically on
+every `unit (linux)` run once jobs started landing there. Fixed with `UMask=0022` on the
+runner's systemd `--user` unit (`~/.config/systemd/user/actions-runner-opencode-fork.service`)
+rather than touching the test — the environment was the thing lying about production umasks,
+not the assertion. The caveat above still applies to a plain local `bun test` on this or any
+`002`-umask box; it just no longer reaches CI.
+
 ## Observational checks (retargeted, running, deliberately NOT in the gate)
 
 `e2e (linux)` and `e2e (windows)` (both, symmetrically) and `nix-eval` run on every PR but do not
@@ -374,6 +382,17 @@ for `unit`/`test:httpapi` in TKT-336 — advisory-without-a-rule is exactly how 
 hides (that was the whole reason for abolishing it), so each observational check gets a
 **deterministic reading rule** instead of a judgment call:
 
+- **e2e (`linux`) stays on GitHub-hosted (`ubuntu-latest`), not the self-hosted runner (TKT-338):**
+  `bunx playwright install-deps chromium` needs `sudo apt-get install`, and this host's NOPASSWD
+  sudo is scoped to `docker`/`ctr` only (confirmed via `sudo -n -l`) — most of the requested
+  libs are already present, but 8 packages (`xvfb`, `fonts-unifont`, `xfonts-cyrillic`,
+  `xfonts-scalable`, `fonts-ipafont-gothic`, `fonts-wqy-zenhei`, `fonts-tlwg-loma-otf`,
+  `fonts-freefont-ttf`) are missing and the install fails with `sudo: a password is required`.
+  Left on GitHub-hosted because e2e is observational, not the merge gate — the minutes worth
+  reclaiming are `typecheck`/`unit (linux)`. Unlock condition: those 8 packages installed on
+  the runner host (one-time, operator; the exact command is in TKT-338's diary), then retarget
+  this matrix entry to `[self-hosted, opencode-fork, linux, arm64]` the same way
+  `typecheck`/`unit (linux)` already are.
 - **e2e (`packages/app`'s Playwright regression suite):** first ran on either platform in
   TKT-336 (previously queued forever on blacksmith on both) and turned out to have ordinary,
   pre-existing E2E flakiness — a small number of timing-sensitive specs occasionally fail past
