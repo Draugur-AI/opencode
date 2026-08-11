@@ -23,12 +23,23 @@ export interface Instance {
   readonly stop: () => void
 }
 
-const sseChunk = (input: { readonly delta?: Record<string, unknown>; readonly finish?: string }) =>
+const sseChunk = (input: {
+  readonly delta?: Record<string, unknown>
+  readonly finish?: string
+  readonly usage?: { readonly prompt_tokens: number; readonly completion_tokens: number; readonly total_tokens: number }
+}) =>
   `data: ${JSON.stringify({
     id: "fake-http-llm",
     object: "chat.completion.chunk",
     choices: [{ index: 0, delta: input.delta ?? {}, finish_reason: input.finish ?? null }],
+    ...(input.usage ? { usage: input.usage } : {}),
   })}\n\n`
+
+/** A plain chars/4 estimate, same order of magnitude as @opencode-ai/core's Token.estimate --
+ * not imported directly to keep this file dependency-free, and exactness does not matter here:
+ * the only thing that reads this is the baseline binary's own overflow check, which just needs
+ * token counts to grow with real text length so SessionCompaction's real trigger can fire. */
+const estimateTokens = (text: string) => Math.ceil(text.length / 4)
 
 /**
  * A new V1 session auto-generates its own title on the first turn -- a SEPARATE completions
@@ -55,12 +66,30 @@ export const start = (): Instance => {
       if (!isTitle) requests.push({ body })
       const text = isTitle ? "Fake title" : (queue.shift() ?? "")
 
+      // Real usage is what makes the baseline binary's own overflow check (packages/opencode/src/
+      // session/overflow.ts: `count = tokens.total || tokens.input + ...`) see growth at all --
+      // without it every turn reports 0 tokens and SessionCompaction's real trigger never fires,
+      // no matter how much filler text a fixture sends.
+      const promptTokens = estimateTokens(JSON.stringify((body as { messages?: unknown }).messages ?? ""))
+      const completionTokens = estimateTokens(text)
+
       const stream = new ReadableStream({
         start: (controller) => {
           const encoder = new TextEncoder()
           controller.enqueue(encoder.encode(sseChunk({ delta: { role: "assistant" } })))
           if (text) controller.enqueue(encoder.encode(sseChunk({ delta: { content: text } })))
-          controller.enqueue(encoder.encode(sseChunk({ finish: "stop" })))
+          controller.enqueue(
+            encoder.encode(
+              sseChunk({
+                finish: "stop",
+                usage: {
+                  prompt_tokens: promptTokens,
+                  completion_tokens: completionTokens,
+                  total_tokens: promptTokens + completionTokens,
+                },
+              }),
+            ),
+          )
           controller.enqueue(encoder.encode("data: [DONE]\n\n"))
           controller.close()
         },
