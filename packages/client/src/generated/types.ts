@@ -165,6 +165,27 @@ export type ProjectPreferenceConflictError = {
 export const isProjectPreferenceConflictError = (value: unknown): value is ProjectPreferenceConflictError =>
   typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ProjectPreferenceConflictError"
 
+export type ConfigDocumentTargetNotFoundError = {
+  readonly _tag: "ConfigDocumentTargetNotFoundError"
+  readonly id: string
+  readonly message: string
+}
+export const isConfigDocumentTargetNotFoundError = (value: unknown): value is ConfigDocumentTargetNotFoundError =>
+  typeof value === "object" &&
+  value !== null &&
+  "_tag" in value &&
+  value["_tag"] === "ConfigDocumentTargetNotFoundError"
+
+export type ConfigDocumentConflictError = {
+  readonly _tag: "ConfigDocumentConflictError"
+  readonly id: string
+  readonly expectedHash: string
+  readonly actualHash: string
+  readonly message: string
+}
+export const isConfigDocumentConflictError = (value: unknown): value is ConfigDocumentConflictError =>
+  typeof value === "object" && value !== null && "_tag" in value && value["_tag"] === "ConfigDocumentConflictError"
+
 export type HealthGetOutput = { readonly healthy: true }
 
 export type LocationGetInput = {
@@ -3890,3 +3911,248 @@ export type ServerProjectWriteOutput = {
     readonly revision: number
   }
 }["data"]
+
+export type ConfigDocumentTargetListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ConfigDocumentTargetListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly id: string
+    readonly kind: "global" | "project"
+    readonly path: string
+    readonly exists: boolean
+  }>
+}
+
+export type ConfigDocumentTargetReadInput = {
+  readonly targetID: { readonly targetID: string }["targetID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ConfigDocumentTargetReadOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly target: {
+      readonly id: string
+      readonly kind: "global" | "project"
+      readonly path: string
+      readonly exists: boolean
+    }
+    readonly text: string
+    readonly hash: string
+    readonly parsed: JsonValue
+    readonly diagnostics: ReadonlyArray<{
+      readonly severity: "error" | "warning"
+      readonly message: string
+      readonly offset?: number | null
+      readonly length?: number | null
+    }>
+  }
+}
+
+export type ConfigDocumentEffectiveGetInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type ConfigDocumentEffectiveGetOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: { readonly fields: { readonly [x: string]: { readonly value: JsonValue; readonly source: string } } }
+}
+
+export type ConfigDocumentTargetValidateInput = {
+  readonly targetID: { readonly targetID: string }["targetID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly patch: {
+    readonly patch:
+      | {
+          readonly op: "mcp.server.set"
+          readonly name: string
+          readonly value:
+            | {
+                readonly type: "local"
+                readonly command: ReadonlyArray<string>
+                readonly cwd?: string | undefined
+                readonly environment?: { readonly [x: string]: string } | undefined
+                readonly disabled?: boolean | undefined
+                readonly timeout?:
+                  | { readonly startup?: number | undefined; readonly request?: number | undefined }
+                  | undefined
+              }
+            | {
+                readonly type: "remote"
+                readonly url: string
+                readonly headers?: { readonly [x: string]: string } | undefined
+                readonly oauth?:
+                  | {
+                      readonly client_id?: string | undefined
+                      readonly client_secret?: string | undefined
+                      readonly scope?: string | undefined
+                      readonly callback_port?: number | undefined
+                      readonly redirect_uri?: string | undefined
+                    }
+                  | false
+                  | undefined
+                readonly disabled?: boolean | undefined
+                readonly timeout?:
+                  | { readonly startup?: number | undefined; readonly request?: number | undefined }
+                  | undefined
+              }
+        }
+      | { readonly op: "mcp.server.remove"; readonly name: string }
+  }["patch"]
+}
+
+export type ConfigDocumentTargetValidateOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly diagnostics: ReadonlyArray<{
+      readonly severity: "error" | "warning"
+      readonly message: string
+      readonly offset?: number | null
+      readonly length?: number | null
+    }>
+    readonly preview: {
+      readonly fields: { readonly [x: string]: { readonly value: JsonValue; readonly source: string } }
+    }
+  }
+}
+
+export type ConfigDocumentTargetApplyInput = {
+  readonly targetID: { readonly targetID: string }["targetID"]
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+  readonly expectedHash: {
+    readonly expectedHash: string
+    readonly patch:
+      | {
+          readonly op: "mcp.server.set"
+          readonly name: string
+          readonly value:
+            | {
+                readonly type: "local"
+                readonly command: ReadonlyArray<string>
+                readonly cwd?: string | undefined
+                readonly environment?: { readonly [x: string]: string } | undefined
+                readonly disabled?: boolean | undefined
+                readonly timeout?:
+                  | { readonly startup?: number | undefined; readonly request?: number | undefined }
+                  | undefined
+              }
+            | {
+                readonly type: "remote"
+                readonly url: string
+                readonly headers?: { readonly [x: string]: string } | undefined
+                readonly oauth?:
+                  | {
+                      readonly client_id?: string | undefined
+                      readonly client_secret?: string | undefined
+                      readonly scope?: string | undefined
+                      readonly callback_port?: number | undefined
+                      readonly redirect_uri?: string | undefined
+                    }
+                  | false
+                  | undefined
+                readonly disabled?: boolean | undefined
+                readonly timeout?:
+                  | { readonly startup?: number | undefined; readonly request?: number | undefined }
+                  | undefined
+              }
+        }
+      | { readonly op: "mcp.server.remove"; readonly name: string }
+  }["expectedHash"]
+  readonly patch: {
+    readonly expectedHash: string
+    readonly patch:
+      | {
+          readonly op: "mcp.server.set"
+          readonly name: string
+          readonly value:
+            | {
+                readonly type: "local"
+                readonly command: ReadonlyArray<string>
+                readonly cwd?: string | undefined
+                readonly environment?: { readonly [x: string]: string } | undefined
+                readonly disabled?: boolean | undefined
+                readonly timeout?:
+                  | { readonly startup?: number | undefined; readonly request?: number | undefined }
+                  | undefined
+              }
+            | {
+                readonly type: "remote"
+                readonly url: string
+                readonly headers?: { readonly [x: string]: string } | undefined
+                readonly oauth?:
+                  | {
+                      readonly client_id?: string | undefined
+                      readonly client_secret?: string | undefined
+                      readonly scope?: string | undefined
+                      readonly callback_port?: number | undefined
+                      readonly redirect_uri?: string | undefined
+                    }
+                  | false
+                  | undefined
+                readonly disabled?: boolean | undefined
+                readonly timeout?:
+                  | { readonly startup?: number | undefined; readonly request?: number | undefined }
+                  | undefined
+              }
+        }
+      | { readonly op: "mcp.server.remove"; readonly name: string }
+  }["patch"]
+}
+
+export type ConfigDocumentTargetApplyOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: { readonly hash: string; readonly restartImpact: "live" | "reopen" | "restart" }
+}
+
+export type McpListInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type McpListOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly name: string
+    readonly transport: "local" | "remote"
+    readonly status: "configured" | "disabled"
+    readonly target: string
+  }>
+}

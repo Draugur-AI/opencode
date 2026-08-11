@@ -973,6 +973,71 @@ const adaptGroup21 = (raw: RawClient["server.project"]) => ({
   write: Endpoint21_4(raw),
 })
 
+type Endpoint22_0Request = Parameters<RawClient["server.config-document"]["config.document.target.list"]>[0]
+type Endpoint22_0Input = { readonly location?: Endpoint22_0Request["query"]["location"] }
+const Endpoint22_0 = (raw: RawClient["server.config-document"]) => (input?: Endpoint22_0Input) =>
+  raw["config.document.target.list"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError))
+
+type Endpoint22_1Request = Parameters<RawClient["server.config-document"]["config.document.target.read"]>[0]
+type Endpoint22_1Input = {
+  readonly targetID: Endpoint22_1Request["params"]["targetID"]
+  readonly location?: Endpoint22_1Request["query"]["location"]
+}
+const Endpoint22_1 = (raw: RawClient["server.config-document"]) => (input: Endpoint22_1Input) =>
+  raw["config.document.target.read"]({
+    params: { targetID: input["targetID"] },
+    query: { location: input["location"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type Endpoint22_2Request = Parameters<RawClient["server.config-document"]["config.document.effective.get"]>[0]
+type Endpoint22_2Input = { readonly location?: Endpoint22_2Request["query"]["location"] }
+const Endpoint22_2 = (raw: RawClient["server.config-document"]) => (input?: Endpoint22_2Input) =>
+  raw["config.document.effective.get"]({ query: { location: input?.["location"] } }).pipe(
+    Effect.mapError(mapClientError),
+  )
+
+type Endpoint22_3Request = Parameters<RawClient["server.config-document"]["config.document.target.validate"]>[0]
+type Endpoint22_3Input = {
+  readonly targetID: Endpoint22_3Request["params"]["targetID"]
+  readonly location?: Endpoint22_3Request["query"]["location"]
+  readonly patch: Endpoint22_3Request["payload"]["patch"]
+}
+const Endpoint22_3 = (raw: RawClient["server.config-document"]) => (input: Endpoint22_3Input) =>
+  raw["config.document.target.validate"]({
+    params: { targetID: input["targetID"] },
+    query: { location: input["location"] },
+    payload: { patch: input["patch"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+type Endpoint22_4Request = Parameters<RawClient["server.config-document"]["config.document.target.apply"]>[0]
+type Endpoint22_4Input = {
+  readonly targetID: Endpoint22_4Request["params"]["targetID"]
+  readonly location?: Endpoint22_4Request["query"]["location"]
+  readonly expectedHash: Endpoint22_4Request["payload"]["expectedHash"]
+  readonly patch: Endpoint22_4Request["payload"]["patch"]
+}
+const Endpoint22_4 = (raw: RawClient["server.config-document"]) => (input: Endpoint22_4Input) =>
+  raw["config.document.target.apply"]({
+    params: { targetID: input["targetID"] },
+    query: { location: input["location"] },
+    payload: { expectedHash: input["expectedHash"], patch: input["patch"] },
+  }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroup22 = (raw: RawClient["server.config-document"]) => ({
+  targetList: Endpoint22_0(raw),
+  targetRead: Endpoint22_1(raw),
+  effectiveGet: Endpoint22_2(raw),
+  targetValidate: Endpoint22_3(raw),
+  targetApply: Endpoint22_4(raw),
+})
+
+type Endpoint23_0Request = Parameters<RawClient["server.mcp"]["mcp.list"]>[0]
+type Endpoint23_0Input = { readonly location?: Endpoint23_0Request["query"]["location"] }
+const Endpoint23_0 = (raw: RawClient["server.mcp"]) => (input?: Endpoint23_0Input) =>
+  raw["mcp.list"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroup23 = (raw: RawClient["server.mcp"]) => ({ list: Endpoint23_0(raw) })
+
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroup0(raw["server.health"]),
   location: adaptGroup1(raw["server.location"]),
@@ -996,6 +1061,8 @@ const adaptClient = (raw: RawClient) => ({
   references: adaptGroup19(raw["server.reference"]),
   projectCopies: adaptGroup20(raw["server.projectCopy"]),
   "server.project": adaptGroup21(raw["server.project"]),
+  configDocument: adaptGroup22(raw["server.config-document"]),
+  mcp: adaptGroup23(raw["server.mcp"]),
 })
 
 export const make = (options?: { readonly baseUrl?: URL | string }) =>
