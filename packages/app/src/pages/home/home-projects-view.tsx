@@ -1,5 +1,6 @@
 import { type Accessor, createMemo, For, type JSX, onCleanup, Show, splitProps } from "solid-js"
 import { createStore } from "solid-js/store"
+import { DateTime } from "luxon"
 import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
 import { isSortable, useSortable } from "@dnd-kit/solid/sortable"
 import { AutoScroller, Feedback, PointerActivationConstraints } from "@dnd-kit/dom"
@@ -12,6 +13,8 @@ import { IconButtonV2 } from "@opencode-ai/ui/v2/icon-button-v2"
 import { MenuV2 } from "@opencode-ai/ui/v2/menu-v2"
 import { TooltipV2 } from "@opencode-ai/ui/v2/tooltip-v2"
 import { getProjectAvatarVariant, type HomeProjectSelection, type LocalProject } from "@/context/layout"
+import type { HomeInventoryRow } from "@/context/global"
+import type { HomeInventoryTab } from "./home-projects-controller"
 import { ServerConnection } from "@/context/server"
 import { useLanguage } from "@/context/language"
 import { usePlatform } from "@/context/platform"
@@ -58,6 +61,12 @@ export type HomeProjectsViewProps = {
   onCloseProject: (server: ServerConnection.Any, directory: string) => void
   onOpenSettings: () => void
   onOpenHelp: () => void
+  inventoryTab: Accessor<HomeInventoryTab>
+  onSetInventoryTab: (tab: HomeInventoryTab) => void
+  inventoryFavorites: Accessor<HomeInventoryRow[]>
+  inventoryRecent: Accessor<HomeInventoryRow[]>
+  inventoryAll: Accessor<HomeInventoryRow[]>
+  onToggleFavorite: (projectID: string) => void
 }
 
 export function HomeProjectsView(props: HomeProjectsViewProps) {
@@ -97,7 +106,31 @@ export function HomeProjectsView(props: HomeProjectsViewProps) {
           </TooltipV2>
         </Show>
       </div>
+      <HomeInventoryTabBar tab={props.inventoryTab()} onSetTab={props.onSetInventoryTab} language={props.language} />
       <ScrollView data-slot="home-projects-scroll" class="min-h-0 min-w-0 shrink">
+        <Show
+          when={props.inventoryTab() === "servers"}
+          fallback={
+            <HomeInventoryList
+              language={props.language}
+              homedir={props.homedir}
+              items={
+                props.inventoryTab() === "favorites"
+                  ? props.inventoryFavorites()
+                  : props.inventoryTab() === "recent"
+                    ? props.inventoryRecent()
+                    : props.inventoryAll()
+              }
+              onSelectRow={(row) => {
+                const server = props.servers().find((conn) =>
+                  props.projectsForServer(conn).some((project) => project.worktree === row.worktree),
+                )
+                if (server) props.onOpenProjectNewSession(server, row.worktree)
+              }}
+              onToggleFavorite={props.onToggleFavorite}
+            />
+          }
+        >
         <Show
           when={props.servers().length > 1}
           fallback={
@@ -143,6 +176,7 @@ export function HomeProjectsView(props: HomeProjectsViewProps) {
             </For>
           </div>
         </Show>
+        </Show>
       </ScrollView>
       <HomeUtilityNav
         class="mb-8 mt-4 hidden shrink-0 lg:flex"
@@ -151,6 +185,125 @@ export function HomeProjectsView(props: HomeProjectsViewProps) {
         language={props.language}
       />
     </aside>
+  )
+}
+
+const INVENTORY_TABS: HomeInventoryTab[] = ["servers", "favorites", "recent", "all"]
+const inventoryTabLabel = (tab: HomeInventoryTab, language: ReturnType<typeof useLanguage>) =>
+  ({
+    servers: language.t("home.inventory.servers"),
+    favorites: language.t("home.inventory.favorites"),
+    recent: language.t("home.inventory.recent"),
+    all: language.t("home.inventory.all"),
+  })[tab]
+
+function HomeInventoryTabBar(props: {
+  tab: HomeInventoryTab
+  onSetTab: (tab: HomeInventoryTab) => void
+  language: ReturnType<typeof useLanguage>
+}) {
+  return (
+    <div class="flex h-7 min-w-0 shrink-0 items-center gap-1 pl-1.5 pr-3" role="tablist">
+      <For each={INVENTORY_TABS}>
+        {(tab) => (
+          <button
+            type="button"
+            role="tab"
+            aria-selected={props.tab === tab}
+            data-selected={props.tab === tab ? "" : undefined}
+            class={`
+              rounded-[6px] px-2 py-1 text-v2-text-text-muted [font-weight:440]
+              hover:bg-v2-background-bg-layer-01 hover:text-v2-text-text-base
+              data-[selected]:bg-v2-background-bg-layer-03 data-[selected]:text-v2-text-text-base
+            `}
+            onClick={() => props.onSetTab(tab)}
+          >
+            {inventoryTabLabel(tab, props.language)}
+          </button>
+        )}
+      </For>
+    </div>
+  )
+}
+
+function HomeInventoryList(props: {
+  language: ReturnType<typeof useLanguage>
+  homedir: Accessor<string>
+  items: HomeInventoryRow[]
+  onSelectRow: (row: HomeInventoryRow) => void
+  onToggleFavorite: (projectID: string) => void
+}) {
+  return (
+    <Show
+      when={props.items.length > 0}
+      fallback={
+        <div class="px-1.5 py-2 text-v2-text-text-faint">{props.language.t("home.empty.title")}</div>
+      }
+    >
+      <div class="flex min-w-0 flex-col gap-0.5 pr-3">
+        <For each={props.items}>{(row) => <HomeInventoryRowView {...props} row={row} />}</For>
+      </div>
+    </Show>
+  )
+}
+
+function HomeInventoryRowView(props: {
+  language: ReturnType<typeof useLanguage>
+  homedir: Accessor<string>
+  row: HomeInventoryRow
+  onSelectRow: (row: HomeInventoryRow) => void
+  onToggleFavorite: (projectID: string) => void
+}) {
+  const path = () => {
+    const home = props.homedir()
+    const worktree = props.row.worktree
+    if (home && (worktree === home || worktree.startsWith(`${home}/`))) return `~${worktree.slice(home.length)}`
+    return worktree
+  }
+  const lastOpened = () => {
+    const at = props.row.preference.lastOpenedAt
+    return at === undefined ? undefined : DateTime.fromMillis(at).toRelative()
+  }
+  return (
+    <div
+      class="group/inventory relative flex h-7 min-w-0 items-center rounded-[6px]"
+      data-project-id={props.row.id}
+      style={{ "content-visibility": "auto", "contain-intrinsic-size": "0 28px" }}
+    >
+      <TooltipV2 placement="right" value={path()}>
+        <HomeProjectNavButton
+          type="button"
+          data-component="home-inventory-row"
+          class="pr-8"
+          onClick={() => props.onSelectRow(props.row)}
+        >
+          <ProjectAvatar
+            fallback={displayName(props.row)}
+            src={getProjectAvatarSource(props.row.id, props.row.icon)}
+            variant={getProjectAvatarVariant(props.row.icon?.color)}
+          />
+          <span class={HOME_PROJECT_NAV_LABEL}>{displayName(props.row)}</span>
+          <Show when={lastOpened()}>
+            <span class="shrink-0 text-v2-text-text-faint">{lastOpened()}</span>
+          </Show>
+        </HomeProjectNavButton>
+      </TooltipV2>
+      <IconButtonV2
+        data-action="home-inventory-favorite"
+        variant="ghost-muted"
+        size="small"
+        class="absolute right-1 top-1/2 -translate-y-1/2"
+        classList={{ "text-v2-icon-icon-warning": props.row.preference.favorite }}
+        icon={<IconV2 name={props.row.preference.favorite ? "star-active" : "star"} />}
+        aria-label={props.language.t(
+          props.row.preference.favorite ? "home.inventory.unfavorite" : "home.inventory.favorite",
+        )}
+        onClick={(event: MouseEvent) => {
+          event.stopPropagation()
+          props.onToggleFavorite(props.row.id)
+        }}
+      />
+    </div>
   )
 }
 

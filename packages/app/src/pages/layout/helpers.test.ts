@@ -10,6 +10,7 @@ import { type Session } from "@opencode-ai/sdk/v2/client"
 import {
   childSessionOnPath,
   closeHomeProject,
+  compareProjectOrder,
   compareSessionTime,
   displayName,
   effectiveWorkspaceOrder,
@@ -177,6 +178,54 @@ describe("layout workspace helpers", () => {
     ]
 
     expect(sessions.sort(compareSessionTime).map((item) => item.id)).toEqual(["ses_a", "ses_z"])
+  })
+
+  test("compareProjectOrder: favorite sorts before non-favorite regardless of everything else", () => {
+    const rows = [
+      { id: "prj_b", name: "B", favorite: false, lastOpenedAt: 1000 },
+      { id: "prj_a", name: "A", favorite: true, lastOpenedAt: 1 },
+    ]
+    expect(rows.sort(compareProjectOrder).map((item) => item.id)).toEqual(["prj_a", "prj_b"])
+  })
+
+  test("compareProjectOrder: rank breaks ties within the same favorite status, lexicographic", () => {
+    const rows = [
+      { id: "prj_b", name: "B", favorite: true, rank: "m" },
+      { id: "prj_a", name: "A", favorite: true, rank: "a" },
+    ]
+    expect(rows.sort(compareProjectOrder).map((item) => item.id)).toEqual(["prj_a", "prj_b"])
+  })
+
+  test("compareProjectOrder: a defined rank sorts before an undefined one", () => {
+    const rows = [
+      { id: "prj_b", name: "B", favorite: false },
+      { id: "prj_a", name: "A", favorite: false, rank: "z" },
+    ]
+    expect(rows.sort(compareProjectOrder).map((item) => item.id)).toEqual(["prj_a", "prj_b"])
+  })
+
+  test("compareProjectOrder: lastOpened DESC breaks ties when rank is equal", () => {
+    const rows = [
+      { id: "prj_old", name: "Old", favorite: false, lastOpenedAt: 1 },
+      { id: "prj_new", name: "New", favorite: false, lastOpenedAt: 2 },
+    ]
+    expect(rows.sort(compareProjectOrder).map((item) => item.id)).toEqual(["prj_new", "prj_old"])
+  })
+
+  test("compareProjectOrder: falls back to a stable name/id tiebreak", () => {
+    const rows = [
+      { id: "prj_z", name: "Same", favorite: false },
+      { id: "prj_a", name: "Same", favorite: false },
+    ]
+    expect(rows.sort(compareProjectOrder).map((item) => item.id)).toEqual(["prj_a", "prj_z"])
+  })
+
+  test("compareProjectOrder: falls back to id when name is missing on both sides", () => {
+    const rows = [
+      { id: "prj_z", favorite: false },
+      { id: "prj_a", favorite: false },
+    ]
+    expect(rows.sort(compareProjectOrder).map((item) => item.id)).toEqual(["prj_a", "prj_z"])
   })
 
   test("detects project permissions with a filter", () => {

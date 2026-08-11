@@ -35,6 +35,12 @@ export function HomeProjects(props: { projects: HomeProjectsController; scroll: 
       onCloseProject={props.projects.project.close}
       onOpenSettings={props.projects.utility.settings}
       onOpenHelp={props.projects.utility.help}
+      inventoryTab={props.projects.inventory.tab}
+      onSetInventoryTab={props.projects.inventory.setTab}
+      inventoryFavorites={props.projects.inventory.favorites}
+      inventoryRecent={props.projects.inventory.recent}
+      inventoryAll={props.projects.inventory.all}
+      onToggleFavorite={props.projects.inventory.toggleFavorite}
     />
   )
 }

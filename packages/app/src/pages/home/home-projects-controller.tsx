@@ -11,9 +11,11 @@ import { closeHomeProject, errorMessage, homeProjectDirectories } from "@/pages/
 import { Persist, persisted } from "@/utils/persist"
 import { showToast } from "@/utils/toast"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
-import { createResource } from "solid-js"
+import { createResource, createSignal } from "solid-js"
 import { createStore } from "solid-js/store"
 import type { HomeController } from "./home-controller"
+
+export type HomeInventoryTab = "servers" | "favorites" | "recent" | "all"
 
 export function createHomeProjectsController(home: HomeController) {
   const platform = usePlatform()
@@ -40,12 +42,22 @@ export function createHomeProjectsController(home: HomeController) {
     return platform.platform === "desktop" && !!platform.openPath && ServerConnection.local(conn)
   }
 
+  const [inventoryTab, setInventoryTab] = createSignal<HomeInventoryTab>("servers")
+
   return {
     copy: {
       language,
     },
     selection: {
       value: home.selection.value,
+    },
+    inventory: {
+      tab: inventoryTab,
+      setTab: setInventoryTab,
+      favorites: home.inventory.favorites,
+      recent: home.inventory.recent,
+      all: home.inventory.all,
+      toggleFavorite: home.inventory.toggleFavorite,
     },
     server: {
       list: home.server.list,
