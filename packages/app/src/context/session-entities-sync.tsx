@@ -26,10 +26,15 @@ import { useTabs } from "./tabs"
  * - Snapshots load BEFORE tabs restore: `runSnapshot` waits for `tabs.ready()` before calling
  *   `reconcile`, so a snapshot that resolves first does not reconcile against tabs that have not
  *   loaded their persisted references yet -- it would silently find nothing to do.
- * - Navigation happens ONCE after the batch: `reconcile` is called once per snapshot (bootstrap,
- *   each reconnect), never per live event. A live `session`/`purged` dispatch updates the
- *   entities store immediately (any view reading it re-renders), but does not itself call
- *   `reconcile` -- that would reintroduce the old per-tab navigation bounce this ticket removes.
+ * - Navigation happens ONCE after the batch: each snapshot calls `reconcile` exactly once for
+ *   its whole set, never once per session inside it -- that per-tab bounce (closing several
+ *   sessions used to route through each intermediate tab) is the bug this replaces. A live
+ *   `session`/`purged` dispatch (one event, one session) also calls `reconcile` once right
+ *   after -- that IS one batch of one, the same shape, and it is what makes archiving a session
+ *   from anywhere still close its own tab immediately once the five old dispatch sites
+ *   (titlebar-session-events.ts and friends) are deleted, rather than only on the next
+ *   reconnect. Not a live-vs-snapshot distinction; a one-navigation-per-event invariant that
+ *   both paths satisfy.
  */
 
 const SNAPSHOT_PAGE_LIMIT = 5_000
@@ -102,6 +107,7 @@ export function SessionEntitiesSync() {
           .get({ sessionID })
           .then((session) => {
             entities.dispatch({ type: "session", serverKey, session: session as unknown as Session.Info })
+            tabs.reconcile(entities.state)
           })
           .catch(() => {})
       }
@@ -131,6 +137,7 @@ export function SessionEntitiesSync() {
           const sessionID = properties?.info?.id ?? properties?.sessionID
           if (!sessionID) return
           entities.dispatch({ type: "purged", serverKey, sessionID })
+          tabs.reconcile(entities.state)
           return
         }
         case "server.connected": {
