@@ -258,6 +258,40 @@ broken.**
 (no merge ref gets built), which looks identical to an Actions outage. Always check
 `gh pr view <n> --json mergeable,mergeStateStatus` before troubleshooting CI as if it were down.
 
+## Self-hosted runner (TKT-338) and the fork-PR guard
+
+This fork is **public**, and a self-hosted runner executes whatever a triggering workflow says.
+That combination is the hazard: a `pull_request` event can originate from a fork whose head repo
+differs from this one, and a permissive self-hosted runner would run that fork's code on our
+host. Two independent mitigations, deliberately not just one:
+
+1. **Repo Actions policy** (`GET/PUT
+   /repos/Draugur-AI/opencode/actions/permissions/fork-pr-contributor-approval`, readable and
+   writable with repo-admin, no org-admin needed despite appearances — verified during TKT-338
+   after every other endpoint 403'd or came back empty): `approval_policy` set to
+   `all_external_contributors`. An outside contributor's workflow run needs explicit approval
+   before it executes at all.
+2. **Per-job guard, in versioned YAML, auditable and greppable — the one that matters if (1) is
+   ever misconfigured or silently reverted**: every job whose `runs-on` includes the
+   `opencode-fork` self-hosted label carries
+   `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository`.
+   Push events (`dev`) are internal by definition and always pass; a `pull_request` event only
+   passes when the PR's head repo is this repo. A fork PR's `unit`/`e2e`/`typecheck` jobs
+   therefore never reach the self-hosted runner at all — they simply don't run, rather than
+   running unsafely. This is what makes the runner safe **by construction**, independent of any
+   repo or org setting.
+
+**The runner itself**: `opencode-fork-runner-1`, its own directory
+(`~/actions-runner-opencode-fork`), labels `[self-hosted, opencode-fork, linux, arm64]`, a
+systemd `--user` unit (not `sudo ./svc.sh install` — this host's NOPASSWD sudo is scoped to
+`docker`/`ctr` only). Two other runners share this host: `spark-6703` (system-level unit,
+`draugur-alpha`) and the flagship runner (TKT-337) — three distinct directories is what avoids
+the two-`Runner.Listener`s-racing-one-`_temp` footgun that has bitten this host before (see
+[[ci-runner-double-listener]]). **Windows is disabled**, not just left on GitHub-hosted: this
+host is linux/aarch64, so `unit (windows)` and `e2e (windows)` are dropped from their workflow
+matrices rather than burning GitHub-hosted minutes for a platform this runner can't serve.
+Revisit when GH-hosted minutes reset or a Windows runner exists elsewhere.
+
 ## Does automated review run on fork PRs? — No.
 
 Answer, with evidence, for the standing "assume no review runs" convention already baked into
@@ -333,6 +367,14 @@ whose umask is `002` (the shared dev box is one). CI's `ubuntu-latest` runner us
 and passes it. That is the environment, not the code — do not chase it if you see it locally, and
 it should not appear in CI.
 
+**CI parity is now enforced at the unit level too (TKT-338):** `opencode-fork-runner-1`'s login
+shell inherits this host's `002` umask, which surfaced the same failure deterministically on
+every `unit (linux)` run once jobs started landing there. Fixed with `UMask=0022` on the
+runner's systemd `--user` unit (`~/.config/systemd/user/actions-runner-opencode-fork.service`)
+rather than touching the test — the environment was the thing lying about production umasks,
+not the assertion. The caveat above still applies to a plain local `bun test` on this or any
+`002`-umask box; it just no longer reaches CI.
+
 ## Observational checks (retargeted, running, deliberately NOT in the gate)
 
 `e2e (linux)` and `e2e (windows)` (both, symmetrically) and `nix-eval` run on every PR but do not
@@ -341,6 +383,17 @@ for `unit`/`test:httpapi` in TKT-336 — advisory-without-a-rule is exactly how 
 hides (that was the whole reason for abolishing it), so each observational check gets a
 **deterministic reading rule** instead of a judgment call:
 
+- **e2e (`linux`) stays on GitHub-hosted (`ubuntu-latest`), not the self-hosted runner (TKT-338):**
+  `bunx playwright install-deps chromium` needs `sudo apt-get install`, and this host's NOPASSWD
+  sudo is scoped to `docker`/`ctr` only (confirmed via `sudo -n -l`) — most of the requested
+  libs are already present, but 8 packages (`xvfb`, `fonts-unifont`, `xfonts-cyrillic`,
+  `xfonts-scalable`, `fonts-ipafont-gothic`, `fonts-wqy-zenhei`, `fonts-tlwg-loma-otf`,
+  `fonts-freefont-ttf`) are missing and the install fails with `sudo: a password is required`.
+  Left on GitHub-hosted because e2e is observational, not the merge gate — the minutes worth
+  reclaiming are `typecheck`/`unit (linux)`. Unlock condition: those 8 packages installed on
+  the runner host (one-time, operator; the exact command is in TKT-338's diary), then retarget
+  this matrix entry to `[self-hosted, opencode-fork, linux, arm64]` the same way
+  `typecheck`/`unit (linux)` already are.
 - **e2e (`packages/app`'s Playwright regression suite):** first ran on either platform in
   TKT-336 (previously queued forever on blacksmith on both) and turned out to have ordinary,
   pre-existing E2E flakiness — a small number of timing-sensitive specs occasionally fail past

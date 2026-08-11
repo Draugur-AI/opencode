@@ -23,18 +23,26 @@ env:
 jobs:
   unit:
     name: unit (${{ matrix.settings.name }})
+    # Fork note (TKT-338): fork-PR guard, mandatory on every self-hosted job. A self-hosted
+    # runner executes whatever a triggering workflow says; on a PUBLIC repo, a pull_request
+    # event can originate from a fork with a head repo different from this one. Push events
+    # (dev) are internal by definition. This condition is what makes the runner safe BY
+    # CONSTRUCTION regardless of any repo/org Actions setting -- see FORK.md's CI section.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     strategy:
       fail-fast: false
       matrix:
         settings:
-          # Fork note (TKT-305, retargeting extended to the e2e job below in TKT-336):
-          # blacksmith-* runner labels require the Blacksmith GitHub App, which is not
-          # installed on Draugur-AI, so jobs targeting them queue forever on this fork.
-          # Retargeted to GitHub-hosted runners. See FORK.md.
+          # Fork note (TKT-305/336, superseded by TKT-338): blacksmith-* queued forever (no
+          # Blacksmith app on this org), so this was retargeted to GitHub-hosted ubuntu-latest.
+          # TKT-338 retargets linux again, this time to the fork's own self-hosted runner
+          # (opencode-fork-runner-1, linux/aarch64) to stop burning shared GH-hosted minutes --
+          # the full local gate already runs green on this exact host/arch. Windows has no
+          # self-hosted runner on this fork and is disabled here rather than left on
+          # GitHub-hosted alone (see FORK.md's known-issues); revisit when minutes reset or a
+          # windows runner exists.
           - name: linux
-            host: ubuntu-latest
-          - name: windows
-            host: windows-latest
+            host: [self-hosted, opencode-fork, linux, arm64]
     runs-on: ${{ matrix.settings.host }}
     defaults:
       run:
@@ -107,13 +115,18 @@ jobs:
       fail-fast: false
       matrix:
         settings:
-          # Fork note (TKT-336): was blacksmith-*, queued forever (no Blacksmith app on
-          # this org) and held its whole workflow run open, blocking rerun-failed-jobs for
-          # every job in the run, e2e included. Retargeted to GitHub-hosted. See FORK.md.
+          # Fork note (TKT-336, superseded by TKT-338): was blacksmith-*, queued forever (no
+          # Blacksmith app on this org). Retargeted to GitHub-hosted (ubuntu-latest). TKT-338
+          # tried moving linux to the fork's self-hosted runner alongside typecheck/unit, but
+          # `bunx playwright install-deps chromium` needs `sudo apt-get install` for 8 missing
+          # packages (xvfb + fonts) and this host's NOPASSWD sudo is scoped to docker/ctr only
+          # -- kept on GitHub-hosted instead. Unlock condition: those 8 packages installed on
+          # the runner host (one-time, operator; the exact command is in TKT-338's diary), then
+          # retarget this matrix entry the same way typecheck/unit already are. e2e is
+          # non-merge-gating (see "The merge gate" below) so it wasn't worth blocking #14 on.
+          # Windows stays disabled -- no self-hosted windows runner on this fork.
           - name: linux
             host: ubuntu-latest
-          - name: windows
-            host: windows-latest
     runs-on: ${{ matrix.settings.host }}
     env:
       PLAYWRIGHT_BROWSERS_PATH: ${{ github.workspace }}/.playwright-browsers
