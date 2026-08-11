@@ -115,6 +115,13 @@ been reconciled, not just what is currently outstanding.
 - **No automated review runs on fork PRs** (see "Does automated review run on fork PRs?" below —
   confirmed, with evidence, as of TKT-305). Say so explicitly in every PR and report — local
   per-package tests are the gate, and an absence of review comments is not evidence of a clean diff.
+- **LLM-generated source is checked like source, not trusted like data.** A `script/translate-app.ts`
+  batch (TKT-314) wrote a syntax error into one locale file out of 63 — a smart quote opened a
+  string, a plain ASCII quote closed it, breaking the literal — invisible on read, and it segfaulted
+  the test runner rather than failing cleanly. Before committing any batch of LLM-written or
+  LLM-translated files: a per-file syntax-only build check (e.g. `bun build <file> --outfile=/dev/null`
+  for each), a diff check that every changed line is a pure addition (a `-` line is a collateral edit,
+  not a translation), and the relevant parity/lint suite green — in that order, before the commit.
 
 ## Adding a new global `.node`? Check every assembly site that actually serves it.
 
