@@ -2,6 +2,7 @@ import { createMemo } from "solid-js"
 import type { Session } from "@opencode-ai/schema/session"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
+import * as SessionEntities from "@/context/session-entities"
 import { useSessionEntities } from "@/context/session-entities-provider"
 import { useTabs } from "@/context/tabs"
 import { createSessionLifecycleClient, lifecycleRequestID } from "@/utils/session-lifecycle-client"
@@ -22,9 +23,8 @@ export function createArchivedController() {
   const language = useLanguage()
 
   const records = createMemo(() => {
-    const prefix = `${server.key} `
-    return Object.entries(entities.state.entities)
-      .filter(([key, entity]) => key.startsWith(prefix) && entity.value?.lifecycle.state === "archived")
+    return SessionEntities.entitiesForServer(entities.state, server.key)
+      .filter(([, entity]) => entity.value?.lifecycle.state === "archived")
       .map(([, entity]) => entity.value as Session.Info)
       // `time.updated` is typed as the decoded `DateTimeUtcFromMillis` schema shape, but these
       // objects never actually go through the schema decoder (they arrive as raw client-next

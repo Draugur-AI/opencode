@@ -4,6 +4,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { DialogConfirmPurge } from "@/components/dialog-confirm-purge"
 import { useLanguage } from "@/context/language"
 import { useServer } from "@/context/server"
+import * as SessionEntities from "@/context/session-entities"
 import { useSessionEntities } from "@/context/session-entities-provider"
 import { useTabs } from "@/context/tabs"
 import { createSessionLifecycleClient, lifecycleRequestID } from "@/utils/session-lifecycle-client"
@@ -23,9 +24,8 @@ export function createTrashController() {
   const dialog = useDialog()
 
   const records = createMemo(() => {
-    const prefix = `${server.key} `
-    return Object.entries(entities.state.entities)
-      .filter(([key, entity]) => key.startsWith(prefix) && entity.value?.lifecycle.state === "trash")
+    return SessionEntities.entitiesForServer(entities.state, server.key)
+      .filter(([, entity]) => entity.value?.lifecycle.state === "trash")
       .map(([, entity]) => entity.value as Session.Info)
       .sort((a, b) => Number(b.time.updated) - Number(a.time.updated))
   })
