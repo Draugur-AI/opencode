@@ -108,6 +108,13 @@ export function createHomeProjectsController(home: HomeController) {
         })
       },
       close: (conn: ServerConnection.Any, directory: string) => {
+        // Closing is a soft hide, never a delete: mirror it to the server-side preference so it
+        // stays hidden across browsers/devices, not just this one's local project list. Mirrors
+        // pages/layout.tsx's closeProject, which covers the in-session sidebar -- this is the
+        // separate home-page project list's own close path.
+        const projectID = home.server.context(conn).projects.list().find((p) => p.worktree === directory)?.id
+        if (projectID) void home.server.context(conn).sync.project.preference.write({ projectID, hidden: true })
+
         const next = closeHomeProject(
           home.selection.value(),
           ServerConnection.key(conn),
