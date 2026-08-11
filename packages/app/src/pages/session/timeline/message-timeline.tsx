@@ -70,7 +70,6 @@ import { useTabs } from "@/context/tabs"
 import { legacySessionHref, requireServerKey, sessionHref } from "@/utils/session-route"
 import { useSDK } from "@/context/sdk"
 import { useSync } from "@/context/sync"
-import { notifySessionTabsRemoved } from "@/components/titlebar-session-events"
 import { sessionTitle } from "@/utils/session-title"
 import { scheduleConnectedMeasure } from "./measure"
 import { observeElementOffsetReconnectAware } from "./observe-element-offset"
@@ -852,7 +851,6 @@ export function MessageTimeline(props: {
         )
         sync().session.evict(sessionID)
         navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
-        notifySessionTabsRemoved({ directory: sdk().directory, sessionIDs: [sessionID] })
       })
       .catch((err) => {
         showToast({
@@ -922,7 +920,6 @@ export function MessageTimeline(props: {
     for (const id of removed) {
       sync().session.evict(id)
     }
-    notifySessionTabsRemoved({ directory: sdk().directory, sessionIDs: [...removed] })
     return true
   }
 

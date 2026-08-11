@@ -20,7 +20,6 @@ import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { pathKey } from "@/utils/path-key"
 import { showToast } from "@/utils/toast"
 import { Binary } from "@opencode-ai/core/util/binary"
-import { archiveHomeSession } from "../home-session-archive"
 import { useSessionEntities } from "@/context/session-entities-provider"
 import type { HomeController } from "./home-controller"
 
@@ -219,32 +218,28 @@ export function createHomeSessionsController(home: HomeController) {
         if (!conn || !ctx) return
         const [, setStore] = ctx.sync.child(session.directory)
         if ((await ctx.sdk.protocol) !== "v1") return
-        await archiveHomeSession({
-          server: ServerConnection.key(conn),
-          session,
-          archive: (sessionID) =>
-            ctx.sdk.client.session.update({
-              sessionID,
-              directory: session.directory,
-              time: { archived: Date.now() },
-            }),
+        try {
+          await ctx.sdk.client.session.update({
+            sessionID: session.id,
+            directory: session.directory,
+            time: { archived: Date.now() },
+          })
           // The row leaves the list because the entity store says so, not because this call
           // returned 200. `archive_pending` is an OPTIMISTIC status, deliberately not a
           // fabricated `archived` lifecycle: the authoritative state arrives from the server and
           // replaces it, and a failure rolls the pending back in one place.
-          remove: () =>
-            entities.dispatch({
-              type: "pending",
-              serverKey: home.selection.value().server,
-              sessionID: session.id,
-              intent: "archive",
-            }),
-          onError: (cause) =>
-            showToast({
-              title: language.t("common.requestFailed"),
-              description: errorMessage(cause, language.t("common.requestFailed")),
-            }),
-        })
+          entities.dispatch({
+            type: "pending",
+            serverKey: home.selection.value().server,
+            sessionID: session.id,
+            intent: "archive",
+          })
+        } catch (cause) {
+          showToast({
+            title: language.t("common.requestFailed"),
+            description: errorMessage(cause, language.t("common.requestFailed")),
+          })
+        }
       },
     },
     tab: {

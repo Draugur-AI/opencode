@@ -1,13 +1,14 @@
 /**
  * The one client-side truth about a session's existence and lifecycle.
  *
- * The app currently holds three: a sorted array merged by ID in `global-sync/bootstrap.ts`, tab
+ * The app used to hold three: a sorted array merged by ID in `global-sync/bootstrap.ts`, tab
  * references validated against known *servers* rather than known *sessions* in `tabs.tsx`, and a
- * browser-only `opencode:session-tabs-removed` custom event dispatched on archive. Race conditions
- * between them are not surprising, they are structural — an archived session can flash back on an
- * SSE race, and a delete can leave the sidebar stale until refresh.
+ * browser-only `opencode:session-tabs-removed` custom event dispatched on archive (deleted once
+ * every consumer read this store instead — see `tabs.tsx`'s `reconcile()`). Race conditions
+ * between three truths were not surprising, they were structural — an archived session could
+ * flash back on an SSE race, and a delete could leave the sidebar stale until refresh.
  *
- * This module is the reducer those three collapse into. It is deliberately free of Solid, of the
+ * This module is the reducer those three collapsed into. It is deliberately free of Solid, of the
  * DOM, and of any transport: it is a pure function over (state, message) so that a property test
  * can drive it through generated deliveries — duplicated, reordered, delayed, gapped — without a
  * browser. The Solid store wrapper lives beside it; the rules live here.

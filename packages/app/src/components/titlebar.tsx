@@ -29,9 +29,7 @@ import { useSettings } from "@/context/settings"
 import { WindowsAppMenu } from "./windows-app-menu"
 import { applyPath, backPath, forwardPath } from "./titlebar-history"
 import { TitlebarTabStrip } from "@/components/titlebar-tab-strip"
-import { makeEventListener } from "@solid-primitives/event-listener"
 import { createMediaQuery } from "@solid-primitives/media"
-import { readSessionTabsRemovedDetail, SESSION_TABS_REMOVED_EVENT } from "@/components/titlebar-session-events"
 import { useGlobal } from "@/context/global"
 import { ServerConnection, useServer } from "@/context/server"
 import { tabKey, useTabs } from "@/context/tabs"
@@ -253,12 +251,6 @@ export function Titlebar(props: { update?: TitlebarUpdate; debugTools?: { visibl
                 const next = { server: route.server ?? server.key, sessionId }
                 tabsStoreActions.addSessionTab(next)
               }
-            })
-
-            makeEventListener(window, SESSION_TABS_REMOVED_EVENT, (event) => {
-              const detail = readSessionTabsRemovedDetail(event)
-              if (!detail) return
-              tabsStoreActions.removeSessions(detail)
             })
 
             const openNewTab = () => {

@@ -30,9 +30,9 @@ import { useTabs } from "./tabs"
  *   its whole set, never once per session inside it -- that per-tab bounce (closing several
  *   sessions used to route through each intermediate tab) is the bug this replaces. A live
  *   `session`/`purged` dispatch (one event, one session) also calls `reconcile` once right
- *   after -- that IS one batch of one, the same shape, and it is what makes archiving a session
+ *   after -- that IS one batch of one, the same shape, and it is what let archiving a session
  *   from anywhere still close its own tab immediately once the five old dispatch sites
- *   (titlebar-session-events.ts and friends) are deleted, rather than only on the next
+ *   (titlebar-session-events.ts and friends) were deleted, rather than only on the next
  *   reconnect. Not a live-vs-snapshot distinction; a one-navigation-per-event invariant that
  *   both paths satisfy.
  */
