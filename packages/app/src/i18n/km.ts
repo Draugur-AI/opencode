@@ -1154,4 +1154,12 @@ export const dict = {
   "workspace.reset.archived.many": "សម័យ {{count}} នឹងត្រូវបានទុកក្នុងប័ណ្ណសារ។",
   "workspace.reset.note": "វានឹងកំណត់កន្លែងធ្វើការឡើងវិញដើម្បីផ្គូផ្គងសាខាលំនាំដើម។",
   "dialog.usageExceeded.dontShowAgain": "កុំបង្ហាញម្តងទៀត",
+  "archived.title": "បណ្ណសារ",
+  "archived.empty": "គ្មានសម័យដែលបានទុកក្នុងប័ណ្ណសារទេ។",
+  "trash.title": "ធុងសំរាម",
+  "trash.empty": "ធុងសំរាមទទេ",
+  "trash.deletePermanently": "លុបជាអចិន្ត្រៃយ៍",
+  "trash.deleteConfirm.title": "លុបជាអចិន្ត្រៃយ៍?",
+  "trash.deleteConfirm.description": "ប្រតិបត្តិការនេះនឹងលុប \"{{title}}\" និងប្រតិចារឹក ព្រឹត្តិការណ៍ គោលដៅ បញ្ជី និងឯកសារតាមដានដែលកាន់កាប់របស់វាដោយថាអចិន្ត្រៃយ៍។ វាមិនអាចត្រឡប់វិញបានទេ។",
+  "common.restore": "ស្តារឡើងវិញ",
 }

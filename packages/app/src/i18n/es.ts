@@ -883,6 +883,16 @@ export const dict = {
   "common.reset": "Restablecer",
   "common.archive": "Archivar",
   "common.delete": "Eliminar",
+  "common.restore": "Restaurar",
+
+  "archived.title": "Archivadas",
+  "archived.empty": "No hay sesiones archivadas",
+
+  "trash.title": "Papelera",
+  "trash.empty": "La papelera está vacía",
+  "trash.deletePermanently": "Eliminar permanentemente",
+  "trash.deleteConfirm.title": "¿Eliminar permanentemente?",
+  "trash.deleteConfirm.description": "Esto eliminará permanentemente a \"{{title}}\" y su transcripción, eventos, objetivos, libro mayor y registros de monitor. Esta acción no se puede deshacer.",
   "common.close": "Cerrar",
   "common.edit": "Editar",
   "common.loadMore": "Cargar más",

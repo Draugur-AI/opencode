@@ -1165,4 +1165,12 @@ export const dict = {
   "workspace.reset.archived.many": "Tiks arhivētas {{count}} sesijas.",
   "workspace.reset.note": "Darbvieta tiks atiestatīta uz noklusējuma zara stāvokli.",
   "dialog.usageExceeded.dontShowAgain": "Vairs nerādīt",
+  "archived.title": "Arhivētas",
+  "archived.empty": "Nav arhivētu sesiju",
+  "trash.title": "Izmests",
+  "trash.empty": "Izmētās konteiners ir tukšs",
+  "trash.deletePermanently": "Dzēst neatgriezeniski",
+  "trash.deleteConfirm.title": "Dzēst neatgriezeniski?",
+  "trash.deleteConfirm.description": "Tas neatgriezeniski dzēsīs \"{{title}}\" un tiesaistījumu, notikumus, mērķus, grāmatu un pārraudzības ierakstus. Šo darbību nevar atsaukt.",
+  "common.restore": "Atjaunot",
 }

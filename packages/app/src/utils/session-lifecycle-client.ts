@@ -1,22 +1,33 @@
 /**
- * The ONLY place the app talks to the current-generation client.
+ * Where the app talks to the current-generation client for SESSION LIFECYCLE, and nothing else.
  *
  * `@opencode-ai/client` (used everywhere else in this app) is a vendored snapshot generated before
- * session lifecycle existed — it has no restore, trash, restoreFromTrash or purge, because those
- * routes did not exist when it was packed. `@opencode-ai/client-next` aliases the workspace client,
- * which is regenerated from the live protocol.
+ * session lifecycle existed — it has no restore, trash, restoreFromTrash, purge, lifecycle-aware
+ * list, or get, because those routes did not exist when it was packed. `@opencode-ai/client-next`
+ * aliases the workspace client, which is regenerated from the live protocol.
  *
- * 🛑 This file is deliberately the whole surface of that alias. Nothing else may import
- * `@opencode-ai/client-next`: two client generations in one app is a wart we are carrying on
- * purpose and for a bounded time, not a pattern to spread. TKT-328 migrates every call site onto
- * one client and deletes both the alias and this module. See FORK.md's divergence ledger.
+ * 🛑 This file is one of exactly TWO bounded importers of `@opencode-ai/client-next` — the other
+ * is `project-client.ts`, its sibling for the project surface. Each owns its own verbs and neither
+ * edits the other; nothing else may import the alias at all. Two client generations in one app is
+ * a wart we carry on purpose and for a bounded time, not a pattern to spread. TKT-328 migrates
+ * every call site onto one client and deletes the alias and both modules. See FORK.md's ledger.
+ *
+ * The sibling exists so two agents can work the two surfaces without touching one file. If you are
+ * adding a third importer, that is the signal to finish TKT-328 instead.
  *
  * Archive is NOT here. It still goes through the V1 route the app already uses, which the slice-1
  * server-side adapter now drives into the same lifecycle service — so archive already produces the
  * same durable result without a second client.
+ *
+ * Six calls, nothing else: four lifecycle mutations (restore, trash, restoreFromTrash, purge) plus
+ * list and get (TKT-314) — the lifecycle-aware snapshot feed for the normalized session-entities
+ * store needs `lifecycle: "all"`, which the vendored client's list endpoint does not support at
+ * all. Widening this file's own verb count instead of opening a third importer keeps the
+ * one-file-per-surface discipline intact.
  */
 
 import { OpenCode } from "@opencode-ai/client-next"
+import type { SessionsListOutput, SessionsGetOutput } from "@opencode-ai/client-next"
 import type { ServerConnection } from "@/context/server"
 import { authTokenFromCredentials } from "@/utils/server"
 
@@ -66,6 +77,24 @@ export const createSessionLifecycleClient = (http: ServerConnection.HttpBase) =>
      */
     purge: (input: { readonly sessionID: string; readonly requestID: string }) =>
       client.sessions.purge({ ...input, confirmation: input.sessionID }),
+    /**
+     * Index-summary shape (id/lifecycle/title/tokens/time — no messages), same fields
+     * `home-session-index.ts` fetches for its own list, just lifecycle-aware. Used for the
+     * session-entities feed's snapshot, never for a full transcript.
+     */
+    list: (input: {
+      readonly lifecycle?: "active" | "archived" | "trash" | "all"
+      readonly limit?: number
+      readonly order?: "asc" | "desc"
+      readonly cursor?: string
+      // Explicit return type: tsgo does not reliably carry the `{data, cursor}` wrapper through
+      // this generated client's generic `request<T>()` chain without help.
+    }): Promise<SessionsListOutput> => client.sessions.list(input),
+    /** One session's current lifecycle, for the `session.next.lifecycle.changed` re-fetch path
+     * — that event carries `from`/`to` but no revision and no full session, so this is what
+     * turns it into a dispatchable snapshot instead of a guess. Same explicit-return-type note
+     * as `list` above. */
+    get: (input: { readonly sessionID: string }): Promise<SessionsGetOutput> => client.sessions.get(input),
   }
 }
 

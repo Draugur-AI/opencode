@@ -745,6 +745,15 @@ export const dict = {
   "home.sessions.group.older": "ก่อนหน้านี้",
   "home.providerTip": "เชื่อมต่อกับผู้ให้บริการกว่า 75 รายเพื่อใช้โมเดลอื่น ๆ รวมถึง Claude, GPT, Gemini และอีกมากมาย",
 
+  "archived.title": "ที่จัดเก็บ",
+  "archived.empty": "ไม่มีเซสชันที่จัดเก็บ",
+  "trash.title": "ขยะ",
+  "trash.empty": "ถังขยะว่างเปล่า",
+  "trash.deletePermanently": "ลบถาวร",
+  "trash.deleteConfirm.title": "ลบถาวร?",
+  "trash.deleteConfirm.description": "การดำเนินการนี้จะลบ \"{{title}}\"และบันทึกข้อมูล ข้อกิจกรรม เป้าหมาย บัญชีรายการ และการบันทึกการตรวจสอบที่ครอบครองไว้อย่างถาวร ไม่สามารถยกเลิกได้",
+  "common.restore": "เรียกคืน",
+
   "session.tab.session": "เซสชัน",
   "session.tab.review": "ตรวจสอบ",
   "session.tab.context": "บริบท",

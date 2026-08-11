@@ -3,6 +3,29 @@ import type { Page, Route } from "@playwright/test"
 const emptyList = new Set(["/skill", "/command", "/lsp", "/formatter", "/vcs/status", "/vcs/diff"])
 const emptyObject = new Set(["/global/config", "/config", "/provider/auth", "/mcp", "/experimental/resource"])
 
+/** Mirrors `packages/core/src/session/lifecycle.ts`'s `TRANSITIONS` table exactly -- a mock that
+ * accepts an illegal transition would let a state-gate journey pass against behavior the real
+ * server rejects. `purged` is absent for the same reason it is absent there: it removes the row. */
+const LIFECYCLE_TRANSITIONS: Record<string, readonly string[]> = {
+  active: ["archived", "trash"],
+  archived: ["active", "trash"],
+  trash: ["active", "archived"],
+}
+
+/** `packages/core/src/session/lifecycle.ts`'s `TrashGraceMillis`. */
+const TRASH_GRACE_MILLIS = 30 * 24 * 60 * 60 * 1000
+
+type LifecycleValue =
+  | { state: "active" }
+  | { state: "archived"; at: number }
+  | { state: "trash"; at: number; purgeAfter: number }
+
+const lifecycleOf = (session: Record<string, unknown>): LifecycleValue =>
+  (session.lifecycle as LifecycleValue | undefined) ?? { state: "active" }
+
+const revisionOf = (session: Record<string, unknown>): number =>
+  typeof session.lifecycleRevision === "number" ? session.lifecycleRevision : 0
+
 export interface MockServerConfig {
   protocol?: "v1" | "v2"
   provider: unknown | (() => unknown)
@@ -202,9 +225,14 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       const parentID = url.searchParams.get("parentID")
       const limit = Number(url.searchParams.get("limit") ?? 50)
       const offset = Number(url.searchParams.get("cursor") ?? 0)
+      // `lifecycle` cursor param (packages/protocol/src/groups/session.ts, `SessionsCursor`):
+      // "active" is also the default when the caller omits it, matching `session.list`'s server
+      // behavior of not surfacing archived/trashed rows unless asked for.
+      const lifecycle = url.searchParams.get("lifecycle") ?? "active"
       const sessions = config.sessions
         .filter((session) => !directory || session.directory === directory)
         .filter((session) => parentID !== "null" || session.parentID === undefined)
+        .filter((session) => lifecycle === "all" || lifecycleOf(session).state === lifecycle)
         .filter((session) => {
           const search = url.searchParams.get("search")?.toLowerCase()
           return (
@@ -248,13 +276,102 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       return json(route, true)
     }
     if (
-      /^\/api\/session\/[^/]+\/(archive|rename|interrupt|revert\/clear|revert\/commit)$/.test(path) &&
+      /^\/api\/session\/[^/]+\/(rename|interrupt|revert\/clear|revert\/commit)$/.test(path) &&
       route.request().method() === "POST"
     ) {
       return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } })
     }
     if (/^\/api\/session\/[^/]+$/.test(path) && route.request().method() === "DELETE") {
       return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } })
+    }
+
+    // The four reversible lifecycle verbs -- named for the handler comment that groups them the
+    // same way (packages/server/src/handlers/session.ts's `lifecycle()` wrapper).
+    const lifecycleMutationMatch = path.match(/^\/api\/session\/([^/]+)\/(archive|restore|trash|restore-from-trash)$/)
+    if (lifecycleMutationMatch && route.request().method() === "POST") {
+      const sessionID = lifecycleMutationMatch[1]!
+      const verb = lifecycleMutationMatch[2]!
+      const session = config.sessions.find((item) => item.id === sessionID)
+      if (!session) return json(route, { sessionID, message: `Session not found: ${sessionID}` }, undefined, 404)
+
+      const to = verb === "trash" ? "trash" : verb === "archive" ? "archived" : "active"
+      const from = lifecycleOf(session).state
+      const revision = revisionOf(session)
+      const body = (route.request().postDataJSON() ?? {}) as {
+        requestID?: string
+        expectedLifecycleRevision?: number
+      }
+
+      // packages/core/src/session/lifecycle.ts `project()`'s compare-and-set: a caller-supplied
+      // revision that no longer matches the row loses to SessionLifecycleConflictError (409),
+      // carrying the revision the row actually holds rather than overwriting past it.
+      if (body.expectedLifecycleRevision !== undefined && body.expectedLifecycleRevision !== revision) {
+        return json(
+          route,
+          { sessionID, lifecycleRevision: revision, message: `Session lifecycle moved to revision ${revision}` },
+          undefined,
+          409,
+        )
+      }
+
+      // packages/core/src/session/lifecycle.ts `TRANSITIONS`: SessionLifecycleTransitionError (409).
+      if (!LIFECYCLE_TRANSITIONS[from]?.includes(to)) {
+        return json(route, { sessionID, from, to, message: `Session cannot move from ${from} to ${to}` }, undefined, 409)
+      }
+
+      const now = Date.now()
+      session.lifecycle =
+        to === "active"
+          ? { state: "active" }
+          : to === "archived"
+            ? { state: "archived", at: now }
+            : { state: "trash", at: now, purgeAfter: now + TRASH_GRACE_MILLIS }
+      session.lifecycleRevision = revision + 1
+      // packages/core/src/session/lifecycle.ts `toRow()`: `time_archived` is the V1-compatibility
+      // mirror of "is archived", set exactly on entry to `archived` and cleared on every other
+      // transition -- a stale `time.archived` here would fool `server-session.ts`'s V1-shaped
+      // `session.updated` listener (reads `info.time.archived`) into treating a restored or
+      // trashed session as still archived.
+      const previousTime = session.time as Record<string, unknown> | undefined
+      session.time = { ...previousTime, updated: now, archived: to === "archived" ? now : undefined }
+      return json(route, { data: currentSession(session, config.directory) })
+    }
+
+    const purgeMatch = path.match(/^\/api\/session\/([^/]+)\/purge$/)
+    if (purgeMatch && route.request().method() === "POST") {
+      const sessionID = purgeMatch[1]!
+      const index = config.sessions.findIndex((item) => item.id === sessionID)
+      if (index === -1) return json(route, { sessionID, message: `Session not found: ${sessionID}` }, undefined, 404)
+      const session = config.sessions[index]!
+      const body = (route.request().postDataJSON() ?? {}) as { requestID?: string; confirmation?: string }
+      // packages/server/src/handlers/session.ts purge handler: the confirmation must echo the
+      // session ID back, or InvalidRequestError (400) -- this is what stops a fat-fingered call
+      // from destroying the wrong session.
+      if (body.confirmation !== sessionID) {
+        return json(
+          route,
+          {
+            message: "Permanent deletion requires the session ID echoed back as confirmation.",
+            field: "confirmation",
+            kind: sessionID,
+          },
+          undefined,
+          400,
+        )
+      }
+      const revision = revisionOf(session)
+      config.sessions.splice(index, 1)
+      // packages/schema/src/session-lifecycle.ts `Tombstone` / generated `SessionsPurgeOutput` --
+      // no transcript content, just enough for a client to tell "purged" apart from "not fetched
+      // yet" for the retention window.
+      return json(route, {
+        data: {
+          id: sessionID,
+          projectID: (session.projectID as string | undefined) ?? "project",
+          purgedAt: Date.now(),
+          lastLifecycleRevision: revision,
+        },
+      })
     }
     if (path in staticRoutes) return json(route, staticRoutes[path])
 
@@ -369,6 +486,10 @@ export function currentSession(session: { id: string } & Record<string, unknown>
         ? { archived: session.time.archived }
         : {}),
     },
+    // `Session.Info.lifecycle`/`lifecycleRevision` (packages/schema/src/session-lifecycle.ts) --
+    // absent on a config-authored session means "never mutated", same as a fresh row there.
+    lifecycle: lifecycleOf(session),
+    lifecycleRevision: revisionOf(session),
     title: session.title ?? session.id,
     location: {
       directory: typeof session.directory === "string" ? session.directory : fallbackDirectory,

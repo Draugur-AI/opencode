@@ -1226,4 +1226,12 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "建立持續性專案圖示失敗",
   "error.childStore.storeCreateFailed": "建立儲存區失敗",
   "terminal.connectionLost.abnormalClose": "WebSocket 異常關閉：{{code}}",
+  "archived.title": "已封存",
+  "archived.empty": "沒有已封存的工作階段",
+  "trash.title": "垃圾桶",
+  "trash.empty": "垃圾桶為空",
+  "trash.deletePermanently": "永久刪除",
+  "trash.deleteConfirm.title": "永久刪除？",
+  "trash.deleteConfirm.description": "這將永久刪除「{{title}}」及其記錄、事件、目標、帳單和owned monitor 記錄。此操作無法復原。",
+  "common.restore": "還原",
 } satisfies Partial<Record<Keys, string>>

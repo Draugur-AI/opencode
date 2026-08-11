@@ -671,6 +671,17 @@ export const dict = {
   "home.sessions.group.older": "Older",
   "home.providerTip": "Connect to 75+ providers to use other models, including Claude, GPT, Gemini, etc",
 
+  "archived.title": "Archived",
+  "archived.empty": "No archived sessions",
+  "trash.title": "Trash",
+  "trash.empty": "Trash is empty",
+  "trash.deletePermanently": "Delete permanently",
+  "trash.deleteConfirm.title": "Delete permanently?",
+  // Deliberately uncompressed and not squeezed against a shared key -- Ethan's ruling on the
+  // i18n boundary: the purge confirmation is the one place translation quality is a safety
+  // property, not polish, and it must name what it deletes.
+  "trash.deleteConfirm.description": "This permanently deletes \"{{title}}\" and its transcript, events, goals, ledger, and owned monitor records. This cannot be undone.",
+
   "session.tab.session": "Session",
   "session.tab.review": "Review",
   "session.tab.context": "Context",
@@ -821,6 +832,7 @@ export const dict = {
   "common.reset": "Reset",
   "common.archive": "Archive",
   "common.delete": "Delete",
+  "common.restore": "Restore",
   "common.close": "Close",
   "common.edit": "Edit",
   "common.loadMore": "Load more",

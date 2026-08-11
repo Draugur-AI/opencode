@@ -855,6 +855,7 @@ export const dict = {
   "common.reset": "रीसेट करें",
   "common.archive": "संग्रहित करें",
   "common.delete": "हटाएँ",
+  "common.restore": "पुनर्स्थापित करें",
   "common.close": "बंद करें",
   "common.edit": "संपादित करें",
   "common.loadMore": "और लोड करें",
@@ -1166,4 +1167,12 @@ export const dict = {
   "workspace.reset.archived.one": "1 सेशन संग्रहित किया जाएगा।",
   "workspace.reset.archived.many": "{{count}} सेशन संग्रहित किए जाएँगे।",
   "workspace.reset.note": "यह डिफ़ॉल्ट शाखा से मिलान करने के लिए वर्कस्पेस को रीसेट कर देगा।",
+
+  "archived.title": "संग्रहित",
+  "archived.empty": "कोई संग्रहित सेशन नहीं",
+  "trash.title": "अपशिष्ट",
+  "trash.empty": "अपशिष्ट खाली है",
+  "trash.deletePermanently": "स्थायी रूप से हटाएं",
+  "trash.deleteConfirm.title": "स्थायी रूप से हटाएं?",
+  "trash.deleteConfirm.description": "यह स्थायी रूप से \"{{title}}\" और इसकी ट्रांस्क्रिप्ट, इवेंट्स, गोल, ledger, और owned monitor records को हटा देगा। इसे पूर्ववत नहीं किया जा सकता।",
 }
