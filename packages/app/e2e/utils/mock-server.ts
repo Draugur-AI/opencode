@@ -33,6 +33,9 @@ export interface MockServerConfig {
 export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
   const cursors = new Map<string, string>()
   let nextCursor = 0
+  const preferences = new Map<string, { projectID: string; favorite: boolean; hidden: boolean; revision: number }>()
+  const preferenceFor = (projectID: string) =>
+    preferences.get(projectID) ?? { projectID, favorite: false, hidden: false, revision: 0 }
   const staticRoutes: Record<string, unknown> = {
     "/path": {
       state: config.directory,
@@ -149,9 +152,21 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       config.onConnectKey?.({ integrationID: integrationConnect, body: route.request().postDataJSON() })
       return route.fulfill({ status: 204, headers: { "access-control-allow-origin": "*" } })
     }
-    if (path === "/api/project") return json(route, [config.project])
+    if (path === "/api/project") return json(route, { data: [config.project] })
     if (path === "/api/project/current")
       return json(route, { id: (config.project as { id?: string }).id, directory: config.directory })
+    const preferenceMatch = path.match(/^\/api\/project\/([^/]+)\/preference$/)
+    if (preferenceMatch) {
+      const projectID = preferenceMatch[1]
+      if (route.request().method() === "GET") return json(route, { data: preferenceFor(projectID) })
+      if (route.request().method() === "PATCH") {
+        const current = preferenceFor(projectID)
+        const patch = route.request().postDataJSON() as Partial<typeof current> & { expectedRevision?: number }
+        const next = { ...current, ...patch, revision: current.revision + 1 }
+        preferences.set(projectID, next)
+        return json(route, { data: next })
+      }
+    }
     if (path.startsWith("/api/project/") && route.request().method() === "PATCH") return json(route, config.project)
     if (path === "/api/path")
       return json(route, {
