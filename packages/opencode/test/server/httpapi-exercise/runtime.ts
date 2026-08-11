@@ -22,7 +22,15 @@ export function runtime() {
     const publicApi = await import("../../../src/server/routes/instance/httpapi/public")
     const httpApiServer = await import("../../../src/server/routes/instance/httpapi/server")
     const appRuntime = await import("../../../src/effect/app-runtime")
-    const { Layer } = await import("effect")
+    // TKT-349: the SAME shared MemoMap production's own server assembly uses (app-runtime.ts
+    // already imports this exact singleton), not a fresh one. Two AppNodeBuilderV1.build(...)
+    // calls in the same server.ts pipe (SessionV2.node's own build, and app's) each independently
+    // walk their tree and construct global-node layers -- without a SHARED MemoMap those two
+    // constructions never dedupe, silently splitting a process-singleton (like
+    // SessionExecutionLocal's coordinator) into two live instances. A fresh
+    // Layer.makeMemoMapUnsafe() here reproduced exactly that split; nothing else does, because
+    // production never builds without the shared one.
+    const { memoMap: sharedMemoMap } = await import("@opencode-ai/core/effect/memo-map")
     const instanceRef = await import("../../../src/effect/instance-ref")
     const instanceStore = await import("../../../src/project/instance-store")
     const session = await import("../../../src/session/session")
@@ -36,7 +44,7 @@ export function runtime() {
       PublicApi: publicApi.PublicApi,
       HttpApiApp: httpApiServer.HttpApiApp,
       AppLayer: appRuntime.AppLayer,
-      memoMap: Layer.makeMemoMapUnsafe(),
+      memoMap: sharedMemoMap,
       InstanceRef: instanceRef.InstanceRef,
       InstanceStore: instanceStore.InstanceStore,
       Session: session.Session,

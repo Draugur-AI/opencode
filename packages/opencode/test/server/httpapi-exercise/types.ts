@@ -65,6 +65,10 @@ export type ScenarioContext = {
   sessionLifecycle: (
     sessionID: SessionID,
   ) => Effect.Effect<{ readonly state: string; readonly revision: number } | undefined>
+  /** Whether a session_tombstone row exists for this ID -- the durable evidence that a session
+   * went through the crash-safe purge transaction rather than a raw row delete, which leaves no
+   * tombstone at all. */
+  sessionTombstone: (sessionID: SessionID) => Effect.Effect<boolean>
   project: () => Effect.Effect<Project.Info>
   message: (sessionID: SessionID, input?: { text?: string }) => Effect.Effect<MessageSeed>
   messages: (sessionID: SessionID) => Effect.Effect<SessionV1.WithParts[]>

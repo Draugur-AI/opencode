@@ -62,6 +62,8 @@ import { shouldMarkBoundaryGesture, normalizeWheelDelta } from "@/pages/session/
 import { SessionContextUsage } from "@/components/session-context-usage"
 import { useDialog } from "@opencode-ai/ui/context/dialog"
 import { useLanguage } from "@/context/language"
+import { useServer } from "@/context/server"
+import { createSessionLifecycleClient, lifecycleRequestID } from "@/utils/session-lifecycle-client"
 import { useSessionKey } from "@/pages/session/session-layout"
 import { useServerSDK } from "@/context/server-sdk"
 import { usePlatform } from "@/context/platform"
@@ -260,6 +262,7 @@ export function MessageTimeline(props: {
   const navigate = useNavigate()
   const serverSDK = useServerSDK()
   const sdk = useSDK()
+  const server = useServer()
   const sync = useSync()
   const settings = useSettings()
   const tabs = useTabs()
@@ -860,16 +863,23 @@ export function MessageTimeline(props: {
       })
   }
 
+  // "Delete..." moves the session to trash -- recoverable with a grace period, same lifecycle
+  // transition the Trash view's restore/purge actions operate on (see trash-controller.tsx).
+  // Not the CLI/ACP "remove" verb, which is a permanent delete; trash does not cascade to
+  // children, so unlike a permanent delete this only touches the one session.
   const deleteSession = async (sessionID: string) => {
     const session = sync().session.get(sessionID)
     if (!session) return false
+    const conn = server.current
+    if (!conn || conn.type !== "http") return false
 
     const sessions = (sync().data.session ?? []).filter((s) => !s.parentID && !s.time?.archived)
     const index = sessions.findIndex((s) => s.id === sessionID)
     const nextSession = index === -1 ? undefined : (sessions[index + 1] ?? sessions[index - 1])
 
-    const result = await sdk()
-      .api.session.remove({ sessionID })
+    const client = createSessionLifecycleClient(conn.http)
+    const result = await client
+      .trash({ sessionID, requestID: lifecycleRequestID() })
       .then(() => true)
       .catch((err) => {
         showToast({
@@ -881,45 +891,15 @@ export function MessageTimeline(props: {
 
     if (!result) return false
 
-    const removed = new Set<string>([sessionID])
-    const byParent = new Map<string, string[]>()
-    for (const item of sync().data.session) {
-      const parentID = item.parentID
-      if (!parentID) continue
-      const existing = byParent.get(parentID)
-      if (existing) {
-        existing.push(item.id)
-        continue
-      }
-      byParent.set(parentID, [item.id])
-    }
-
-    const stack = [sessionID]
-    while (stack.length) {
-      const parentID = stack.pop()
-      if (!parentID) continue
-
-      const children = byParent.get(parentID)
-      if (!children) continue
-
-      for (const child of children) {
-        if (removed.has(child)) continue
-        removed.add(child)
-        stack.push(child)
-      }
-    }
-
     navigateAfterSessionRemoval(sessionID, session.parentID, nextSession?.id)
 
     sync().set(
       produce((draft) => {
-        draft.session = draft.session.filter((s) => !removed.has(s.id))
+        const index = draft.session.findIndex((s) => s.id === sessionID)
+        if (index !== -1) draft.session.splice(index, 1)
       }),
     )
-
-    for (const id of removed) {
-      sync().session.evict(id)
-    }
+    sync().session.evict(sessionID)
     return true
   }
 

@@ -59,6 +59,7 @@ retires it without reading every PR.
 | Normalized app session entities + tab reconciliation: `session-entities.ts` reducer keyed by (server scope, session ID), `SessionEntitiesProvider`, and `TabsProvider.reconcile()` ([#11](https://github.com/Draugur-AI/opencode/pull/11)) | Upstream keeps three independent session truths in the browser — a sorted array merged by ID in `global-sync/bootstrap.ts`, tab references validated against known *servers* rather than known *sessions*, and a browser-only `opencode:session-tabs-removed` custom event. Races between them are structural, not incidental: an archived session can flash back on an SSE race. Design post, "Fix session lifecycle before session chrome" | not yet filed | none — client-side projection only; types are imported from `@opencode-ai/schema`, the package the generated client is produced from | none | **upstream** — the client half of the lifecycle domain, proposed back with it |
 | Temporary `@opencode-ai/client-next` alias in `packages/app`, reaching the workspace client for **six** session-lifecycle calls: four mutations (`restore`, `trash`, `restoreFromTrash`, `purge`) plus `list` (lifecycle-aware, index-summary shape) and `get` (TKT-314, session-entities feed) ([#11](https://github.com/Draugur-AI/opencode/pull/11)) | `packages/app` pins `@opencode-ai/client` to a vendored tarball generated before session lifecycle existed, so those routes are absent from it — including a lifecycle-filterable list, which the normalized entity store's snapshot feed needs (`lifecycle: "all"`) and the vendored client cannot express at all. Archive is deliberately NOT on the alias: it still goes through the V1 route, which the slice-1 server adapter drives into the same lifecycle service. Migrating the app off the vendored client is 42 files and its own ticket | n/a — fork-only packaging workaround | none | none | **remove** — deleted together with the vendored tarball by **TKT-328** (app + session-ui onto one client, amended to cover both importers below). Bounded by construction: `packages/app/src/utils/session-lifecycle-client.ts` is this alias's only importer for session-lifecycle calls and says so in its header — see the next row for the project-calls sibling, added by ruling rather than by drift. Two importers total, neither accretes further |
 | Second `@opencode-ai/client-next` importer, `packages/app/src/utils/project-client.ts`, reaching the workspace client for **five** project calls (`list`, `get`, `updateMetadata`, preference `read`, preference `write`) (TKT-315) | Same vendored-tarball gap as the row above, for project data instead of session lifecycle: the vendored client predates PR #8's project/preference endpoints entirely, so TKT-315's app half (favorites that persist server-side — the entire point of "two browsers converge on the same favorites") cannot be built against it. Ruled rather than assumed: extending `session-lifecycle-client.ts` itself was rejected because that file is Henry's, under active use by his views work, and editing it mid-flight would manufacture the exact collision the one-importer discipline exists to prevent. A second, equally narrow, equally bounded file was the correct shape instead of either widening the first file or blocking the ticket on a vendored client with no preference support at all | n/a — fork-only packaging workaround | none | none | **remove** — deleted together with the vendored tarball and the row above by **TKT-328**, now covering both importers by amendment. Bounded by construction, same discipline as the row above: `project-client.ts` is this half's only importer and says so in its own header |
+| App "Delete…" session action rewired from the legacy `DELETE /session/:id` route (`sdk().api.session.remove`, a permanent, non-recoverable hard delete) to the `trash` lifecycle route (`session-lifecycle-client.ts`'s `client.trash(...)`), in `packages/app/src/pages/session/timeline/message-timeline.tsx` (TKT-349) | Found by the day-two runbook walk: clicking Delete… on an active session made it permanently, unrecoverably gone instead of trash-with-grace-period, the app's own stated promise. Root cause: the app called the legacy V1 remove route directly rather than any lifecycle route at all. This row is the app-side half of the fix — it is independent of, and does not depend on, the V1 `session.remove` adapter (deferred, see the section above); the legacy route itself still exists and still hard-deletes for its remaining CLI/ACP/teardown callers | n/a — bug fix, not a divergence pattern | none | none | **remove** — once the deferred V1 `session.remove` adapter lands with its own designed dependency shape, this row's "the legacy route still hard-deletes" caveat should be re-verified and this row closed alongside it |
 
 `e2e` (in `test.yml`), `nix-eval.yml`, `pr-management.yml`'s `check-duplicates` job, and most of
 the release/publish/deploy/beta/docs/notify/storybook/triage/stats workflows are **not** in this
@@ -207,6 +208,55 @@ leaves it unsatisfied and the handler's call signature shifts from one argument 
 the provide site. `HttpRouter.serve` (used by `packages/cli`'s daemon) does not draw this same
 distinction, which is why the equivalent fix there was just adding the node to the existing
 `Layer.provide(AppNodeBuilder.build(...))` list.
+
+### A process singleton is a singleton PER MEMO MAP (TKT-349)
+
+Listing a global node at every reachable assembly site (above) is necessary but **not
+sufficient** on its own. Two separate `AppNodeBuilder`/`AppNodeBuilderV1.build(...)` (or
+`Layer.buildWithMemoMap(...)`) calls that both reach the same global node, each without a
+**shared** `MemoMap`, construct it **twice** — two live, independent instances of what the
+codebase assumes is one process-wide singleton (`SessionExecutionLocal`'s coordinator, in the
+case that surfaced this: a keyed `Map` + `FiberSet` split in two, each half seeing only some of
+the sessions it should be coordinating). A green functional test suite does not catch this class
+of bug — every individual assertion can still pass against whichever half of the split it
+happened to be routed to. **Only a construction counter does**: instrument the layer's own
+construction path and assert it runs exactly once across every boundary that is supposed to
+share it.
+
+The fix is always the same shape: **pass the shared `memoMap` instance
+(`@opencode-ai/core/effect/memo-map`) at every assembly boundary that is supposed to produce one
+shared instance of a node.** Production's own server assembly already did this correctly
+everywhere the `httpapi-exercise` test harness did not, which is why the split was invisible until
+a change (a since-reverted TKT-349 session-removal adapter prototype) added a new edge that made a
+previously-single build path fan out across two boundaries. That prototype surfaced two more
+boundaries this rule applies to and is still open, **not yet fixed**:
+
+1. The V1 `session.remove` adapter itself — routing it through `SessionV2.Service` means V1's
+   `Session.node` needs `SessionV2.node` as a dependency, which reaches `SessionExecution.node`
+   (unbound) from **every** consumer of `Session.Service`, not just `remove`. That broke 35
+   otherwise-unrelated test fixtures across the suite that build `Session.node` in their own
+   narrow harness and never needed a `SessionExecution` replacement before. The fixtures were not
+   wrong — the edge's shape was: a whole-service dependency for what should be one function's
+   concern. Needs a narrower capability (a `serviceOption`-style optional dependency, or a
+   narrower interface `remove` alone requires) rather than 35 individual fixture patches.
+2. `acp/service.ts`'s `makeDirectoryService` is **not** a true process-global the shared-memoMap
+   rule applies to as-is: `Directory.Loader`'s replacement is parameterized by the caller's own
+   `sdk` (a distinct `OpencodeClient` per ACP connection), so passing the shared memoMap dedups
+   instances that are legitimately supposed to stay distinct — confirmed by real ACP test
+   failures (wrong JSON-RPC error codes) the moment the shared memoMap was applied there. Needs
+   its own per-sdk-vs-global memo structure, not a blanket pass.
+
+Both are tracked open on TKT-349 pending a designed shape for each — the pre-existing V1
+`session.remove` raw hard-delete (no tombstone, no crash safety) remains live for its CLI/ACP/
+teardown callers until the first is resolved. No app-facing path reaches it after this PR: the
+app's own "Delete…" action was moved to the `trash` lifecycle route directly (see the app-side
+row below), independent of this adapter entirely.
+
+**Where a fresh, unshared `MemoMap` is deliberate** (per-listener config isolation in
+`server/server.ts`'s `startListener`, for example), that is legitimate — but the code must say,
+at the point the fresh map is created, which singletons it is knowingly duplicating as a result.
+A silent fresh map reads identically to a forgotten shared one; only the comment tells the next
+person which case they are looking at.
 
 ## Merge-blocking gates
 
