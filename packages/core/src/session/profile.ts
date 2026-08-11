@@ -1,20 +1,30 @@
 export * as SessionProfile from "./profile"
 
-import { eq } from "drizzle-orm"
+import { and, desc, eq, lte } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer, Schema } from "effect"
 import { SessionProfile as ProfileSchema } from "@opencode-ai/schema/session-profile"
 import { Permission } from "@opencode-ai/schema/permission"
 import { Database } from "../database/database"
 import { makeLocationNode } from "../effect/app-node"
 import { EventV2 } from "../event"
+import { EventTable } from "../event/sql"
 import { SystemContext } from "../system-context/index"
 import { Hash } from "../util/hash"
 import { SessionSchema } from "./schema"
 import { SessionEvent } from "./event"
-import { SessionProfileSnapshotTable, SessionTable } from "./sql"
+import { SessionMessageTable, SessionProfileSnapshotTable, SessionTable } from "./sql"
 import type { SessionMessage } from "./message"
 
 type DatabaseService = Database.Interface["db"]
+
+// The durable event log stores a version-suffixed type (event.ts's publish path applies
+// versionedType(definition.type, durable.version) before the INSERT), not the bare
+// SessionEvent.ProfileSwitched.type literal -- computed once here so `at()` queries the same
+// value that was actually written.
+const PROFILE_SWITCHED_TYPE = EventV2.versionedType(
+  SessionEvent.ProfileSwitched.type,
+  SessionEvent.ProfileSwitched.durable?.version ?? 1,
+)
 
 export const ID = ProfileSchema.ID
 export type ID = typeof ID.Type
@@ -75,8 +85,8 @@ function sortedEntries(map: RuleMap): Array<[string, RuleEffect]> {
 }
 
 /** Apply one committed `ProfileSwitched` event: insert the immutable snapshot row, then repoint
- * the session's current pointer at it. Never updates a prior snapshot row -- old turns keep
- * pointing at whatever snapshot they actually ran under via the event stream, even after this
+ * the session's current pointer at it. Never updates a prior snapshot row -- old turns stay
+ * explainable against the exact snapshot active when they ran via `at()`, even after this
  * repoint moves the session's CURRENT pointer on. */
 export const projectSwitched = Effect.fn("SessionProfile.projectSwitched")(function* (
   db: DatabaseService,
@@ -132,6 +142,12 @@ export interface Interface {
   /** The session's current snapshot, or undefined if none has been resolved yet (pre-migration
    * sessions, or a session whose creation didn't go through `resolve`). */
   readonly get: (sessionID: SessionSchema.ID) => Effect.Effect<Snapshot | undefined>
+  /** The snapshot that was active for a specific past message/turn -- not the session's current
+   * pointer. Resolved via the shared session event-sequence cursor (the message's own `seq` IS
+   * the durable event sequence it was written at; see projector.ts's `insertMessage`), never
+   * wall-clock time, so it stays exact under same-millisecond switches. Undefined if the message
+   * predates any profile switch (pre-migration session, or created before `resolve` ever ran). */
+  readonly at: (sessionID: SessionSchema.ID, messageID: SessionMessage.ID) => Effect.Effect<Snapshot | undefined>
   /** Resolve `definition` into a fresh immutable snapshot, attach it to the session, and publish
    * `SessionEvent.ProfileSwitched`. Called both on session create (no `fromSnapshotID`) and on an
    * explicit switch (`fromSnapshotID` set to whatever `get` returned beforehand). */
@@ -200,6 +216,38 @@ const layer = Layer.effect(
       return row ? fromRow(row) : undefined
     })
 
+    const at: Interface["at"] = Effect.fn("SessionProfile.at")(function* (sessionID, messageID) {
+      const message = yield* db
+        .select({ seq: SessionMessageTable.seq })
+        .from(SessionMessageTable)
+        .where(and(eq(SessionMessageTable.session_id, sessionID), eq(SessionMessageTable.id, messageID)))
+        .get()
+        .pipe(Effect.orDie)
+      if (!message) return undefined
+      const event = yield* db
+        .select({ data: EventTable.data })
+        .from(EventTable)
+        .where(
+          and(
+            eq(EventTable.aggregate_id, sessionID),
+            eq(EventTable.type, PROFILE_SWITCHED_TYPE),
+            lte(EventTable.seq, message.seq),
+          ),
+        )
+        .orderBy(desc(EventTable.seq))
+        .limit(1)
+        .get()
+        .pipe(Effect.orDie)
+      if (!event) return undefined
+      const row = yield* db
+        .select()
+        .from(SessionProfileSnapshotTable)
+        .where(eq(SessionProfileSnapshotTable.id, SnapshotID.make(event.data.snapshotID as string)))
+        .get()
+        .pipe(Effect.orDie)
+      return row ? fromRow(row) : undefined
+    })
+
     const resolve: Interface["resolve"] = Effect.fn("SessionProfile.resolve")(function* (input) {
       const previous = yield* get(input.sessionID)
       const snapshotID = SnapshotID.create()
@@ -258,7 +306,7 @@ const layer = Layer.effect(
       })
     })
 
-    return Service.of({ get, resolve, toolDenyRuleset, context })
+    return Service.of({ get, at, resolve, toolDenyRuleset, context })
   }),
 )
 

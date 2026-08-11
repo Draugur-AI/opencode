@@ -13,12 +13,14 @@ import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
+import { SessionContextEpoch } from "@opencode-ai/core/session/context-epoch"
 import { SessionMessage } from "@opencode-ai/core/session/message"
 import { SessionProfile } from "@opencode-ai/core/session/profile"
 import { SessionProfileBuiltin } from "@opencode-ai/core/session/profile-builtin"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
-import { SessionTable } from "@opencode-ai/core/session/sql"
+import { SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionStore } from "@opencode-ai/core/session/store"
+import { SystemContext } from "@opencode-ai/core/system-context"
 import { eq } from "drizzle-orm"
 import { location } from "./fixture/location"
 import { testEffect } from "./lib/effect"
@@ -380,6 +382,112 @@ describe("PermissionV2", () => {
         definition: SessionProfileBuiltin.coding,
       })
       expect(yield* service.assert(edit())).toBeUndefined()
+    }),
+  )
+
+  // Proof, not description: RuleEffect's doc comment CLAIMS "allow"/"inherit" are treated
+  // identically so a profile can never re-enable what a higher scope denies -- this is the test
+  // that goes red the day a refactor makes that claim false, e.g. if denyRules (or its caller)
+  // is ever changed to emit an actual allow rule for "allow" instead of skipping it.
+  it.effect("a profile's explicit 'allow' cannot re-enable an action the agent denies at a higher scope", () =>
+    Effect.gen(function* () {
+      yield* setup([{ action: "bash", resource: "*", effect: "deny" }])
+      const profiles = yield* SessionProfile.Service
+      yield* profiles.resolve({
+        sessionID: SessionV2.ID.make("ses_test"),
+        messageID: SessionMessage.ID.make("msg_allow_attempt"),
+        definition: {
+          id: SessionProfile.ID.create(),
+          title: "attempted-override",
+          toolRules: { bash: "allow" },
+          skillRules: {},
+          mcpRules: {},
+          pluginRules: {},
+          hookRules: {},
+          monitorRules: { allowUser: true, allowPlugin: true, autoStart: true },
+        },
+      })
+
+      const service = yield* PermissionV2.Service
+      const error = yield* service.assert(assertion({ action: "bash", resources: ["ls"] })).pipe(Effect.flip)
+      expect(error).toBeInstanceOf(PermissionV2.BlockedError)
+    }),
+  )
+
+  // Slice 4 established that a goal/ledger mutation resets the context epoch so the next turn
+  // rebuilds its baseline rather than reconciling against a stale one; ProfileSwitched follows
+  // the same pattern (projector.ts). Proven here the same way: initialize an epoch, confirm a
+  // second initialize is a no-op (row exists), switch, then confirm the NEXT initialize creates
+  // a fresh row rather than seeing the pre-switch one as still current.
+  it.effect("a profile switch resets the context epoch, same as a goal or ledger mutation", () =>
+    Effect.gen(function* () {
+      yield* setup([{ action: "*", resource: "*", effect: "allow" }])
+      const { db } = yield* Database.Service
+      const profiles = yield* SessionProfile.Service
+      const sessionID = SessionV2.ID.make("ses_test")
+      const loadContext = Effect.succeed(SystemContext.empty)
+
+      const first = yield* SessionContextEpoch.initialize(db, loadContext, sessionID)
+      expect(first).toBeDefined()
+      expect(yield* SessionContextEpoch.initialize(db, loadContext, sessionID)).toBeUndefined()
+
+      yield* profiles.resolve({
+        sessionID,
+        messageID: SessionMessage.ID.make("msg_switch"),
+        definition: SessionProfileBuiltin.chat,
+      })
+
+      const afterSwitch = yield* SessionContextEpoch.initialize(db, loadContext, sessionID)
+      expect(afterSwitch).toBeDefined()
+    }),
+  )
+
+  // profile.ts's doc comment claims old turns "stay explainable against the exact snapshot
+  // active when they ran" -- this is the test that makes that true rather than theater. Resolved
+  // via the shared session event-sequence cursor (never wall-clock), per the lead's ruling that
+  // every convergence property in this codebase anchors on seq.
+  it.effect("a past turn resolves to the snapshot active when it ran, not the session's current one", () =>
+    Effect.gen(function* () {
+      yield* setup([{ action: "*", resource: "*", effect: "allow" }])
+      const { db } = yield* Database.Service
+      const profiles = yield* SessionProfile.Service
+      const sessionID = SessionV2.ID.make("ses_test")
+
+      const first = yield* profiles.resolve({
+        sessionID,
+        messageID: SessionMessage.ID.make("msg_first_switch"),
+        definition: SessionProfileBuiltin.coding,
+      })
+
+      // A real turn that happened after the first switch but before the second -- its own `seq`
+      // is what `at()` resolves against, so it must be a real committed sequence value, not an
+      // arbitrary one.
+      const seqAfterFirst = yield* EventV2.latestSequence(db, sessionID)
+      const turnID = SessionMessage.ID.make("msg_mid_session_turn")
+      yield* db
+        .insert(SessionMessageTable)
+        .values({
+          id: turnID,
+          session_id: sessionID,
+          type: "compaction",
+          seq: seqAfterFirst,
+          data: { reason: "auto", summary: "a turn before the second switch", recent: "" } as never,
+        })
+        .run()
+        .pipe(Effect.orDie)
+
+      const second = yield* profiles.resolve({
+        sessionID,
+        messageID: SessionMessage.ID.make("msg_second_switch"),
+        definition: SessionProfileBuiltin.chat,
+      })
+      expect(second.id).not.toBe(first.id)
+
+      // Both snapshots remain independently fetchable...
+      expect((yield* profiles.get(sessionID))?.id).toBe(second.id)
+      // ...and the turn from before the second switch still resolves to the FIRST snapshot, not
+      // the session's current one.
+      expect((yield* profiles.at(sessionID, turnID))?.id).toBe(first.id)
     }),
   )
 })

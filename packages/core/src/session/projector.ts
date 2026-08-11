@@ -318,22 +318,28 @@ const layer = Layer.effectDiscard(
       }),
     )
     yield* events.project(SessionEvent.ProfileSwitched, (event) =>
-      SessionProfile.projectSwitched(db, {
-        sessionID: event.data.sessionID,
-        snapshotID: event.data.snapshotID,
-        definitionID: event.data.definitionID,
-        definitionHash: event.data.definitionHash,
-        title: event.data.title,
-        agent: event.data.agent,
-        toolRules: event.data.toolRules,
-        skillRules: event.data.skillRules,
-        mcpRules: event.data.mcpRules,
-        pluginRules: event.data.pluginRules,
-        hookRules: event.data.hookRules,
-        monitorRules: event.data.monitorRules,
-        compaction: event.data.compaction,
-        systemAppend: event.data.systemAppend,
-        timestamp: event.data.timestamp,
+      Effect.gen(function* () {
+        yield* SessionProfile.projectSwitched(db, {
+          sessionID: event.data.sessionID,
+          snapshotID: event.data.snapshotID,
+          definitionID: event.data.definitionID,
+          definitionHash: event.data.definitionHash,
+          title: event.data.title,
+          agent: event.data.agent,
+          toolRules: event.data.toolRules,
+          skillRules: event.data.skillRules,
+          mcpRules: event.data.mcpRules,
+          pluginRules: event.data.pluginRules,
+          hookRules: event.data.hookRules,
+          monitorRules: event.data.monitorRules,
+          compaction: event.data.compaction,
+          systemAppend: event.data.systemAppend,
+          timestamp: event.data.timestamp,
+        })
+        // A tool/skill/mcp rule set just changed under the session -- the next turn must rebuild
+        // its baseline against the new profile rather than reconciling against a stale one, same
+        // as a directory Move forces a fresh baseline below.
+        yield* SessionContextEpoch.reset(db, event.data.sessionID)
       }),
     )
     yield* events.project(SessionEvent.Moved, (event) =>
