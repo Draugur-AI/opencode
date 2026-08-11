@@ -35,6 +35,8 @@ export const groupNames = {
   "server.question": "questions",
   "server.reference": "references",
   "server.projectCopy": "projectCopies",
+  "server.config-document": "configDocument",
+  "server.mcp": "mcp",
 } as const
 
 export const endpointNames = {
@@ -48,6 +50,11 @@ export const endpointNames = {
   "permission.saved.list": "listSaved",
   "permission.saved.remove": "removeSaved",
   "question.request.list": "listRequests",
+  "config.document.target.list": "targetList",
+  "config.document.target.read": "targetRead",
+  "config.document.effective.get": "effectiveGet",
+  "config.document.target.validate": "targetValidate",
+  "config.document.target.apply": "targetApply",
 } as const
 
 export const omitEndpoints = new Set(["fs.read", "pty.connect", "pty.connectToken"])

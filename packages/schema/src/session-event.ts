@@ -12,6 +12,7 @@ import { SessionID } from "./session-id"
 import { SessionLifecycle } from "./session-lifecycle"
 import { SessionGoal } from "./session-goal"
 import { SessionLedger } from "./session-ledger"
+import { SessionProfile } from "./session-profile"
 import { Location } from "./location"
 import { SessionMessage } from "./session-message"
 import { Revert } from "./revert"
@@ -147,6 +148,30 @@ export const LedgerSuperseded = Event.define({
   },
 })
 export type LedgerSuperseded = typeof LedgerSuperseded.Type
+
+export const ProfileSwitched = Event.define({
+  type: "session.next.profile.switched",
+  ...options,
+  schema: {
+    ...Base,
+    messageID: SessionMessage.ID,
+    snapshotID: SessionProfile.SnapshotID,
+    definitionID: SessionProfile.ID,
+    definitionHash: Schema.String,
+    title: Schema.String,
+    agent: Schema.String.pipe(optional),
+    toolRules: SessionProfile.RuleMap,
+    skillRules: SessionProfile.RuleMap,
+    mcpRules: SessionProfile.RuleMap,
+    pluginRules: SessionProfile.RuleMap,
+    hookRules: SessionProfile.RuleMap,
+    monitorRules: SessionProfile.MonitorRules,
+    compaction: Schema.String.pipe(optional),
+    systemAppend: Schema.String.pipe(optional),
+    fromSnapshotID: SessionProfile.SnapshotID.pipe(optional),
+  },
+})
+export type ProfileSwitched = typeof ProfileSwitched.Type
 
 export const Moved = Event.define({
   type: "session.next.moved",

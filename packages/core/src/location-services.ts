@@ -4,6 +4,8 @@ import { AISDK } from "./aisdk"
 import { Catalog } from "./catalog"
 import { CommandV2 } from "./command"
 import { Config } from "./config"
+import { ConfigDocument } from "./config/document"
+import { McpCatalog } from "./config/mcp-catalog"
 import { LayerNode } from "./effect/layer-node"
 import { Node } from "./effect/app-node"
 import { FileMutation } from "./file-mutation"
@@ -43,6 +45,8 @@ export const locationServices = LayerNode.group([
   Location.node,
   Policy.node,
   Config.node,
+  ConfigDocument.node,
+  McpCatalog.node,
   AgentV2.node,
   CommandV2.node,
   Reference.node,

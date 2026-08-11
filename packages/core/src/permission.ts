@@ -8,6 +8,7 @@ import { Location } from "./location"
 import { AgentV2 } from "./agent"
 import { SessionV2 } from "./session"
 import { SessionStore } from "./session/store"
+import { SessionProfile } from "./session/profile"
 import { Wildcard } from "./util/wildcard"
 import { PermissionSaved } from "./permission/saved"
 
@@ -114,6 +115,7 @@ const layer = Layer.effect(
     const agents = yield* AgentV2.Service
     const sessions = yield* SessionStore.Service
     const saved = yield* PermissionSaved.Service
+    const profiles = yield* SessionProfile.Service
     const pending = new Map<ID, Pending>()
 
     yield* EffectRuntime.addFinalizer(() =>
@@ -134,6 +136,15 @@ const layer = Layer.effect(
       )
     })
 
+    // The profile's tool rules are folded in HERE, not just at ToolRegistry.materialize's
+    // listing-time filter, because this is the function evaluateInput calls for BOTH ask/assert
+    // (leaf enforcement, every tool execution) and it's the function materialize should resolve
+    // its own ruleset through too (see registry.ts) -- one merge, both call sites, so a profile
+    // denial can never be listing-only UX with no teeth at execution. profileToolDenies is
+    // deny-only by construction (SessionProfile.toolDenyRuleset never emits "allow"/"inherit" as
+    // a rule) and is placed LAST so findLast-wins semantics let it ADD a restriction on top of the
+    // agent's ruleset without ever being able to loosen one: there is no profile-sourced "allow"
+    // entry that could out-rank an agent-level deny by winning the findLast in evaluate().
     const configured = EffectRuntime.fn("PermissionV2.configured")(function* (
       sessionID: SessionV2.ID,
       agentID?: AgentV2.ID,
@@ -141,7 +152,9 @@ const layer = Layer.effect(
       const session = yield* sessions.get(sessionID)
       if (!session) return yield* new SessionV2.NotFoundError({ sessionID })
       const agent = yield* agents.resolve(agentID ?? session.agent)
-      return agent?.permissions ?? missingAgentPermissions
+      const agentRules = agent?.permissions ?? missingAgentPermissions
+      const profileToolDenies = yield* profiles.toolDenyRuleset(sessionID)
+      return merge(agentRules, profileToolDenies)
     })
 
     function denied(input: AssertInput, rules: Permission.Ruleset) {
@@ -306,5 +319,5 @@ export const locationLayer = layer.pipe(Layer.provideMerge(AgentV2.locationLayer
 export const node = makeLocationNode({
   service: Service,
   layer,
-  deps: [EventV2.node, Location.node, AgentV2.node, SessionStore.node, PermissionSaved.node],
+  deps: [EventV2.node, Location.node, AgentV2.node, SessionStore.node, PermissionSaved.node, SessionProfile.node],
 })

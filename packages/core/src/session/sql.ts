@@ -17,6 +17,7 @@ import type { Revert } from "@opencode-ai/schema/revert"
 import type { SessionLifecycle } from "@opencode-ai/schema/session-lifecycle"
 import type { SessionGoal } from "@opencode-ai/schema/session-goal"
 import type { SessionLedger } from "@opencode-ai/schema/session-ledger"
+import type { SessionProfile } from "@opencode-ai/schema/session-profile"
 
 type SessionMessageData = Omit<(typeof SessionMessage.Message)["Encoded"], "type" | "id">
 type V1MessageData = Omit<SessionV1.Info, "id" | "sessionID">
@@ -70,6 +71,11 @@ export const SessionTable = sqliteTable(
      * restoring an archived session to `active` would silently undo the archive the user chose.
      */
     trash_restore_to: text().$type<Exclude<SessionLifecycle.State, "trash">>(),
+    /** The session's CURRENT resolved profile snapshot. Null means no profile has been resolved
+     * yet (pre-migration sessions, or a session created before this ticket's resolve-on-create
+     * wiring runs). Past snapshots stay reachable through SessionEvent.ProfileSwitched even after
+     * this column moves on to a newer one. */
+    profile_snapshot_id: text().$type<SessionProfile.SnapshotID>(),
   },
   (table) => [
     index("session_project_idx").on(table.project_id),
@@ -270,4 +276,36 @@ export const SessionLedgerTable = sqliteTable(
     ...Timestamps,
   },
   (table) => [index("session_ledger_session_status_updated_idx").on(table.session_id, table.status, table.time_updated)],
+)
+
+// Immutable: never updated in place, only inserted -- a switch creates a new row and repoints
+// session.profile_snapshot_id, it never mutates an old snapshot. That's what keeps a past turn
+// explainable against the exact rules it ran under even after the named definition changes.
+// Rule maps are stored as opaque JSON (Record<string, "inherit"|"allow"|"deny">); nothing here
+// queries into an individual rule, so a child table per rule would just be indirection.
+export const SessionProfileSnapshotTable = sqliteTable(
+  "session_profile_snapshot",
+  {
+    id: text().$type<SessionProfile.SnapshotID>().primaryKey(),
+    session_id: text()
+      .$type<SessionSchema.ID>()
+      .notNull()
+      .references(() => SessionTable.id, { onDelete: "cascade" }),
+    definition_id: text().$type<SessionProfile.ID>().notNull(),
+    definition_hash: text().notNull(),
+    title: text().notNull(),
+    agent: text(),
+    tool_rules: text({ mode: "json" }).notNull().$type<SessionProfile.RuleMap>(),
+    skill_rules: text({ mode: "json" }).notNull().$type<SessionProfile.RuleMap>(),
+    mcp_rules: text({ mode: "json" }).notNull().$type<SessionProfile.RuleMap>(),
+    plugin_rules: text({ mode: "json" }).notNull().$type<SessionProfile.RuleMap>(),
+    hook_rules: text({ mode: "json" }).notNull().$type<SessionProfile.RuleMap>(),
+    monitor_rules: text({ mode: "json" }).notNull().$type<SessionProfile.MonitorRules>(),
+    compaction: text(),
+    system_append: text(),
+    time_created: integer()
+      .notNull()
+      .$default(() => Date.now()),
+  },
+  (table) => [index("session_profile_snapshot_session_created_idx").on(table.session_id, table.time_created)],
 )

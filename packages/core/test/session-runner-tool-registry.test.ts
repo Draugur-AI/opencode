@@ -69,7 +69,7 @@ describe("ToolRegistry", () => {
         write: make("edit"),
         apply_patch: make("edit"),
       })
-      const names = (rules: Parameters<ToolRegistry.Interface["materialize"]>[0]) =>
+      const names = (rules: Parameters<typeof toolDefinitions>[1]) =>
         toolDefinitions(service, rules).pipe(Effect.map((definitions) => definitions.map((tool) => tool.name)))
 
       expect(yield* names([{ action: "question", resource: "*", effect: "deny" }])).toEqual([
