@@ -9,20 +9,7 @@ import type {
   ReferenceInfo,
   Session,
 } from "@opencode-ai/sdk/v2/client"
-import type {
-  AgentListInput,
-  AgentListOutput,
-  CatalogApi,
-  CommandInfo,
-  CommandListInput,
-  CommandListOutput,
-  ProjectCurrentInput,
-  ProjectCurrentOutput,
-  ProjectListOutput,
-  ReferenceListInput,
-  ReferenceListOutput,
-  SessionApi,
-} from "@opencode-ai/client/promise"
+import type { AgentListInput, AgentListOutput, CatalogApi, CommandInfo, CommandListInput, CommandListOutput, ProjectCurrentInput, ProjectCurrentOutput, ProjectListOutput, ReferenceListInput, ReferenceListOutput, SessionApi } from "@/utils/client-types"
 import { showToast } from "@/utils/toast"
 import { getFilename } from "@opencode-ai/core/util/path"
 import { retry } from "@opencode-ai/core/util/retry"

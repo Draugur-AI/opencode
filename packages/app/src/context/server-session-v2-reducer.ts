@@ -1,5 +1,5 @@
-import type { OpenCodeEvent, SessionMessageInfo, SessionPendingMessage } from "@opencode-ai/client/promise"
-
+import type { OpenCodeEvent } from "@opencode-ai/client"
+import type { SessionMessageInfo, SessionPendingMessage } from "@/utils/client-types"
 type Assistant = Extract<SessionMessageInfo, { type: "assistant" }>
 type Compaction = Extract<SessionMessageInfo, { type: "compaction" }>
 type Shell = Extract<SessionMessageInfo, { type: "shell" }>

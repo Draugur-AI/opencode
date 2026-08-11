@@ -50,15 +50,8 @@ import { createProjectPreferenceCache } from "./global-sync/project-preferences"
 import { createProjectClient } from "@/utils/project-client"
 import { persisted } from "@/utils/persist"
 import type { ServerApi } from "@/utils/server"
-import type {
-  McpListInput,
-  McpListOutput,
-  McpResource,
-  McpResourceCatalogInput,
-  McpResourceCatalogOutput,
-  McpServer,
-  SessionActiveOutput,
-} from "@opencode-ai/client/promise"
+import type { SessionActiveOutput } from "@/utils/client-types"
+import type { McpListInput, McpListOutput, McpResource, McpResourceCatalogInput, McpResourceCatalogOutput, McpServer } from "@opencode-ai/client-legacy/promise"
 import { toggleMcp } from "./global-sync/mcp"
 import { createServerSession, type ServerSession } from "./server-session"
 

@@ -1,21 +1,7 @@
 import type { ServerApi } from "./server"
 import type { ServerProtocol } from "./server-protocol"
 import type { AgentPartInput, FilePartInput, OpencodeClient, Session, TextPartInput } from "@opencode-ai/sdk/v2/client"
-import type {
-  Project,
-  ProjectCurrent,
-  SessionApi,
-  SessionCommandInput,
-  SessionCommandOutput,
-  SessionCompactInput,
-  SessionCompactOutput,
-  SessionInfo,
-  SessionPromptInput,
-  SessionPromptOutput,
-  SessionShellInput,
-  SessionShellOutput,
-} from "@opencode-ai/client/promise"
-
+import type { Project, ProjectCurrent, SessionApi, SessionCommandInput, SessionCommandOutput, SessionCompactInput, SessionCompactOutput, SessionInfo, SessionPromptInput, SessionPromptOutput, SessionShellInput, SessionShellOutput } from "@/utils/client-types"
 type LegacyClient = OpencodeClient
 type LegacyFor = (directory?: string) => LegacyClient
 type CompatibleSessionApi = Omit<

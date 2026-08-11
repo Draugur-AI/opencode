@@ -1,10 +1,4 @@
-import type {
-  SessionMessageAssistant,
-  SessionMessageAssistantTool,
-  SessionMessageInfo,
-  SessionMessageShell,
-  SessionMessageUser,
-} from "@opencode-ai/client/promise"
+import type { SessionMessageAssistant, SessionMessageAssistantTool, SessionMessageInfo, SessionMessageShell, SessionMessageUser } from "@/utils/client-types"
 import type { AssistantMessage, FilePart, Message, Part, ToolPart, UserMessage } from "@opencode-ai/sdk/v2"
 import { Option, Schema } from "effect"
 

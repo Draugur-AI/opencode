@@ -1,10 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import type {
-  AgentListOutput,
-  ModelDefaultOutput,
-  ModelListOutput,
-  ProviderListOutput,
-} from "@opencode-ai/client/promise"
+import type { AgentListOutput, ModelDefaultOutput, ModelListOutput, ProviderListOutput } from "@/utils/client-types"
 import { directoryKey, normalizeAgentList, normalizePermissionRequest, normalizeProviderList } from "./utils"
 
 describe("normalizeAgentList", () => {

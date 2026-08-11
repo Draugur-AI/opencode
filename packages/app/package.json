@@ -1,4 +1,5 @@
 {
+  "//client-legacy": "TEMPORARY. The vendored pre-lifecycle client snapshot, retained ONLY for the MCP surface, which has no protocol group or generated types on the workspace side yet. Its single blocker is TKT-323 (slice-8 Integrations), which adds the MCP protocol group; the pin and the tarball delete together with it. See FORK.md's divergence ledger.",
   "name": "@opencode-ai/app",
   "version": "1.18.16",
   "description": "",
@@ -48,7 +49,6 @@
     "vite-plugin-icons-spritesheet": "3.0.1",
     "vite-plugin-solid": "catalog:"
   },
-  "//client-next": "TEMPORARY. @opencode-ai/client below is a stale generated snapshot predating session lifecycle; @opencode-ai/client-next aliases the workspace client for EXACTLY the three lifecycle calls (restore/trash/purge) and nothing else. See FORK.md's divergence ledger; removed by TKT-328.",
   "dependencies": {
     "@corvu/drawer": "catalog:",
     "@dnd-kit/abstract": "0.5.0",
@@ -56,8 +56,8 @@
     "@dnd-kit/helpers": "0.5.0",
     "@dnd-kit/solid": "0.5.0",
     "@kobalte/core": "catalog:",
-    "@opencode-ai/client": "file:vendor/opencode-ai-client-1.17.13-v2.tgz",
-    "@opencode-ai/client-next": "workspace:@opencode-ai/client@*",
+    "@opencode-ai/client": "workspace:*",
+    "@opencode-ai/client-legacy": "file:vendor/opencode-ai-client-1.17.13-v2.tgz",
     "@opencode-ai/core": "workspace:*",
     "@opencode-ai/schema": "workspace:*",
     "@opencode-ai/sdk": "workspace:*",
