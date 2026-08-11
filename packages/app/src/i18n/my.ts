@@ -706,6 +706,12 @@ export const dict = {
   "home.sessions.group.today": "ယနေ့",
   "home.sessions.group.yesterday": "မနေ့က",
   "home.sessions.group.older": "အသက်ကြီးသည်။",
+  "home.inventory.servers": "ဆာဗာများ",
+  "home.inventory.favorites": "စိတ်ကြိုက်များ",
+  "home.inventory.recent": "လတ်တလော",
+  "home.inventory.all": "အားလုံး",
+  "home.inventory.favorite": "စိတ်ကြိုက်ထဲ ထည့်ပါ",
+  "home.inventory.unfavorite": "စိတ်ကြိုက်မှ ဖယ်ရှားပါ",
   "home.providerTip":
     "Claude၊ GPT၊ Gemini စသည်တို့အပါအဝင် အခြားမော်ဒယ်များကို အသုံးပြုရန် 75+ ဝန်ဆောင်မှုပေးသူများထံ ချိတ်ဆက်ပါ။",
   "session.tab.session": "အပိုင်း",

@@ -67,6 +67,12 @@ export function createHomeController() {
       focusedContext: focusedServerCtx,
       focusedSync,
     },
+    inventory: {
+      favorites: () => focusedServerCtx()?.home.favorites() ?? [],
+      recent: () => focusedServerCtx()?.home.recent() ?? [],
+      all: () => focusedServerCtx()?.home.all() ?? [],
+      toggleFavorite: (projectID: string) => focusedServerCtx()?.home.toggleFavorite(projectID),
+    },
     project: {
       list: projects,
       recentlyClosed,

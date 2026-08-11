@@ -15,6 +15,31 @@ export function compareSessionTime(a: Session, b: Session) {
   return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
 }
 
+export type ProjectOrderRow = {
+  readonly id: string
+  readonly name?: string
+  readonly favorite: boolean
+  readonly rank?: string
+  readonly lastOpenedAt?: number
+}
+
+/** favorite DESC, then rank (lexicographic, undefined last), then lastOpened DESC, then a stable name/id tiebreak. */
+export function compareProjectOrder(a: ProjectOrderRow, b: ProjectOrderRow) {
+  if (a.favorite !== b.favorite) return a.favorite ? -1 : 1
+  if (a.rank !== b.rank) {
+    if (a.rank === undefined) return 1
+    if (b.rank === undefined) return -1
+    return a.rank < b.rank ? -1 : a.rank > b.rank ? 1 : 0
+  }
+  const aTime = a.lastOpenedAt ?? 0
+  const bTime = b.lastOpenedAt ?? 0
+  if (aTime !== bTime) return bTime - aTime
+  const aName = a.name ?? a.id
+  const bName = b.name ?? b.id
+  if (aName !== bName) return aName < bName ? -1 : 1
+  return a.id < b.id ? -1 : a.id > b.id ? 1 : 0
+}
+
 const isRootVisibleSession = (session: Session, directory: string) =>
   pathKey(session.directory) === pathKey(directory) && !session.parentID && !session.time?.archived
 

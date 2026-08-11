@@ -1327,6 +1327,11 @@ export default function LegacyLayout(props: ParentProps) {
     const active = pathKey(currentProject()?.worktree ?? "") === key
     if (index === -1) return
 
+    // Closing is a soft hide, never a delete: mirror it to the server-side preference so it
+    // stays hidden across browsers/devices, not just this one's local sidebar state.
+    const projectID = list[index].id
+    if (projectID) void serverSync().project.preference.write({ projectID, hidden: true })
+
     if (!active) {
       layout.projects.close(directory)
       return

@@ -1162,4 +1162,10 @@ export const dict = {
   "workspace.reset.archived.many": "{{count}} նիստերը կարխիվացվեն։",
   "workspace.reset.note": "Սա կվերակայի աշխատանքային տարածքը, որպեսզի համապատասխանի լռելյայն ճյուղին:",
   "dialog.usageExceeded.dontShowAgain": "Այլևս չցուցադրել",
+  "home.inventory.servers": "Սերվերներ",
+  "home.inventory.favorites": "Ընտրյալներ",
+  "home.inventory.recent": "Վերջին",
+  "home.inventory.all": "Բոլորը",
+  "home.inventory.favorite": "Ավելացնել ընտրյալների մեջ",
+  "home.inventory.unfavorite": "Հեռացնել ընտրյալներից",
 }

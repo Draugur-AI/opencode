@@ -699,6 +699,12 @@ export const dict = {
   "home.sessions.group.today": "dnes",
   "home.sessions.group.yesterday": "včera",
   "home.sessions.group.older": "Starší",
+  "home.inventory.servers": "Servery",
+  "home.inventory.favorites": "Oblíbené",
+  "home.inventory.recent": "Nedávné",
+  "home.inventory.all": "Vše",
+  "home.inventory.favorite": "Přidat do oblíbených",
+  "home.inventory.unfavorite": "Odebrat z oblíbených",
   "home.providerTip":
     "Připojte se k více než 75 poskytovatelům a použijte další modely, včetně Claude, GPT, Gemini atd",
   "session.tab.session": "Relace",
