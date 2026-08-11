@@ -1,19 +1,29 @@
 export * as SessionPurge from "./purge"
 
-import { and, asc, eq, lte, sql } from "drizzle-orm"
+import { and, asc, eq, lte, sql, inArray} from "drizzle-orm"
 import { DateTime, Effect } from "effect"
 import type { Database } from "../database/database"
 import { EventSequenceTable, EventTable } from "../event/sql"
 import type { FSUtil } from "../fs-util"
 import { SessionLifecycle } from "./lifecycle"
+import { ProjectV2 } from "../project"
 import { SessionSchema } from "./schema"
 import { SessionTable, SessionTombstoneTable } from "./sql"
 
 type DatabaseService = Database.Interface["db"]
 
 export interface Claimed {
+  /** The tombstone for the session that was asked for — the root of the purged subtree. */
   readonly tombstone: SessionLifecycle.Tombstone
-  /** Managed tool-output files owned by the purged session. Removed only after the commit. */
+  /**
+   * Every tombstone written, root first then descendants. A child session ID is an ID some
+   * client may still hold — an open tab, a recently-closed entry — so each purged child needs
+   * its OWN tombstone. A parent-only tombstone would leave every child indistinguishable from
+   * "not fetched yet", which is the exact confusion tombstones exist to remove, rebuilt one
+   * level down.
+   */
+  readonly tombstones: ReadonlyArray<SessionLifecycle.Tombstone>
+  /** Managed tool-output files owned by the purged subtree. Removed only after the commit. */
   readonly objects: ReadonlyArray<string>
 }
 
@@ -71,45 +81,105 @@ export const claim = Effect.fn("SessionPurge.claim")(function* (
           .pipe(Effect.orDie)
         if (!row) return undefined
 
-        const objects = yield* managedObjects(db, input.sessionID)
+        // The whole subtree, deepest first. `parent_id` is a plain column with no foreign key, so
+        // children do NOT cascade with their parent — purging only the root would leave live
+        // orphans pointing at a tombstoned parent, which is worse than either outcome alone.
+        const subtree = yield* descendants(db, input.sessionID)
 
-        // Durable events are keyed by aggregate, not by a foreign key, so they do not cascade.
-        // Inlined rather than calling EventV2.remove so the whole purge is one transaction: a
-        // crash between two transactions would leave events for a session that no longer exists.
-        yield* db.delete(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, input.sessionID)).run()
-        yield* db.delete(EventTable).where(eq(EventTable.aggregate_id, input.sessionID)).run()
-        // FTS5 virtual tables cannot declare a foreign key, so session_transcript_search cannot
-        // cascade like the ordinary relational child tables below -- same reasoning as the
-        // aggregate-keyed event tables just above, deleted explicitly for the same reason.
-        yield* db.run(sql`DELETE FROM session_transcript_search WHERE session_id = ${input.sessionID}`)
-        // Every child table declares `onDelete: "cascade"`, and `PRAGMA foreign_keys = ON` is set
-        // when the database opens. The purge inventory test is what keeps that true for tables
-        // added later.
-        yield* db.delete(SessionTable).where(eq(SessionTable.id, input.sessionID)).run()
+        const objects: string[] = []
+        const tombstones: SessionLifecycle.Tombstone[] = []
 
-        yield* db
-          .insert(SessionTombstoneTable)
-          .values({
-            id: input.sessionID,
-            project_id: row.projectID,
-            time_purged: input.now,
-            last_lifecycle_revision: row.lifecycleRevision,
-          })
-          .onConflictDoNothing()
-          .run()
+        for (const target of subtree) {
+          objects.push(...(yield* managedObjects(db, target.id)))
 
-        return {
-          tombstone: SessionLifecycle.Tombstone.make({
-            id: input.sessionID,
-            projectID: row.projectID,
-            purgedAt: DateTime.makeUnsafe(input.now),
-            lastLifecycleRevision: row.lifecycleRevision,
-          }),
-          objects,
-        } satisfies Claimed
+          // Durable events are keyed by aggregate, not by a foreign key, so they do not cascade.
+          // Inlined rather than calling EventV2.remove so the whole purge is one transaction: a
+          // crash between two transactions would leave events for a session that no longer exists.
+          yield* db.delete(EventSequenceTable).where(eq(EventSequenceTable.aggregate_id, target.id)).run()
+          yield* db.delete(EventTable).where(eq(EventTable.aggregate_id, target.id)).run()
+          // FTS5 virtual tables cannot declare a foreign key, so session_transcript_search cannot
+          // cascade like the ordinary relational child tables below -- same reasoning as the
+          // aggregate-keyed event tables just above, deleted explicitly for the same reason.
+          yield* db.run(sql`DELETE FROM session_transcript_search WHERE session_id = ${target.id}`)
+          // Every child table declares `onDelete: "cascade"`, and `PRAGMA foreign_keys = ON` is set
+          // when the database opens. The purge inventory test is what keeps that true for tables
+          // added later.
+          yield* db.delete(SessionTable).where(eq(SessionTable.id, target.id)).run()
+
+          yield* db
+            .insert(SessionTombstoneTable)
+            .values({
+              id: target.id,
+              project_id: target.projectID,
+              time_purged: input.now,
+              last_lifecycle_revision: target.lifecycleRevision,
+            })
+            .onConflictDoNothing()
+            .run()
+
+          tombstones.push(
+            SessionLifecycle.Tombstone.make({
+              id: target.id,
+              projectID: target.projectID,
+              purgedAt: DateTime.makeUnsafe(input.now),
+              lastLifecycleRevision: target.lifecycleRevision,
+            }),
+          )
+        }
+
+        const root = tombstones.find((t) => t.id === input.sessionID)
+        if (!root) return undefined
+        return { tombstone: root, tombstones, objects } satisfies Claimed
       }),
     )
     .pipe(Effect.orDie)
+})
+
+/**
+ * The session and everything beneath it, DEEPEST FIRST.
+ *
+ * Ordering matters for the reader, not for the database: the whole purge is one transaction, so a
+ * crash at any point rolls the entire subtree back rather than leaving half a tree deleted. That
+ * is the recovery answer — there is no partial state to recover FROM. Deepest-first simply keeps
+ * the delete order matching the containment order, so anyone stepping through it sees children go
+ * before the parent they belong to.
+ */
+const descendants = Effect.fn("SessionPurge.descendants")(function* (
+  db: DatabaseService,
+  rootID: SessionSchema.ID,
+) {
+  type Node = { id: SessionSchema.ID; projectID: ProjectV2.ID; lifecycleRevision: number }
+  const ordered: Node[] = []
+  let frontier: SessionSchema.ID[] = [rootID]
+  // Breadth-first down, then reversed: a session tree is shallow (GitHub-style sub-issue depth,
+  // not a filesystem), so this is a handful of queries rather than a recursive CTE.
+  while (frontier.length > 0) {
+    const rows = yield* db
+      .select({
+        id: SessionTable.id,
+        projectID: SessionTable.project_id,
+        lifecycleRevision: SessionTable.lifecycle_revision,
+      })
+      .from(SessionTable)
+      .where(inArray(SessionTable.id, frontier))
+      .all()
+      .pipe(Effect.orDie)
+    for (const r of rows) {
+      ordered.push({
+        id: SessionSchema.ID.make(r.id),
+        projectID: r.projectID,
+        lifecycleRevision: r.lifecycleRevision,
+      })
+    }
+    const children = yield* db
+      .select({ id: SessionTable.id })
+      .from(SessionTable)
+      .where(inArray(SessionTable.parent_id, frontier))
+      .all()
+      .pipe(Effect.orDie)
+    frontier = children.map((c) => SessionSchema.ID.make(c.id))
+  }
+  return ordered.reverse()
 })
 
 /**
