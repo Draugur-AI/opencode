@@ -94,8 +94,10 @@ describe("plugin.config-hook-error-isolation", () => {
     // Each hook's config call is wrapped in Effect.tryPromise with error logging + Effect.ignore
     expect(src).toContain("plugin config hook failed")
 
+    // TKT-321: the loop now iterates LoadedHooks{pluginID, origin, hooks}[] (was a flat Hooks[]),
+    // destructuring `hooks` back to the local name `hook` this pattern still expects.
     const pattern =
-      /for\s*\(const hook of hooks\)\s*\{[\s\S]*?Effect\.tryPromise[\s\S]*?\.config\?\.\([\s\S]*?plugin config hook failed[\s\S]*?Effect\.ignore/
+      /for\s*\(const\s*\{\s*hooks:\s*hook\s*\}\s*of\s*loaded\)\s*\{[\s\S]*?Effect\.tryPromise[\s\S]*?\.config\?\.\([\s\S]*?plugin config hook failed[\s\S]*?Effect\.ignore/
     expect(pattern.test(src)).toBe(true)
   })
 })

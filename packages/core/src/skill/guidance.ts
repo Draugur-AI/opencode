@@ -6,6 +6,7 @@ import { AgentV2 } from "../agent"
 import { PermissionV2 } from "../permission"
 import { SkillV2 } from "../skill"
 import { SystemContext } from "../system-context/index"
+import type { SessionProfile } from "../session/profile"
 
 const Summary = Schema.Struct({
   name: Schema.String,
@@ -32,7 +33,15 @@ const render = (skills: ReadonlyArray<Summary>) =>
   ].join("\n")
 
 export interface Interface {
-  readonly load: (agent: AgentV2.Selection) => Effect.Effect<SystemContext.SystemContext>
+  /** `skillRules` extends the existing agent-permission filter with a session's resolved profile
+   * rather than a second, profile-only skill registry -- same reasoning as ToolRegistry's
+   * profileToolRules. Deny-only by construction on the caller's side (SessionProfile.RuleMap),
+   * so passing a profile's rules here can only remove a skill from guidance, never add one back
+   * that the agent's own permissions already exclude. */
+  readonly load: (
+    agent: AgentV2.Selection,
+    skillRules?: SessionProfile.RuleMap,
+  ) => Effect.Effect<SystemContext.SystemContext>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/SkillGuidance") {}
@@ -43,10 +52,12 @@ const layer = Layer.effect(
     const skills = yield* SkillV2.Service
 
     return Service.of({
-      load: Effect.fn("SkillGuidance.load")(function* (selection) {
+      load: Effect.fn("SkillGuidance.load")(function* (selection, skillRules) {
         const agent = selection.info
         if (!agent) return SystemContext.empty
-        const permitted = SkillV2.available(yield* skills.list(), agent)
+        const permitted = SkillV2.available(yield* skills.list(), agent).filter(
+          (skill) => skillRules?.[skill.name] !== "deny",
+        )
         if (permitted.length === 0 && PermissionV2.evaluate("skill", "*", agent.permissions).effect === "deny")
           return SystemContext.empty
         const available = permitted

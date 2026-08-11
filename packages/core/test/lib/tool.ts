@@ -10,8 +10,8 @@ export const toolIdentity = {
 
 export const toolDefinitions = (
   registry: ToolRegistry.Interface,
-  permissions?: Parameters<typeof registry.materialize>[0],
-) => registry.materialize(permissions).pipe(Effect.map((materialized) => materialized.definitions))
+  permissions?: NonNullable<Parameters<typeof registry.materialize>[0]>["permissions"],
+) => registry.materialize({ permissions }).pipe(Effect.map((materialized) => materialized.definitions))
 
 export const settleTool = (registry: ToolRegistry.Interface, input: ToolRegistry.ExecuteInput) =>
   registry.materialize().pipe(Effect.flatMap((materialized) => materialized.settle(input)))

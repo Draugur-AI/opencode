@@ -15,6 +15,7 @@ import { SessionLifecycle } from "./lifecycle"
 import { SessionGoal } from "./goal"
 import { SessionHistorySearch } from "./history-search"
 import { SessionLedger } from "./ledger"
+import { SessionProfile } from "./profile"
 import { WorkspaceV2 } from "../workspace"
 import { SessionContextEpoch } from "./context-epoch"
 import { MessageTable, PartTable, SessionInputTable, SessionMessageTable, SessionTable } from "./sql"
@@ -314,6 +315,31 @@ const layer = Layer.effectDiscard(
         entryID: event.data.entryID,
         supersededBy: event.data.supersededBy,
         timestamp: event.data.timestamp,
+      }),
+    )
+    yield* events.project(SessionEvent.ProfileSwitched, (event) =>
+      Effect.gen(function* () {
+        yield* SessionProfile.projectSwitched(db, {
+          sessionID: event.data.sessionID,
+          snapshotID: event.data.snapshotID,
+          definitionID: event.data.definitionID,
+          definitionHash: event.data.definitionHash,
+          title: event.data.title,
+          agent: event.data.agent,
+          toolRules: event.data.toolRules,
+          skillRules: event.data.skillRules,
+          mcpRules: event.data.mcpRules,
+          pluginRules: event.data.pluginRules,
+          hookRules: event.data.hookRules,
+          monitorRules: event.data.monitorRules,
+          compaction: event.data.compaction,
+          systemAppend: event.data.systemAppend,
+          timestamp: event.data.timestamp,
+        })
+        // A tool/skill/mcp rule set just changed under the session -- the next turn must rebuild
+        // its baseline against the new profile rather than reconciling against a stale one, same
+        // as a directory Move forces a fresh baseline below.
+        yield* SessionContextEpoch.reset(db, event.data.sessionID)
       }),
     )
     yield* events.project(SessionEvent.Moved, (event) =>

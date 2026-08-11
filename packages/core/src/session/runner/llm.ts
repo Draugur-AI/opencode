@@ -31,6 +31,7 @@ import { SessionGoal } from "../goal"
 import { SessionHistory } from "../history"
 import { SessionInput } from "../input"
 import { SessionLedger } from "../ledger"
+import { SessionProfile } from "../profile"
 import { SessionSchema } from "../schema"
 import { SessionStore } from "../store"
 import { type RunError, Service } from "./index"
@@ -107,6 +108,7 @@ const layer = Layer.effect(
     const referenceGuidance = yield* ReferenceGuidance.Service
     const goal = yield* SessionGoal.Service
     const ledger = yield* SessionLedger.Service
+    const profile = yield* SessionProfile.Service
     const config = yield* Config.Service
     const snapshots = yield* Snapshot.Service
     const db = (yield* Database.Service).db
@@ -181,10 +183,11 @@ const layer = Layer.effect(
       Effect.all(
         [
           systemContext.load(),
-          skillGuidance.load(agent),
+          profile.get(sessionID).pipe(Effect.flatMap((snapshot) => skillGuidance.load(agent, snapshot?.skillRules))),
           referenceGuidance.load(),
           goal.context(sessionID),
           ledger.context(sessionID),
+          profile.context(sessionID),
         ],
         { concurrency: "unbounded" },
       ).pipe(Effect.map(SystemContext.combine))
@@ -219,7 +222,12 @@ const layer = Layer.effect(
       const entries = yield* SessionHistory.entriesForRunner(db, session.id, system.baselineSeq)
       const context = entries.map((entry) => entry.message)
       const isLastStep = agent.info?.steps !== undefined && currentStep >= agent.info.steps
-      const toolMaterialization = isLastStep ? undefined : yield* tools.materialize(agent.info?.permissions)
+      const toolMaterialization = isLastStep
+        ? undefined
+        : yield* tools.materialize({
+            permissions: agent.info?.permissions,
+            profileToolRules: (yield* profile.get(session.id))?.toolRules,
+          })
       const promptCacheKey = /^ses_[0-9a-f]{64}$/.test(session.id) ? session.id.slice(4) : session.id
       const request = LLM.request({
         model,
@@ -446,6 +454,7 @@ export const node = makeLocationNode({
     ReferenceGuidance.node,
     SessionGoal.node,
     SessionLedger.node,
+    SessionProfile.node,
     Config.node,
     Snapshot.node,
     Database.node,

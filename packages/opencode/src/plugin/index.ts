@@ -33,8 +33,24 @@ import { RuntimeFlags } from "@/effect/runtime-flags"
 import { EventV2Bridge } from "@/event-v2-bridge"
 import { InstallationChannel } from "@opencode-ai/core/installation/version"
 
+/** A loaded plugin's hook implementation, with the identity the flat `Hooks[]` array used to
+ * lose: `pluginID` is stable and attributable (matches core/plugin.ts's V2 ID convention),
+ * `origin` records where it came from (internal, or the loader's spec/path) for diagnostics.
+ * TKT-321: this is the identity half of the hook-runtime refactor -- preserved here so a future
+ * profile-aware trigger() can filter by plugin/hook ID before invocation. Actually THREADING a
+ * TriggerContext (sessionID + resolved profile) through trigger() is deferred to a follow-up:
+ * trigger() has 20+ call sites across packages/opencode/src (tool/code-mode.ts, tool/shell.ts,
+ * session/compaction.ts, session/tools.ts, session/processor.ts, session/llm/request.ts, ...),
+ * and changing its public signature to require a TriggerContext means updating all of them in the
+ * same change -- too large a blast radius to land correctly alongside the rest of this slice. */
+export type LoadedHooks = {
+  readonly pluginID: string
+  readonly origin: string
+  readonly hooks: Hooks
+}
+
 type State = {
-  hooks: Hooks[]
+  loaded: LoadedHooks[]
 }
 
 // Hook names that follow the (input, output) => Promise<void> trigger pattern
@@ -109,16 +125,19 @@ function getLegacyPlugins(mod: Record<string, unknown>) {
   return result
 }
 
-async function applyPlugin(load: PluginLoader.Loaded, input: PluginInput, hooks: Hooks[]) {
+async function applyPlugin(load: PluginLoader.Loaded, input: PluginInput, loaded: LoadedHooks[]) {
   const plugin = readV1Plugin(load.mod, load.spec, "server", "detect")
   if (plugin) {
-    await resolvePluginId(load.source, load.spec, load.target, readPluginId(plugin.id, load.spec), load.pkg)
-    hooks.push(await (plugin as PluginModule).server(input, load.options))
+    const pluginID = await resolvePluginId(load.source, load.spec, load.target, readPluginId(plugin.id, load.spec), load.pkg)
+    loaded.push({ pluginID, origin: load.spec, hooks: await (plugin as PluginModule).server(input, load.options) })
     return
   }
 
+  // Legacy exports have no id concept of their own -- the loader's spec is the only stable
+  // identity available, so it doubles as pluginID here (unlike the V1 branch above, where a
+  // real id is always resolved).
   for (const server of getLegacyPlugins(load.mod)) {
-    hooks.push(await server(input, load.options))
+    loaded.push({ pluginID: load.spec, origin: load.spec, hooks: await server(input, load.options) })
   }
 }
 
@@ -131,7 +150,7 @@ const layer = Layer.effect(
 
     const state = yield* InstanceState.make<State>(
       Effect.fn("Plugin.state")(function* (ctx) {
-        const hooks: Hooks[] = []
+        const loaded: LoadedHooks[] = []
         const bridge = yield* EffectBridge.make()
 
         function publishPluginError(message: string) {
@@ -173,7 +192,7 @@ const layer = Layer.effect(
             Effect.tapError((error) => Effect.logError("failed to load internal plugin", { name: plugin.name, error })),
             Effect.option,
           )
-          if (init._tag === "Some") hooks.push(init.value)
+          if (init._tag === "Some") loaded.push({ pluginID: plugin.name, origin: "internal", hooks: init.value })
         }
 
         const plugins = flags.pure ? [] : (cfg.plugin_origins ?? [])
@@ -181,7 +200,7 @@ const layer = Layer.effect(
         }
         if (plugins.length) yield* config.waitForDependencies()
 
-        const loaded = yield* Effect.promise(() =>
+        const sources = yield* Effect.promise(() =>
           PluginLoader.loadExternal({
             items: plugins,
             kind: "server",
@@ -214,13 +233,13 @@ const layer = Layer.effect(
             },
           }),
         )
-        for (const load of loaded) {
+        for (const load of sources) {
           if (!load) continue
 
           // Keep plugin execution sequential so hook registration and execution
           // order remains deterministic across plugin runs.
           yield* Effect.tryPromise({
-            try: () => applyPlugin(load, input, hooks),
+            try: () => applyPlugin(load, input, loaded),
             catch: (err) => {
               const message = errorMessage(err)
               return message
@@ -240,7 +259,7 @@ const layer = Layer.effect(
         }
 
         // Notify plugins of current config
-        for (const hook of hooks) {
+        for (const { hooks: hook } of loaded) {
           yield* Effect.tryPromise({
             try: () => Promise.resolve((hook as any).config?.(cfg)),
             catch: errorMessage,
@@ -253,7 +272,7 @@ const layer = Layer.effect(
         const unsubscribe = yield* events.listen((event) => {
           if (event.location?.directory !== ctx.directory) return Effect.void
           return Effect.sync(() => {
-            for (const hook of hooks) {
+            for (const { hooks: hook } of loaded) {
               void hook["event"]?.({ event: { id: event.id, type: event.type, properties: event.data } as any })
             }
           })
@@ -262,8 +281,8 @@ const layer = Layer.effect(
 
         yield* Effect.addFinalizer(() =>
           Effect.forEach(
-            hooks,
-            (hook) =>
+            loaded,
+            ({ hooks: hook }) =>
               Effect.tryPromise({
                 try: () => Promise.resolve(hook.dispose?.()),
                 catch: errorMessage,
@@ -275,7 +294,7 @@ const layer = Layer.effect(
           ),
         )
 
-        return { hooks }
+        return { loaded }
       }),
     )
 
@@ -286,7 +305,7 @@ const layer = Layer.effect(
     >(name: Name, input: Input, output: Output) {
       if (!name) return output
       const s = yield* InstanceState.get(state)
-      for (const hook of s.hooks) {
+      for (const { hooks: hook } of s.loaded) {
         const fn = hook[name] as any
         if (!fn) continue
         yield* Effect.promise(async () => fn(input, output))
@@ -296,7 +315,7 @@ const layer = Layer.effect(
 
     const list = Effect.fn("Plugin.list")(function* () {
       const s = yield* InstanceState.get(state)
-      return s.hooks
+      return s.loaded.map(({ hooks }) => hooks)
     })
 
     const init = Effect.fn("Plugin.init")(function* () {
