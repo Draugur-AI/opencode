@@ -11,11 +11,16 @@ import type { CheckpointResult } from "./fixture"
  */
 export type Fixture = (handle: BaselineGraph.Handle) => Promise<readonly CheckpointResult[]>
 
-/** Builds a fresh baseline graph (real subprocess + fake HTTP LLM) and runs one fixture against
- * it, always tearing the subprocess down afterward even if the fixture throws. */
-export const run = async (fixture: Fixture): Promise<readonly CheckpointResult[]> => {
+/** Builds a fresh baseline graph and runs one fixture against it, always tearing the subprocess
+ * down afterward even if the fixture throws. `mode: "scripted"` (default) wires FakeHttpLLM;
+ * `"real"` wires the real qwen3-6 gateway via BaselineGraph.buildReal -- see that function's
+ * comment for the tunnel preflight this requires. */
+export const run = async (
+  fixture: Fixture,
+  input: { readonly mode?: "scripted" | "real" } = {},
+): Promise<readonly CheckpointResult[]> => {
   const repoRoot = (await $`git rev-parse --show-toplevel`.cwd(import.meta.dir).quiet().text()).trim()
-  const handle = await BaselineGraph.build({ repoRoot })
+  const handle = input.mode === "real" ? await BaselineGraph.buildReal({ repoRoot }) : await BaselineGraph.build({ repoRoot })
   try {
     return await fixture(handle)
   } finally {
