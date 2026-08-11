@@ -257,6 +257,40 @@ broken.**
 (no merge ref gets built), which looks identical to an Actions outage. Always check
 `gh pr view <n> --json mergeable,mergeStateStatus` before troubleshooting CI as if it were down.
 
+## Self-hosted runner (TKT-338) and the fork-PR guard
+
+This fork is **public**, and a self-hosted runner executes whatever a triggering workflow says.
+That combination is the hazard: a `pull_request` event can originate from a fork whose head repo
+differs from this one, and a permissive self-hosted runner would run that fork's code on our
+host. Two independent mitigations, deliberately not just one:
+
+1. **Repo Actions policy** (`GET/PUT
+   /repos/Draugur-AI/opencode/actions/permissions/fork-pr-contributor-approval`, readable and
+   writable with repo-admin, no org-admin needed despite appearances — verified during TKT-338
+   after every other endpoint 403'd or came back empty): `approval_policy` set to
+   `all_external_contributors`. An outside contributor's workflow run needs explicit approval
+   before it executes at all.
+2. **Per-job guard, in versioned YAML, auditable and greppable — the one that matters if (1) is
+   ever misconfigured or silently reverted**: every job whose `runs-on` includes the
+   `opencode-fork` self-hosted label carries
+   `if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository`.
+   Push events (`dev`) are internal by definition and always pass; a `pull_request` event only
+   passes when the PR's head repo is this repo. A fork PR's `unit`/`e2e`/`typecheck` jobs
+   therefore never reach the self-hosted runner at all — they simply don't run, rather than
+   running unsafely. This is what makes the runner safe **by construction**, independent of any
+   repo or org setting.
+
+**The runner itself**: `opencode-fork-runner-1`, its own directory
+(`~/actions-runner-opencode-fork`), labels `[self-hosted, opencode-fork, linux, arm64]`, a
+systemd `--user` unit (not `sudo ./svc.sh install` — this host's NOPASSWD sudo is scoped to
+`docker`/`ctr` only). Two other runners share this host: `spark-6703` (system-level unit,
+`draugur-alpha`) and the flagship runner (TKT-337) — three distinct directories is what avoids
+the two-`Runner.Listener`s-racing-one-`_temp` footgun that has bitten this host before (see
+[[ci-runner-double-listener]]). **Windows is disabled**, not just left on GitHub-hosted: this
+host is linux/aarch64, so `unit (windows)` and `e2e (windows)` are dropped from their workflow
+matrices rather than burning GitHub-hosted minutes for a platform this runner can't serve.
+Revisit when GH-hosted minutes reset or a Windows runner exists elsewhere.
+
 ## Does automated review run on fork PRs? — No.
 
 Answer, with evidence, for the standing "assume no review runs" convention already baked into
