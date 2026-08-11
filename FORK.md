@@ -408,6 +408,14 @@ Conventional-commit title prefixes (`feat|fix|docs|chore|refactor|test`, optiona
 linked-issue requirement** — a `fix:`/`chore:`/`test:` title still needs `Closes #<number>` in the
 body or the same bot flags it.
 
+**Issues were disabled on this fork** (`has_issues: false`, discovered on TKT-349's PR #24 when
+the linked-issue requirement above had nothing to link to) — re-enabled via `gh api
+repos/Draugur-AI/opencode -X PATCH -F has_issues=true` (additive, reversible, our own fork). Until
+the inherited `pr-standards.yml`/`compliance-close.yml` workflows are adjusted to not require one,
+**every `fix:`/`chore:`/`test:` PR carries a linked shim issue**: title + one paragraph + a
+cross-reference to the tracking ticket, with the issue body saying explicitly that it is a
+compliance shim and the ticket is the source of truth. `Closes #<that issue>` in the PR body.
+
 ## The merge gate: all green, any red blocks
 
 **As of TKT-336, this fork does not run a known-red-exceptions regime any more.** That regime
