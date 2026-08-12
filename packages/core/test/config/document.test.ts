@@ -86,10 +86,18 @@ describe("ConfigDocument", () => {
     ),
   )
 
-  it.live("readTarget surfaces a diagnostic for malformed jsonc instead of throwing", () =>
+  it.live("readTarget surfaces a diagnostic for malformed jsonc instead of throwing, and never leaks a secret in it", () =>
     withTmp((tmp) =>
       Effect.gen(function* () {
-        yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, "opencode.json"), "{ invalid"))
+        // Malformed AND secret-bearing (Henry, TKT-323 feedback #191 follow-up): a fixture that is
+        // merely malformed can't distinguish "fails closed" from "happens not to touch mcp" -- the
+        // secret is what proves this leak class can never return silently.
+        yield* Effect.promise(() =>
+          fs.writeFile(
+            path.join(tmp.path, "opencode.json"),
+            '{ "mcp": { "servers": { "local": { "environment": { "API_KEY": "sk-real-secret" } } } } invalid',
+          ),
+        )
 
         return yield* Effect.gen(function* () {
           const doc = yield* ConfigDocument.Service
@@ -98,6 +106,8 @@ describe("ConfigDocument", () => {
 
           expect(read.diagnostics.length).toBeGreaterThan(0)
           expect(read.diagnostics[0]?.severity).toBe("error")
+          expect(read.text).toBeInstanceOf(ConfigDocument.RedactionWithheld)
+          expect(JSON.stringify(read)).not.toContain("sk-real-secret")
         }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
       }),
     ),
@@ -222,13 +232,15 @@ describe("ConfigDocument", () => {
     ),
   )
 
-  // Regression for a Copilot review finding on PR #32: `parseAndDiagnose` discards its whole
-  // `parsed` value on ANY diagnostic, even one unrelated to mcp -- readTarget's redaction used to
-  // key off that same discarded value, so a file with an unrelated syntax error but a real,
-  // otherwise-valid mcp secret came back over the wire completely unredacted. mcp is valid and
-  // appears before a genuine, unrelated syntax error (a missing colon) later in the same document
-  // -- jsonc-parser recovers from it and still needs to redact.
-  it.live("readTarget still redacts secrets in text when the rest of the document has a syntax error", () =>
+  // Regression for a Copilot review finding on PR #32, flipped by a lead ruling that superseded
+  // the fix Copilot itself suggested (lenient parse): `parseAndDiagnose` discards its whole
+  // `parsed` value on ANY diagnostic, even one unrelated to mcp -- a lenient recovery parse can
+  // itself silently DROP the secret-bearing branch when a malformed region swallows it, so a
+  // best-effort redaction is only a guarantee in the common case. The ruling: fail closed instead
+  // -- withhold `text` entirely rather than return a redaction that isn't reliably complete. mcp is
+  // valid and appears before a genuine, unrelated syntax error (a missing colon) later in the same
+  // document -- text must still be withheld, not redacted, once ANY diagnostic exists.
+  it.live("readTarget withholds text, rather than redact best-effort, when the document has a syntax error", () =>
     withTmp((tmp) =>
       Effect.gen(function* () {
         const filepath = path.join(tmp.path, "opencode.json")
@@ -244,8 +256,9 @@ describe("ConfigDocument", () => {
           const read = yield* doc.readTarget(project.id)
 
           expect(read.diagnostics.length).toBeGreaterThan(0)
-          expect(read.text).not.toContain("sk-real-secret")
-          expect(read.text).toContain("[redacted]")
+          expect(read.text).toBeInstanceOf(ConfigDocument.RedactionWithheld)
+          expect((read.text as ConfigDocument.RedactionWithheld).reason).toBe("could-not-parse")
+          expect(JSON.stringify(read)).not.toContain("sk-real-secret")
         }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
       }),
     ),

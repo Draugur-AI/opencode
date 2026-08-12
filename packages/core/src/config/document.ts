@@ -29,6 +29,9 @@ export type Diagnostic = ConfigDocumentSchema.Diagnostic
 export const ReadResult = ConfigDocumentSchema.ReadResult
 export type ReadResult = ConfigDocumentSchema.ReadResult
 
+export const RedactionWithheld = ConfigDocumentSchema.RedactionWithheld
+export type RedactionWithheld = ConfigDocumentSchema.RedactionWithheld
+
 export const RestartImpact = ConfigDocumentSchema.RestartImpact
 export type RestartImpact = ConfigDocumentSchema.RestartImpact
 
@@ -344,15 +347,23 @@ const layer = Layer.effect(
       // it against the actual on-disk file, so it must never be computed from the redacted display
       // copy a client echoes back.
       const hash = Hash.sha256(text)
-      // Redaction must not depend on the document parsing cleanly: `parseAndDiagnose` discards its
-      // `parsed` value on ANY diagnostic, even one unrelated to mcp, which would otherwise leave a
-      // secret in `text` unredacted whenever the file has an unrelated syntax error elsewhere
-      // (Copilot review, PR #32) -- exactly the leak this change exists to close, reachable through
-      // a different path. Use jsonc-parser's own lenient parse directly, ignoring its error list,
-      // purely to locate secret paths -- the same forgiving parse it always performs internally.
-      const lenientParsed: unknown = text.trim() === "" ? undefined : parse(text, [], { allowTrailingComma: true })
-      const mcp =
-        lenientParsed && typeof lenientParsed === "object" ? (lenientParsed as Record<string, unknown>).mcp : undefined
+      // Fail closed rather than redact best-effort (lead ruling, TKT-323 feedback #191 follow-up,
+      // superseding an earlier lenient-parse fix reviewed on PR #32): a lenient parse can recover a
+      // tree that silently DROPS the secret-bearing branch when a malformed region swallows it, so
+      // the redactor would see no secrets while the raw text still carries them byte-for-byte. A
+      // guarantee conditional on how badly the file is broken is not a guarantee. The escape hatch
+      // for a broken config is editing it on disk directly (already the rule for every other read
+      // path); these diagnostics are the fix-it information.
+      if (diagnostics.length > 0) {
+        return new ReadResult({
+          target,
+          text: new RedactionWithheld({ reason: "could-not-parse" }),
+          hash,
+          parsed: redactParsed(parsed),
+          diagnostics,
+        })
+      }
+      const mcp = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>).mcp : undefined
       const redactedText = mcp === undefined ? text : redactSecretsInText(text, mcp)
       return new ReadResult({ target, text: redactedText, hash, parsed: redactParsed(parsed), diagnostics })
     })
