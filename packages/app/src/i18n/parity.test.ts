@@ -655,6 +655,21 @@ const KNOWN_MISSING: readonly (
 ]
 
 describe("i18n parity", () => {
+  /**
+   * Pinned total, same pattern as `EventManifest.Latest.size` (packages/schema/test/
+   * event-manifest.test.ts) -- nothing else watches this list's size, so without a pin it grows
+   * by ambient drift: every future feature adds its own individually-justified entries while
+   * overall parity quietly degrades with no signal anywhere. Growing the list is now a deliberate,
+   * same-commit bump of this number (lead ruling, TKT-323 chunk 3, 2026-08-12) -- the loosening
+   * this pin guards is this same PR's own creation (319 verified-failed + 183 pending-first-
+   * attempt = 502). Per-locale pins are deliberately NOT required: TKT-373's real translation
+   * pipeline run will collapse this total massively, and the pin update landing in that same
+   * commit is the mechanism working as designed, not a violation of it.
+   */
+  test("KNOWN_MISSING's total size is a deliberate, same-commit bump, never ambient drift", () => {
+    expect(KNOWN_MISSING.length).toBe(502)
+  })
+
   test("non-English locales have every English key and required plural variants", async () => {
     for (const domain of domains) {
       const source = await dictionary(domain.source)
