@@ -332,6 +332,7 @@ export const dict = {
   "mcp.status.connected": "connected",
   "mcp.status.failed": "failed",
   "mcp.status.needs_auth": "needs auth",
+  "mcp.status.needs_client_registration": "needs client registration",
   "mcp.status.disabled": "disabled",
   "mcp.auth.clickToAuthenticate": "Click to authenticate",
 
@@ -1118,6 +1119,8 @@ export const dict = {
   "settings.commands.description": "Command settings will be configurable here.",
   "settings.mcp.title": "MCP",
   "settings.mcp.description": "MCP settings will be configurable here.",
+  "settings.mcp.runtimeUnavailable": "Live status is unavailable in this assembly. The catalog below reflects your configuration, not a current connection.",
+  "settings.mcp.status.unavailable": "unavailable",
 
   "settings.permissions.title": "Permissions",
   "settings.permissions.description": "Control what tools the server can use by default.",
