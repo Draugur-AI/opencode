@@ -6,6 +6,7 @@ import { CommandV2 } from "./command"
 import { Config } from "./config"
 import { ConfigDocument } from "./config/document"
 import { McpCatalog } from "./config/mcp-catalog"
+import { McpRuntime } from "./config/mcp-runtime"
 import { LayerNode } from "./effect/layer-node"
 import { Node } from "./effect/app-node"
 import { FileMutation } from "./file-mutation"
@@ -47,6 +48,13 @@ export const locationServices = LayerNode.group([
   Config.node,
   ConfigDocument.node,
   McpCatalog.node,
+  // Bound to its own default (TKT-323 chunk 2), never unbound: this group is compiled by more
+  // than one assembly, and LayerNode.compile throws on any unbound member, taking the WHOLE
+  // per-location bundle down for every route in that assembly, not just the one that needed the
+  // member -- see this node's own doc for the mechanism. packages/opencode's httpapi/server.ts
+  // supplies the real implementation as a replacement; every other caller keeps the bound
+  // default, which always fails McpRuntime.UnavailableError.
+  McpRuntime.node,
   AgentV2.node,
   CommandV2.node,
   Reference.node,

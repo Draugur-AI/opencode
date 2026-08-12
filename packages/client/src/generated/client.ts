@@ -161,6 +161,8 @@ import type {
   ConfigDocumentTargetApplyOutput,
   McpListInput,
   McpListOutput,
+  McpStatusInput,
+  McpStatusOutput,
 } from "./types"
 import { ClientError } from "./client-error"
 
@@ -1347,6 +1349,18 @@ export function make(options: ClientOptions) {
             query: { location: input?.["location"] },
             successStatus: 200,
             declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      status: (input?: McpStatusInput, requestOptions?: RequestOptions) =>
+        request<McpStatusOutput>(
+          {
+            method: "GET",
+            path: `/api/mcp/status`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [503, 401, 400],
             empty: false,
           },
           requestOptions,

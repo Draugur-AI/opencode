@@ -33,6 +33,7 @@ import { ChildProcess, ChildProcessSpawner } from "effect/unstable/process"
 import { CrossSpawnSpawner } from "@opencode-ai/core/cross-spawn-spawner"
 import { McpCatalog } from "./catalog"
 import { McpEvent } from "@opencode-ai/schema/mcp-event"
+import { McpStatus } from "@opencode-ai/schema/mcp-status"
 import { McpBrowser } from "./browser"
 
 const DEFAULT_TIMEOUT = 30_000
@@ -80,31 +81,10 @@ function createClient(directory: string) {
   return client
 }
 
-const StatusConnected = Schema.Struct({ status: Schema.Literal("connected") }).annotate({
-  identifier: "MCPStatusConnected",
-})
-const StatusDisabled = Schema.Struct({ status: Schema.Literal("disabled") }).annotate({
-  identifier: "MCPStatusDisabled",
-})
-const StatusFailed = Schema.Struct({ status: Schema.Literal("failed"), error: Schema.String }).annotate({
-  identifier: "MCPStatusFailed",
-})
-const StatusNeedsAuth = Schema.Struct({ status: Schema.Literal("needs_auth") }).annotate({
-  identifier: "MCPStatusNeedsAuth",
-})
-const StatusNeedsClientRegistration = Schema.Struct({
-  status: Schema.Literal("needs_client_registration"),
-  error: Schema.String,
-}).annotate({ identifier: "MCPStatusNeedsClientRegistration" })
-
-export const Status = Schema.Union([
-  StatusConnected,
-  StatusDisabled,
-  StatusFailed,
-  StatusNeedsAuth,
-  StatusNeedsClientRegistration,
-]).annotate({ identifier: "MCPStatus", discriminator: "status" })
-export type Status = Schema.Schema.Type<typeof Status>
+// Relocated to packages/schema/src/mcp-status.ts (TKT-323 chunk 2) so packages/protocol's live
+// mcp.status endpoint can share this exact vocabulary -- protocol cannot depend on this package.
+export const Status = McpStatus.Status
+export type Status = McpStatus.Status
 
 // Store transports for OAuth servers to allow finishing auth
 type TransportWithAuth = StreamableHTTPClientTransport | SSEClientTransport

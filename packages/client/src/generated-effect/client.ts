@@ -1036,7 +1036,12 @@ type Endpoint23_0Input = { readonly location?: Endpoint23_0Request["query"]["loc
 const Endpoint23_0 = (raw: RawClient["server.mcp"]) => (input?: Endpoint23_0Input) =>
   raw["mcp.list"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError))
 
-const adaptGroup23 = (raw: RawClient["server.mcp"]) => ({ list: Endpoint23_0(raw) })
+type Endpoint23_1Request = Parameters<RawClient["server.mcp"]["mcp.status"]>[0]
+type Endpoint23_1Input = { readonly location?: Endpoint23_1Request["query"]["location"] }
+const Endpoint23_1 = (raw: RawClient["server.mcp"]) => (input?: Endpoint23_1Input) =>
+  raw["mcp.status"]({ query: { location: input?.["location"] } }).pipe(Effect.mapError(mapClientError))
+
+const adaptGroup23 = (raw: RawClient["server.mcp"]) => ({ list: Endpoint23_0(raw), status: Endpoint23_1(raw) })
 
 const adaptClient = (raw: RawClient) => ({
   health: adaptGroup0(raw["server.health"]),

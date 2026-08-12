@@ -4156,3 +4156,25 @@ export type McpListOutput = {
     readonly target: string
   }>
 }
+
+export type McpStatusInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type McpStatusOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: {
+    readonly [x: string]:
+      | { readonly status: "connected" }
+      | { readonly status: "disabled" }
+      | { readonly status: "failed"; readonly error: string }
+      | { readonly status: "needs_auth" }
+      | { readonly status: "needs_client_registration"; readonly error: string }
+  }
+}
