@@ -48,6 +48,12 @@ export type Draft = {
 
 export interface Interface extends State.Transformable<Draft> {
   readonly sources: () => Effect.Effect<Source[]>
+  /** The full result of `mergeSkills` over this location's currently-loaded sources -- winners
+   * AND shadowed losers, with provenance. `list()` filters this to winners; `SkillCatalog` (TKT-323)
+   * reports the whole thing. Both consume this exact Effect rather than each re-deriving their own
+   * load-then-merge walk, so they cannot disagree about which skill wins a name collision (see
+   * `mergeSkills`'s own doc comment). */
+  readonly entries: () => Effect.Effect<MergeEntry[]>
   readonly list: () => Effect.Effect<Info[]>
 }
 
@@ -151,7 +157,7 @@ const layer = Layer.effect(
     // QUESTION(Dax): Should local skill sources invalidate on filesystem watch
     // events, following the reload policy chosen for other context sources?
     const cache = new Map<string, Info[]>()
-    const list = Effect.fn("SkillV2.list")(function* () {
+    const entries = Effect.fn("SkillV2.entries")(function* () {
       const loaded: LoadedSource[] = []
       for (const source of state.get().sources) {
         const key = Source.key(source)
@@ -160,8 +166,9 @@ const layer = Layer.effect(
         loaded.push({ source, skills })
       }
       return mergeSkills(loaded)
-        .filter((entry) => !entry.shadowedBy)
-        .map((entry) => entry.skill)
+    })
+    const list = Effect.fn("SkillV2.list")(function* () {
+      return (yield* entries()).filter((entry) => !entry.shadowedBy).map((entry) => entry.skill)
     })
 
     return Service.of({
@@ -170,6 +177,7 @@ const layer = Layer.effect(
       sources: Effect.fn("SkillV2.sources")(function* () {
         return state.get().sources
       }),
+      entries,
       list,
     })
   }),
