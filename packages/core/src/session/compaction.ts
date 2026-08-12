@@ -149,9 +149,15 @@ export const serialize = (message: SessionMessage.Message) => {
 }
 
 // TKT-377, diary 2584 §5: the most recent assistant message with recorded usage carries the REAL
-// prompt-token count for that turn (message.tokens.input, exactly what the provider reported
-// usage.prompt_tokens as) plus its own real response size (message.tokens.output) -- together,
-// the real total context size as of right after that turn completed. Everything appended to
+// prompt-token count for that turn. Copilot review on this PR caught the first cut under-summing
+// it: message.tokens.input is usage.nonCachedInputTokens (publish-llm-event.ts) -- cached prompt
+// tokens still occupy the context window, so cache.read/cache.write must be added too, matching
+// the legacy path's own definition of real usage (overflow.ts's isOverflow: input+output+
+// cache.read+cache.write). message.tokens.reasoning is deliberately NOT added: it is this turn's
+// own extended-thinking output, not content that gets resent in a future prompt, and the legacy
+// formula excludes it for the same reason. Together with the real response size
+// (message.tokens.output), this is the real total context size as of right after that turn
+// completed. Everything appended to
 // `entries` since then (a new user message, this turn's own tool results so far) is the only part
 // that still needs char-count estimation, and it is normally small relative to a whole
 // conversation. Assumes system/tools are unchanged since the anchor turn (the common case for one
@@ -159,11 +165,21 @@ export const serialize = (message: SessionMessage.Message) => {
 // anchor and now is not separately accounted for -- diary 2584's measured error was in structured
 // tool OUTPUT content, not schema size, so this is the right thing to leave unestimated rather
 // than the right thing to chase.
+// Correctness here depends on `entries` never spanning a prior compaction boundary --
+// SessionHistory.entriesForRunner (history.ts) cuts at the latest compaction before this ever
+// sees the list, so scanning backwards for an anchor cannot cross into pre-compaction history and
+// double-count something the compaction summary already absorbed. If a future caller widens what
+// it passes in (e.g. full uncut history for some other purpose), that assumption breaks silently
+// here -- see the matching note at history.ts's cut point.
 const findAnchor = (entries: readonly Entry[]) => {
   for (let index = entries.length - 1; index >= 0; index--) {
     const message = entries[index]!.message
     if (message.type === "assistant" && message.tokens !== undefined)
-      return { realTokens: message.tokens.input + message.tokens.output, afterIndex: index }
+      return {
+        realTokens:
+          message.tokens.input + message.tokens.output + message.tokens.cache.read + message.tokens.cache.write,
+        afterIndex: index,
+      }
   }
   return undefined
 }
@@ -173,9 +189,14 @@ export const anchoredEstimate = (entries: readonly Entry[]) => {
   const anchor = findAnchor(entries)
   if (!anchor) return undefined
   const delta = entries.slice(anchor.afterIndex + 1)
+  // Copilot review on this PR: serialize() truncates tool output (TOOL_OUTPUT_MAX_CHARS) and
+  // strips media payloads for the SUMMARY it's meant to build -- using it here would silently
+  // under-estimate a delta dominated by one large tool result or attachment, exactly the
+  // structured-content under-estimation this whole ticket exists to fix. estimate() (JSON.stringify,
+  // no truncation) is the same untruncated approach the no-anchor fallback already uses.
   return {
     anchoredTokens: anchor.realTokens,
-    estimatedTokens: delta.reduce((total, entry) => total + Token.estimate(serialize(entry.message)), 0),
+    estimatedTokens: estimate(delta.map((entry) => entry.message)),
   }
 }
 

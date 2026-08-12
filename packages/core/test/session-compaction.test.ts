@@ -12,6 +12,10 @@ function user(value: string, text: string): SessionCompaction.Entry["message"] {
   return SessionMessage.User.make({ id: id(value), type: "user", text, time: { created } })
 }
 
+function shell(value: string, output: string): SessionCompaction.Entry["message"] {
+  return SessionMessage.Shell.make({ id: id(value), type: "shell", callID: value, command: "cmd", output, time: { created } })
+}
+
 function assistant(
   value: string,
   content: SessionMessage.Assistant["content"],
@@ -99,6 +103,33 @@ test("anchoredEstimate: an assistant turn with no tokens recorded (e.g. a compac
   ]
   const result = SessionCompaction.anchoredEstimate(entries)
   expect(result?.anchoredTokens).toBe(20_500)
+})
+
+test("anchoredEstimate: cached prompt tokens count toward the real anchor (Copilot review, PR #35) -- cache.read/write still occupy the context window", () => {
+  // input+output alone would give 51_000; the real total the provider actually billed against the
+  // context window also includes cache.read (5_000) and cache.write (2_000) -- matching the legacy
+  // path's own definition of real usage (overflow.ts's isOverflow: input+output+cache.read+cache.write).
+  const tokens = { input: 50_000, output: 1_000, reasoning: 999_999, cache: { read: 5_000, write: 2_000 } }
+  const entries: SessionCompaction.Entry[] = [{ seq: 1, message: assistant("a1", [], tokens) }]
+  const result = SessionCompaction.anchoredEstimate(entries)
+  // Delete-the-fix check: input+output alone (51_000) is what the pre-fix code returned --
+  // asserting the full 58_000 fails against that old sum.
+  expect(result?.anchoredTokens).toBe(58_000)
+  // reasoning is deliberately excluded even though it dwarfs everything else in this fixture --
+  // it is this turn's own generation, not content resent in a future prompt.
+})
+
+test("anchoredEstimate: the delta estimate does not truncate a large post-anchor tool/shell output (Copilot review, PR #35)", () => {
+  const tokens = { input: 1_000, output: 100, reasoning: 0, cache: { read: 0, write: 0 } }
+  const bigOutput = "x".repeat(20_000) // far past TOOL_OUTPUT_MAX_CHARS (2_000) -- serialize() would truncate this
+  const entries: SessionCompaction.Entry[] = [
+    { seq: 1, message: assistant("anchor", [], tokens) },
+    { seq: 2, message: shell("big-shell", bigOutput) },
+  ]
+  const result = SessionCompaction.anchoredEstimate(entries)
+  // 20_000 chars / 4 is ~5_000 tokens; a truncated estimate would cap out far below that (serialize's
+  // TOOL_OUTPUT_MAX_CHARS=2_000 -> ~500 tokens plus the "[truncated]" marker and wrapper text).
+  expect(result?.estimatedTokens).toBeGreaterThan(4_000)
 })
 
 test("compaction describes tool media without embedding base64", () => {

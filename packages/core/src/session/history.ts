@@ -92,6 +92,10 @@ export const entriesForRunner = Effect.fn("SessionHistory.entriesForRunner")(fun
   sessionID: SessionSchema.ID,
   baselineSeq: number,
 ) {
+  // SessionCompaction.findAnchor (compaction.ts) relies on this cut: it scans this list backwards
+  // for the last assistant turn's real usage and treats that as an anchor for everything before
+  // it too. A caller that widens this to return full uncut history (spanning a prior compaction)
+  // would make the anchor stale-high without any test failing -- see the matching note there.
   const rows = yield* messageRows(db, sessionID, yield* latestCompaction(db, sessionID), baselineSeq)
   return yield* Effect.forEach(rows, (row) =>
     decodeMessageRow(row).pipe(Effect.map((message) => ({ seq: row.seq, message }))),
