@@ -73,7 +73,7 @@ export const check = Effect.fn("MonitorProcess.check")(function* (input: {
   // §3) wants "partial output bounded and retained" on timeout; this returns none. Fixing it means
   // switching to appProcess.runStream() with a caller-side accumulator, a change to shared
   // AppProcess behavior that bash.ts would benefit from too -- out of scope for reusing its
-  // existing run() path in this slice. Filed as a gap to close, not silently accepted as done.
+  // existing run() path in this slice. Filed as feedback #199, not silently accepted as done.
   if (!result) return { type: "timeout", output: "" } satisfies CheckResult
   return {
     type: "completed",
