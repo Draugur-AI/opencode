@@ -56,6 +56,7 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { AppNodeBuilderV1 } from "./app-node-builder-v1"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { Monitor } from "@opencode-ai/core/monitor"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionGoal } from "@opencode-ai/core/session/goal"
 import { SessionLedger } from "@opencode-ai/core/session/ledger"
@@ -116,10 +117,14 @@ export const AppLayer = AppNodeBuilderV1.build(
     ProjectV2.node,
     SessionGoal.node,
     SessionLedger.node,
-    // Monitor.node / MonitorRuntime.node: absent by decision -- the TKT-322 execution phase
-    // ships MonitorRuntime.layer but wires it into no assembly site (still no tool/monitor.ts,
-    // no startup recovery hook consuming Monitor.Service or MonitorRuntime.Service on this
-    // runtime). The tool-wiring PR adds both here.
+    // Monitor.recoverNode (declare + startup recovery) is present -- recover() is idempotent
+    // (PR1) so running it here too, alongside httpapi/server.ts's own boot, is safe. This
+    // runtime has no locationServices/BuiltInTools reach (ToolRegistry.node above stays empty
+    // here, same as SessionGoal/SessionLedger before it), so tool/monitor.ts's tools are not
+    // actually served from this runtime, and MonitorRuntime.node stays at its bound default --
+    // no SessionExecution wiring exists here either, and nothing on this runtime reaches a
+    // running session that could need live monitor execution.
+    Monitor.recoverNode,
   ]),
   [[McpRuntime.node, McpRuntimeLive.node]],
 ).pipe(Layer.provideMerge(AppNodeBuilderV1.build(Ripgrep.node)), Layer.provideMerge(Observability.layer))

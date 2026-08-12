@@ -4,6 +4,7 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Database } from "@opencode-ai/core/database/database"
+import { Monitor } from "@opencode-ai/core/monitor"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionGoal } from "@opencode-ai/core/session/goal"
@@ -54,10 +55,12 @@ function bind(hostname: string, port: number, password: string) {
             ProjectV2.node,
             SessionGoal.node,
             SessionLedger.node,
-            // Monitor.node / MonitorRuntime.node: absent by decision -- the TKT-322 execution
-            // phase ships MonitorRuntime.layer but wires it into no assembly site (still no
-            // tool/monitor.ts, no startup recovery hook on this runtime). The tool-wiring PR
-            // adds both.
+            // Monitor.recoverNode (declare + startup recovery) is present. MonitorRuntime.node
+            // stays at its bound default HERE deliberately -- this command's actual HTTP surface
+            // is createRoutes() from packages/server, which wires the real MonitorRuntime.liveNode
+            // itself; this separate top-level graph (Credential/EventV2/etc, this command's own
+            // direct service needs) never reaches a running session and doesn't need it too.
+            Monitor.recoverNode,
             Database.node,
           ]),
         ),

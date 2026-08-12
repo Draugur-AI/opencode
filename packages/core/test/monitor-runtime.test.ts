@@ -1,60 +1,41 @@
-import { afterAll, describe, expect, test } from "bun:test"
-import fs from "fs"
-import os from "os"
-import path from "path"
+import { describe, expect, test } from "bun:test"
 import { Effect, Layer, ManagedRuntime } from "effect"
-import { AbsolutePath } from "@opencode-ai/core/schema"
-import { AgentV2 } from "@opencode-ai/core/agent"
 import { AppProcess } from "@opencode-ai/core/process"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { Database } from "@opencode-ai/core/database/database"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
-import { Location } from "@opencode-ai/core/location"
-import { LocationMutation } from "@opencode-ai/core/location-mutation"
+import { buildLocationServiceMap, LocationServiceMap } from "@opencode-ai/core/location-services"
 import { Monitor } from "@opencode-ai/core/monitor"
 import { MonitorOutput } from "@opencode-ai/core/monitor/output"
 import { MonitorRuntime } from "@opencode-ai/core/monitor/runtime"
-import { PermissionSaved } from "@opencode-ai/core/permission/saved"
-import { PermissionV2 } from "@opencode-ai/core/permission"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
-import { SessionProfile } from "@opencode-ai/core/session/profile"
 import { SessionStore } from "@opencode-ai/core/session/store"
-import { location } from "./fixture/location"
-
-// LocationMutation.node's layer resolves the directory's real path at construction, so this
-// needs to be a directory that actually exists on disk (unlike PermissionV2 alone, which never
-// touches the filesystem).
-const projectDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "monitor-runtime-test-"))
-afterAll(() => fs.rmSync(projectDirectory, { recursive: true, force: true }))
-
-const current = Layer.succeed(
-  Location.Service,
-  Location.Service.of(location({ directory: AbsolutePath.make(projectDirectory) })),
-)
 
 // The real dependency graph MonitorRuntime.layer needs to build -- deliberately the real
-// services (per permission.test.ts's own working list), not stubs, so this proves the ACTUAL
-// construction dedupes rather than just a generic mechanism proxy (see
-// test/effect/layer-node/layer-node.test.ts:349 for that proxy).
+// services, not stubs, so this proves the ACTUAL construction dedupes rather than just a generic
+// mechanism proxy (see test/effect/layer-node/layer-node.test.ts:349 for that proxy).
+//
+// TKT-322 diary 2669 review: MonitorRuntime resolves LocationMutation/PermissionV2 PER CHECK
+// (through SessionStore + LocationServiceMap, mirroring SessionExecutionLocal's own
+// `locations.get(session.location)`), not at construction -- so this test's construction-time
+// deps are SessionStore + LocationServiceMap, not Location/LocationMutation/PermissionV2
+// directly. `buildLocationServiceMap([])` is a real, self-contained LocationServiceMap.Service
+// that never needs to actually resolve a location, since this test never calls start()/cancel().
 const deps = AppNodeBuilder.build(
   LayerNode.group([
     Database.node,
     EventV2.node,
     Monitor.node,
     MonitorOutput.node,
-    LocationMutation.node,
-    PermissionV2.node,
     AppProcess.node,
     SessionExecution.node,
     SessionStore.node,
-    PermissionSaved.node,
-    AgentV2.node,
-    SessionProfile.node,
+    LocationServiceMap.node,
   ]),
   [
-    [Location.node, current],
     [SessionExecution.node, SessionExecution.noopLayer],
+    [LocationServiceMap.node, buildLocationServiceMap([])],
   ],
 )
 
