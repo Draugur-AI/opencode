@@ -267,12 +267,6 @@ export default function BlackLayout(props: RouteSectionProps) {
           </a>
           <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
           <LanguagePicker align="right" />
-          <span>
-            <A href={language.route("/legal/privacy-policy")}>{i18n.t("legal.privacy")}</A>
-          </span>
-          <span>
-            <A href={language.route("/legal/terms-of-service")}>{i18n.t("legal.terms")}</A>
-          </span>
         </div>
         <span data-slot="anomaly-alt">
           ©{new Date().getFullYear()} <a href="https://anoma.ly">Anomaly</a>

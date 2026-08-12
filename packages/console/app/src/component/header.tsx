@@ -151,12 +151,6 @@ export function Header(props: { zen?: boolean; go?: boolean; hideGetStarted?: bo
             <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
           </li>
           <li>
-            <a href={language.route("/data")}>{i18n.t("nav.data")}</a>
-          </li>
-          <li>
-            <A href={language.route("/zen")}>{i18n.t("nav.zen")}</A>
-          </li>
-          <li>
             <A href={language.route("/go")}>{i18n.t("nav.go")}</A>
           </li>
           <li>
@@ -167,7 +161,7 @@ export function Header(props: { zen?: boolean; go?: boolean; hideGetStarted?: bo
               <a href="/auth">{i18n.t("nav.login")}</a>
             </li>
           </Show>
-          <Show when={!props.hideGetStarted}>
+          <Show when={false}>
             <li>
               <A href={language.route("/download")} data-slot="cta-button">
                 <svg
@@ -250,14 +244,6 @@ export function Header(props: { zen?: boolean; go?: boolean; hideGetStarted?: bo
                 <li>
                   <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
                 </li>
-                <li>
-                  <a href={language.route("/data")}>{i18n.t("nav.data")}</a>
-                </li>
-                <Show when={!props.zen}>
-                  <li>
-                    <A href={language.route("/zen")}>{i18n.t("nav.zen")}</A>
-                  </li>
-                </Show>
                 <Show when={!props.go}>
                   <li>
                     <A href={language.route("/go")}>{i18n.t("nav.go")}</A>
@@ -271,7 +257,7 @@ export function Header(props: { zen?: boolean; go?: boolean; hideGetStarted?: bo
                     <a href="/auth">{i18n.t("nav.login")}</a>
                   </li>
                 </Show>
-                <Show when={!props.hideGetStarted}>
+                <Show when={false}>
                   <li>
                     <A href={language.route("/download")} data-slot="cta-button">
                       {i18n.t("nav.getStartedFree")}

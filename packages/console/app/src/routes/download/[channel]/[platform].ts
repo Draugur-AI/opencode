@@ -26,18 +26,9 @@ const downloadNames: Record<string, string> = {
   "windows-x64-nsis": "OpenCode Desktop Installer.exe",
 } satisfies { [K in DownloadPlatform]?: string }
 
-export async function GET({ params: { platform, channel } }: APIEvent) {
-  const assetName = channel === "stable" ? prodAssetNames[platform] : betaAssetNames[platform]
-  if (!assetName) return new Response(null, { status: 404 })
-
-  const resp = await fetch(
-    `https://github.com/anomalyco/${channel === "stable" ? "opencode" : "opencode-beta"}/releases/latest/download/${assetName}`,
-  )
-
-  const downloadName = downloadNames[platform]
-
-  const headers = new Headers(resp.headers)
-  if (downloadName) headers.set("content-disposition", `attachment; filename="${downloadName}"`)
-
-  return new Response(resp.body, { status: resp.status, statusText: resp.statusText, headers })
+// Hidden (TKT-396): no Draugur release pipeline exists yet, so this never pulls anomalyco
+// binaries under this fork's own domain. The asset maps above stay as reference for whenever
+// a real pipeline exists; GET is disabled rather than deleted so re-enabling is one change.
+export async function GET(_evt: APIEvent) {
+  return new Response(null, { status: 404 })
 }
