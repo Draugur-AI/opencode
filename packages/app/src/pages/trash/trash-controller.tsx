@@ -32,8 +32,8 @@ export function createTrashController() {
 
   const restore = async (session: Session.Info) => {
     const conn = server.current
-    if (!conn || conn.type !== "http") return
-    const client = createSessionLifecycleClient(conn.http)
+    if (!conn) return
+    const client = createSessionLifecycleClient(conn)
     try {
       await client.restoreFromTrash({
         sessionID: session.id,
@@ -55,8 +55,8 @@ export function createTrashController() {
         onConfirm={() => {
           void (async () => {
             const conn = server.current
-            if (!conn || conn.type !== "http") return
-            const client = createSessionLifecycleClient(conn.http)
+            if (!conn) return
+            const client = createSessionLifecycleClient(conn)
             try {
               await client.purge({ sessionID: session.id, requestID: lifecycleRequestID() })
             } catch (cause) {

@@ -62,8 +62,8 @@ export interface LifecycleMutation {
   readonly expectedLifecycleRevision?: number
 }
 
-export const createSessionLifecycleClient = (http: ServerConnection.HttpBase) => {
-  const client = OpenCode.make({ baseUrl: http.url, fetch: authorizedFetch(http) })
+export const createSessionLifecycleClient = (conn: ServerConnection.Any) => {
+  const client = OpenCode.make({ baseUrl: conn.http.url, fetch: authorizedFetch(conn.http) })
   return {
     /** Archived -> active. */
     restore: (input: LifecycleMutation) => client.sessions.restore(input),
