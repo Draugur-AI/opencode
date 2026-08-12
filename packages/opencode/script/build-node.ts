@@ -26,6 +26,7 @@ await Bun.build({
   },
   files: {
     "opencode-web-ui.gen.ts": "",
+    "opencode-docs.gen.ts": "",
   },
 })
 
