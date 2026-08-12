@@ -173,12 +173,7 @@ describe("tool.write", () => {
   })
 
   describe("file permissions", () => {
-    // Skipped (TKT-322, feedback #194): assumes a umask of 0022 (0o666 & ~0o022 = 0o644); this
-    // runner's umask is 0002, so the write comes out 0o664. Reproduced identically on a clean,
-    // unmodified dev checkout with zero relation to this PR -- not a regression from this diff.
-    // Un-skip condition: feedback #194 is triaged -- compare against (0o666 & ~process.umask())
-    // instead of a hardcoded mode, or set the mode explicitly rather than relying on the OS default.
-    it.instance.skip("sets file permissions when writing sensitive data", () =>
+    it.instance("sets file permissions when writing sensitive data", () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
         const filepath = path.join(test.directory, "sensitive.json")
