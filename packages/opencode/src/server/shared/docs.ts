@@ -36,10 +36,9 @@ function docsResponse(file: string, body: Uint8Array, status: number) {
 // not silently swapped for the homepage the way an SPA's index.html fallback would be.
 function lookup(embeddedWebDocs: Record<string, string>, requestPath: string) {
   const relative = requestPath.replace(/^\/docs\/?/, "").replace(/\/$/, "")
-  const direct = embeddedWebDocs[relative]
-  if (direct) return { file: direct, status: 200 }
-  const indexed = embeddedWebDocs[relative ? `${relative}/index.html` : "index.html"]
-  if (indexed) return { file: indexed, status: 200 }
+  if (Object.hasOwn(embeddedWebDocs, relative)) return { file: embeddedWebDocs[relative], status: 200 }
+  const indexKey = relative ? `${relative}/index.html` : "index.html"
+  if (Object.hasOwn(embeddedWebDocs, indexKey)) return { file: embeddedWebDocs[indexKey], status: 200 }
   const notFoundPage = embeddedWebDocs["404.html"]
   if (notFoundPage) return { file: notFoundPage, status: 404 }
   return undefined

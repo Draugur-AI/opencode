@@ -116,6 +116,31 @@ describe("HttpApi docs", () => {
     }),
   )
 
+  it.live("does not resolve prototype-chain properties for a request path", () =>
+    Effect.gen(function* () {
+      const fs = yield* FSUtil.Service
+      let readPath: unknown
+      const response = yield* serveEmbeddedDocsEffect(
+        "/docs/__proto__/",
+        {
+          ...fs,
+          readFile: (path) => {
+            readPath = path
+            return Effect.succeed(new TextEncoder().encode("<html>not found</html>"))
+          },
+        },
+        { "404.html": "/$bunfs/root/404.html" },
+      ).pipe(Effect.map(HttpServerResponse.toWeb))
+
+      // Plain-object property lookup resolves __proto__/constructor/toString through the
+      // prototype chain rather than the map's own keys -- guarded with Object.hasOwn.
+      // Falls through to the branded 404 page like any other unmatched path, reading the
+      // real 404.html file path rather than something derived from Object.prototype.
+      expect(readPath).toBe("/$bunfs/root/404.html")
+      expect(response.status).toBe(404)
+    }),
+  )
+
   it.live("falls back to the bundle's own branded 404 page, served with a 404 status", () =>
     Effect.gen(function* () {
       const fs = yield* FSUtil.Service
