@@ -6,7 +6,8 @@ import * as Tool from "./tool"
 
 // V1 bridge for the V2 Monitor tools (packages/core/src/tool/monitor.ts): the live serving
 // path is this legacy registry (see registry.ts's builtin list), which the V2 registration in
-// core/tool/builtins.ts never reaches -- feedback #205, Sean's live gate walk. Delegates to the
+// core/tool/builtins.ts never reaches -- Sean's own live gate walk found this directly (not
+// filed as feedback). Delegates to the
 // same Monitor.Service the V2 tool uses; no duplicated monitor logic, only the tool-shape bridge.
 //
 // Plugin sources and the plugin condition are excluded, mirroring the V2 tool: neither is
