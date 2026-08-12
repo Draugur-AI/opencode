@@ -167,6 +167,27 @@ describe("createSessionTabs", () => {
     })
   })
 
+  test("prefers goal fallback when no file, context, or review tab is active", () => {
+    createRoot((dispose) => {
+      const [state] = createStore({
+        active: undefined as string | undefined,
+        all: ["goal"],
+      })
+      const tabs = createMemo(() => ({ active: () => state.active, all: () => state.all }))
+      const result = createSessionTabs({
+        tabs,
+        pathFromTab: () => undefined,
+        normalizeTab: (tab) => tab,
+      })
+
+      expect(result.goalOpen()).toBe(true)
+      expect(result.activeTab()).toBe("goal")
+      expect(result.closableTab()).toBe("goal")
+      expect(result.panelTabs()).toEqual([])
+      dispose()
+    })
+  })
+
   test("exposes the Open File tab without treating it as a file tab", () => {
     createRoot((dispose) => {
       const [state] = createStore({

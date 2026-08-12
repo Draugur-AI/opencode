@@ -126,6 +126,8 @@ export const dict = {
   "command.session.previous.unseen": "Сеанси қаблии хонданашуда",
   "command.session.next.unseen": "Сеанси навбатии нохонда",
   "command.session.archive": "Сеанси архив",
+  "command.session.goal": "Ҳадаф ва суратҳисоб",
+  "command.session.goal.description": "Кушодани панели ҳадаф ва суратҳисоби кори ҷаласа",
   "command.palette": "Палитраи фармон",
   "command.theme.cycle": "Мавзӯи велосипедронӣ",
   "command.theme.set": "Мавзӯъро истифода баред: {{theme}}",

@@ -31,6 +31,7 @@ import { useDialog } from "@opencode-ai/ui/context/dialog"
 import FileTree from "@/components/file-tree"
 import { normalizeFileTreeV2Path } from "@/components/file-tree-v2-model"
 import { SessionContextUsage } from "@/components/session-context-usage"
+import { SessionGoalTab } from "@/components/session/session-goal-tab"
 
 const reviewTabID = "session-side-panel-review-tab"
 const reviewTabPanelID = "session-side-panel-review-tabpanel"
@@ -182,6 +183,7 @@ export function SessionSidePanel(props: {
     fileBrowser: () => !!props.fileBrowserState,
   })
   const contextOpen = tabState.contextOpen
+  const goalOpen = tabState.goalOpen
   const openFileOpen = tabState.openFileOpen
   const panelTabs = tabState.panelTabs
   const openedTabs = tabState.openedTabs
@@ -391,6 +393,31 @@ export function SessionSidePanel(props: {
                                   </div>
                                 </Tabs.Trigger>
                               </Show>
+                              <Show when={goalOpen()}>
+                                <Tabs.Trigger
+                                  value="goal"
+                                  closeButton={
+                                    <TooltipKeybind
+                                      title={language.t("common.closeTab")}
+                                      keybind={command.keybind("tab.close")}
+                                      placement="bottom"
+                                      gutter={10}
+                                    >
+                                      <IconButton
+                                        icon="close-small"
+                                        variant="ghost"
+                                        class="h-5 w-5"
+                                        onClick={() => tabs().close("goal")}
+                                        aria-label={language.t("common.closeTab")}
+                                      />
+                                    </TooltipKeybind>
+                                  }
+                                  hideCloseButton
+                                  onMiddleClick={() => tabs().close("goal")}
+                                >
+                                  <div class="flex items-center gap-2">{language.t("session.tab.goal")}</div>
+                                </Tabs.Trigger>
+                              </Show>
                               <SortableProvider ids={openedTabs()}>
                                 <For each={panelTabs()}>
                                   {(tab) => (
@@ -494,6 +521,14 @@ export function SessionSidePanel(props: {
                             <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
                               <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                                 <SessionContextTab />
+                              </div>
+                            </Tabs.Content>
+                          </Show>
+
+                          <Show when={activeTab() === "goal"}>
+                            <Tabs.Content value="goal" class="flex flex-col h-full overflow-hidden contain-strict">
+                              <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+                                <SessionGoalTab />
                               </div>
                             </Tabs.Content>
                           </Show>
@@ -603,6 +638,37 @@ export function SessionSidePanel(props: {
                                   <SessionContextUsage variant="indicator" />
                                   <div>{language.t("session.tab.context")}</div>
                                 </div>
+                              </Tabs.Trigger>
+                            </Show>
+                            <Show when={goalOpen()}>
+                              <Tabs.Trigger
+                                value="goal"
+                                closeButton={
+                                  <TooltipV2
+                                    value={
+                                      <>
+                                        {language.t("common.closeTab")}
+                                        <Show when={closeTabKeybind().length > 0}>
+                                          <KeybindV2 keys={closeTabKeybind()} variant="neutral" />
+                                        </Show>
+                                      </>
+                                    }
+                                    placement="bottom"
+                                    gutter={10}
+                                  >
+                                    <IconButton
+                                      icon="close-small"
+                                      variant="ghost"
+                                      class="h-5 w-5"
+                                      onClick={() => tabs().close("goal")}
+                                      aria-label={language.t("common.closeTab")}
+                                    />
+                                  </TooltipV2>
+                                }
+                                hideCloseButton
+                                onMiddleClick={() => tabs().close("goal")}
+                              >
+                                <div class="flex items-center gap-2">{language.t("session.tab.goal")}</div>
                               </Tabs.Trigger>
                             </Show>
                             <For each={panelTabs()}>
@@ -722,6 +788,14 @@ export function SessionSidePanel(props: {
                           <Tabs.Content value="context" class="flex flex-col h-full overflow-hidden contain-strict">
                             <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
                               <SessionContextTab />
+                            </div>
+                          </Tabs.Content>
+                        </Show>
+
+                        <Show when={activeTab() === "goal"}>
+                          <Tabs.Content value="goal" class="flex flex-col h-full overflow-hidden contain-strict">
+                            <div class="relative pt-2 flex-1 min-h-0 overflow-hidden">
+                              <SessionGoalTab />
                             </div>
                           </Tabs.Content>
                         </Show>

@@ -191,6 +191,8 @@ export const dict = {
   "command.session.unshare": "Slutt å dele sesjon",
   "command.session.unshare.description": "Slutt å dele denne sesjonen",
 
+  "command.session.goal": "Mål og notatbok",
+  "command.session.goal.description": "Åpne panellet for sesjonsmål og notatbok",
   "command.session.export": "Eksporter sesjon",
   "command.session.export.description": "Eksporter hele sesjonsutskriften som JSON",
 
@@ -511,6 +513,24 @@ export const dict = {
   "context.usage.cost": "Kostnad",
   "context.usage.clickToView": "Klikk for å se kontekst",
   "context.usage.view": "Se kontekstforbruk",
+
+  "goal.objective.title": "Mål",
+  "goal.objective.placeholder": "Hva skal denne sesjonen oppnå?",
+  "goal.empty": "Ingen mål er satt for denne sesjonen ennå.",
+  "goal.setGoal": "Sett mål",
+  "goal.acceptanceCriteria.title": "Akseptkriterier",
+  "goal.acceptanceCriteria.empty": "Ingen akseptkriterier ennå.",
+  "goal.acceptanceCriteria.met": "Oppfylt",
+  "goal.acceptanceCriteria.waive": "Fraveik",
+  "goal.constraints.title": "Begrensninger",
+  "goal.constraints.empty": "Ingen begrensninger ennå.",
+  "goal.constraints.fromMessage": "Fra melding",
+  "goal.status.title": "Status",
+  "goal.toast.objectiveRequired": "Målet kan ikke være tomt",
+  "goal.toast.saved": "Mål lagret",
+  "goal.ledger.title": "Notatbok",
+  "goal.ledger.empty": "Ingen notatbokoppføringer ennå.",
+  "goal.ledger.supersede": "Eller",
 
   "language.en": "English",
   "language.zh": "简体中文",
