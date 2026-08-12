@@ -2,7 +2,7 @@ import { ConfigDocument } from "@opencode-ai/schema/config-document"
 import { Location } from "@opencode-ai/schema/location"
 import { Schema } from "effect"
 import { HttpApiEndpoint, HttpApiGroup, OpenApi } from "effect/unstable/httpapi"
-import { ConfigDocumentConflictError, ConfigDocumentTargetNotFoundError } from "../errors"
+import { ConfigDocumentConflictError, ConfigDocumentTargetNotFoundError, InvalidRequestError } from "../errors"
 import { LocationQuery, locationQueryOpenApi } from "./location"
 
 export const ConfigDocumentGroup = HttpApiGroup.make("server.config-document")
@@ -73,7 +73,7 @@ export const ConfigDocumentGroup = HttpApiGroup.make("server.config-document")
       query: LocationQuery,
       payload: Schema.Struct({ expectedHash: Schema.String, patch: ConfigDocument.Patch }),
       success: Location.response(ConfigDocument.ApplyResult),
-      error: [ConfigDocumentTargetNotFoundError, ConfigDocumentConflictError],
+      error: [ConfigDocumentTargetNotFoundError, ConfigDocumentConflictError, InvalidRequestError],
     })
       .annotateMerge(locationQueryOpenApi)
       .annotateMerge(

@@ -2,7 +2,7 @@ import { ConfigDocument } from "@opencode-ai/core/config/document"
 import { Effect } from "effect"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { Api } from "../api"
-import { ConfigDocumentConflictError, ConfigDocumentTargetNotFoundError } from "@opencode-ai/protocol/errors"
+import { ConfigDocumentConflictError, ConfigDocumentTargetNotFoundError, InvalidRequestError } from "@opencode-ai/protocol/errors"
 import { response } from "../location"
 
 const notFound = (error: ConfigDocument.TargetNotFoundError) =>
@@ -47,16 +47,25 @@ export const ConfigDocumentHandler = HttpApiBuilder.group(Api, "server.config-do
           const documents = yield* ConfigDocument.Service
           return yield* response(
             documents.applyPatch(ctx.params.targetID, ctx.payload.expectedHash, ctx.payload.patch).pipe(
-              Effect.mapError((error) =>
-                error._tag === "Config.Document.TargetNotFoundError"
-                  ? notFound(error)
-                  : new ConfigDocumentConflictError({
+              Effect.mapError((error) => {
+                switch (error._tag) {
+                  case "Config.Document.TargetNotFoundError":
+                    return notFound(error)
+                  case "Config.Document.StaleHashError":
+                    return new ConfigDocumentConflictError({
                       id: error.id,
                       expectedHash: error.expected,
                       actualHash: error.actual,
                       message: "The target changed on disk since it was last read",
-                    }),
-              ),
+                    })
+                  case "Config.Document.RedactedValueRejectedError":
+                    return new InvalidRequestError({
+                      message:
+                        "This patch would write the redaction placeholder over a secret field -- read the real value from the config file directly if you need to edit it",
+                      field: error.id,
+                    })
+                }
+              }),
             ),
           )
         }),

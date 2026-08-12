@@ -1334,7 +1334,7 @@ export function make(options: ClientOptions) {
             query: { location: input["location"] },
             body: { expectedHash: input["expectedHash"], patch: input["patch"] },
             successStatus: 200,
-            declaredStatuses: [404, 409, 401, 400],
+            declaredStatuses: [404, 409, 400, 401],
             empty: false,
           },
           requestOptions,

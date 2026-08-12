@@ -97,6 +97,63 @@ been reconciled, not just what is currently outstanding.
   script exits 0, no content ever gets written) rather than producing bad content, after 6+ resume
   rounds over ~2.5h. See feedback #182 for the full per-locale evidence and fix-forward.
 
+## Decision reversal: `readTarget` is always redacted, no raw-secret escape hatch (TKT-323, feedback #191)
+
+**Chunk 1 shipped `readTarget` (`GET /api/config/document/target/:targetID`) returning MCP secrets
+in the clear — `text` (raw file) and `parsed` (that raw text parsed), neither passing through the
+redactor `computeEffective` already used on the sibling `effective()` endpoint, same protocol
+group.** Confirmed live: a config with `mcp.servers.<name>.environment.<KEY> = <real secret>`
+returned that exact value verbatim from `readTarget`, and `[redacted]` from `effective()`, same
+request shape, same secret. Filed as feedback #191, verified before any severity was assumed
+(Henry's design note read the code; the live-request confirmation — real secret in, real secret
+out — is what turned the reading into a ruling).
+
+**The original rationale, reversed.** `document.ts`'s own comment (pre-fix) argued the
+direct-file-editing escape hatch needed `readTarget`'s raw text to stay byte-real, or a patch
+computed against a redacted view would corrupt the file's real secret values on write. That
+concern does not hold against the shipped write model: `applyPatch` never serializes text
+wholesale — `ConfigDocument.Patch` is a typed, allowlisted union of field operations
+(`mcp.server.set`/`mcp.server.remove`), applied against text the **server re-reads itself**. A
+field the client did not edit is simply absent from the patch and is never written back. An editor
+working from a redacted display view cannot corrupt a secret it never saw, through any shipped
+endpoint. No consumer of `readTarget`'s real secret values existed at the time of the fix (Henry
+enumerated call sites in parallel with the verification).
+
+**The rule now:** every API read response — `readTarget`, `effective`, `validatePatch`'s
+`preview`, every future `*.catalog.list` — is unconditionally redacted. There is no operation that
+reveals a real secret value over the API. **The escape hatch is editing the config file on disk
+directly**, not an API response; the build post's migration step 9 is clarified to say so
+explicitly, since "always show the selected source document" read ambiguously against "secret
+values are write-only and redacted in read responses" otherwise.
+
+**Corollary shipped in the same fix:** `applyPatch` rejects (`RedactedValueRejectedError`, mapped
+to `InvalidRequestError`, 400) a patch that would write the literal sentinel `"[redacted]"` over a
+secret field. Without this, a UI that reads a redacted value, never touches it, and patches the
+field straight back would silently persist the sentinel as the real secret — indistinguishable
+from a successful save until the integration stops authenticating. Only meaningful now that
+`readTarget` never returns a real value for a client to accidentally echo back; it was unsafe to
+add before the leak was fixed (nothing prevented a real value from round-tripping correctly, so a
+sentinel check would have been the only thing rejecting a legitimate value that happened to equal
+the placeholder string by coincidence — vanishingly unlikely, but the ordering matters).
+
+**Reveal-op path back, if one is ever explicitly authorised.** This reversal does not foreclose a
+future "reveal" capability — it is reversible by addition, not by weakening the default. A
+dedicated, explicitly-authorized operation (its own audit trail, its own authz check, never bundled
+into a general read path) could still return a real secret value on request. Nothing in this fix
+prevents adding one later; it only ensures no *existing* read path does it implicitly. If one is
+ever built, it must not reuse `readTarget`'s response shape for it — a field that is sometimes
+real and sometimes redacted, on the exact same endpoint, is the ambiguity this fix exists to
+remove.
+
+**Mechanical mitigation for the next secret-shaped field** (chunk 3 adds plugin and profile config
+shapes): `mcpSecretPaths` in `document.ts` is the one enumeration every redaction path shares —
+the object redactor, the raw-text redactor, and the write-time sentinel check all read the same
+list rather than three independently maintained ones. A new secret field still requires someone to
+remember to extend it; the allowlist stays hand-written by design (chunk 1's own choice, to avoid
+a key-name scrubber that both misses fields like `client_secret` and over-redacts innocent ones),
+but at least a change to it now fixes read, preview, *and* write-rejection in one place instead of
+three.
+
 ## PR conventions
 
 - **Vertical slices, package boundaries preserved.** Follow the dependency direction in the build

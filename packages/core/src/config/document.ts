@@ -85,34 +85,123 @@ function restartImpactFor(_patch: Patch): RestartImpact {
 
 const REDACTED = "[redacted]"
 
-// `effective()` is a display/summary read model (settings UI, catalog previews) -- unlike
-// `readTarget`'s raw text, which is the direct-file-editing escape hatch the design post requires
-// and must stay byte-real for diffing/patching. MCP is the one catalog chunk 1 knows carries
-// secrets (Local.environment, Remote.headers, Remote.oauth.client_secret); each later catalog
-// that gains a secret-shaped field extends this rather than growing a generic secret-scrubber.
+// REVERSES a documented decision from chunk 1 (this comment previously read: "`readTarget`'s raw
+// text ... is the direct-file-editing escape hatch the design post requires and must stay
+// byte-real for diffing/patching"). That rationale is refuted (feedback #191, Henry's TKT-323
+// settings-v2 design note §0, Ethan's ruling): the round-trip-corruption concern it guards against
+// cannot occur through any shipped write path. `applyPatch` never replaces the file text wholesale
+// -- `ConfigDocument.Patch` is a typed, allowlisted union of field operations
+// (`mcp.server.set`/`mcp.server.remove`), applied against text the server re-reads itself. A field
+// the client did not edit is simply absent from the patch and is never written back, so an editor
+// working from a redacted display view cannot corrupt a secret it never saw. Chunk 1 shipped
+// `readTarget` unredacted anyway, on the SAME `server.config-document` protocol group as the
+// redacted `effective()` -- a client wanting the real values just calls the sibling endpoint.
+// "Secret values are write-only and redacted in read responses" (build post) governs every read
+// path, `readTarget` included; there is no shipped consumer of raw secret values today (Henry
+// enumerated). The escape hatch is now "edit the file on disk yourself"; every API read response
+// is always redacted, with no operation to reveal a value. See FORK.md's divergence ledger for the
+// decision record and the reveal-op path back, should one ever be explicitly authorised.
+//
+// MCP is the one catalog chunk 1 knows carries secrets (Local.environment, Remote.headers,
+// Remote.oauth.client_secret); each later catalog that gains a secret-shaped field extends
+// `mcpSecretPaths` rather than growing a generic secret-scrubber (chunk 1's own deliberate choice:
+// a key-name scrubber both misses `client_secret` and over-redacts innocent fields).
+type SecretPath = string[]
+
+// One enumeration of every secret-bearing field's JSON path within a parsed `mcp` value, shared by
+// the object redactor (below), the raw-text redactor (`redactSecretsInText`), and `applyPatch`'s
+// sentinel-rejection check -- so all three read the same allowlist rather than three independently
+// maintained ones that can drift.
+// Paths are relative to the `mcp` value itself (`["servers", name, ...]`, no leading "mcp"
+// segment) -- callers operating on the whole document (`redactSecretsInText`, which edits raw
+// text via a document-rooted JSON path) prepend "mcp" themselves; callers already holding just
+// the `mcp` sub-value (`redactMcpServers`, `patchWritesRedactedSentinel`) use the path as-is.
+function mcpSecretPaths(mcp: unknown): SecretPath[] {
+  if (typeof mcp !== "object" || mcp === null || !("servers" in mcp)) return []
+  const { servers } = mcp as { servers?: unknown }
+  if (typeof servers !== "object" || servers === null) return []
+  const paths: SecretPath[] = []
+  for (const [name, server] of Object.entries(servers as Record<string, unknown>)) {
+    if (typeof server !== "object" || server === null) continue
+    const s = server as Record<string, unknown>
+    if (s.environment && typeof s.environment === "object")
+      for (const key of Object.keys(s.environment as object)) paths.push(["servers", name, "environment", key])
+    if (s.headers && typeof s.headers === "object")
+      for (const key of Object.keys(s.headers as object)) paths.push(["servers", name, "headers", key])
+    if (s.oauth && typeof s.oauth === "object" && "client_secret" in s.oauth)
+      paths.push(["servers", name, "oauth", "client_secret"])
+  }
+  return paths
+}
+
+function getAtPath(value: unknown, path: SecretPath): unknown {
+  let cursor = value
+  for (const segment of path) {
+    if (typeof cursor !== "object" || cursor === null) return undefined
+    cursor = (cursor as Record<string, unknown>)[segment]
+  }
+  return cursor
+}
+
 function redactMcpServers(mcp: unknown): unknown {
-  if (typeof mcp !== "object" || mcp === null || !("servers" in mcp)) return mcp
-  const { servers, ...rest } = mcp as { servers?: unknown }
-  if (typeof servers !== "object" || servers === null) return mcp
-  const redactedServers = Object.fromEntries(
-    Object.entries(servers as Record<string, unknown>).map(([name, server]) => {
-      if (typeof server !== "object" || server === null) return [name, server]
-      const next = { ...(server as Record<string, unknown>) }
-      if (next.environment && typeof next.environment === "object")
-        next.environment = Object.fromEntries(Object.keys(next.environment as object).map((k) => [k, REDACTED]))
-      if (next.headers && typeof next.headers === "object")
-        next.headers = Object.fromEntries(Object.keys(next.headers as object).map((k) => [k, REDACTED]))
-      if (next.oauth && typeof next.oauth === "object" && "client_secret" in next.oauth)
-        next.oauth = { ...(next.oauth as object), client_secret: REDACTED }
-      return [name, next]
-    }),
-  )
-  return { ...rest, servers: redactedServers }
+  const paths = mcpSecretPaths(mcp)
+  if (paths.length === 0) return mcp
+  // `mcp` is already a parsed, JSON-safe value (from jsonc-parser or an in-memory Patch value),
+  // so a JSON round-trip is a safe, simple deep clone -- nothing here is ever a class instance,
+  // Date, or other value JSON.stringify would lossily reshape.
+  const next = JSON.parse(JSON.stringify(mcp))
+  for (const path of paths) {
+    let cursor: Record<string, unknown> = next
+    for (let i = 0; i < path.length - 1; i++) cursor = cursor[path[i]] as Record<string, unknown>
+    cursor[path[path.length - 1]] = REDACTED
+  }
+  return next
+}
+
+// Redacts the SAME secret locations directly in the raw JSONC text, via `jsonc-parser`'s own
+// `modify`/`applyEdits` -- the identical mechanism `applyPatchToText` already uses for writes --
+// rather than a blind string search-replace, which risks over-redacting a secret value that
+// happens to recur elsewhere (a comment, another field) or under-redacting if jsonc-parser's own
+// serialization of the value differs byte-for-byte from a naive match.
+function redactSecretsInText(text: string, mcp: unknown): string {
+  const paths = mcpSecretPaths(mcp)
+  let redacted = text
+  for (const path of paths) {
+    const edits = modify(redacted, ["mcp", ...path], REDACTED, { formattingOptions: { tabSize: 2, insertSpaces: true } })
+    redacted = applyEdits(redacted, edits)
+  }
+  return redacted
 }
 
 function redactField(key: string, value: unknown): unknown {
   return key === "mcp" ? redactMcpServers(value) : value
 }
+
+// Applied to a WHOLE parsed document (readTarget's `parsed`), as opposed to `redactField`, which
+// `computeEffective` calls per top-level key while building its field-by-field provenance map.
+function redactParsed(parsed: unknown): unknown {
+  if (typeof parsed !== "object" || parsed === null) return parsed
+  return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [k, redactField(k, v)]))
+}
+
+// The corollary Henry's note names as mandatory once readTarget is redacted: a UI that reads a
+// redacted value, doesn't touch it, and patches the field back would otherwise persist the
+// literal string "[redacted]" as the real secret -- a silent, self-inflicted secret loss that
+// only surfaces later when the integration stops authenticating. Only meaningful for
+// `mcp.server.set`, whose value can itself carry secret fields; `mcp.server.remove` has none.
+// Reuses `mcpSecretPaths`' own allowlist by wrapping the single incoming server value in the same
+// `{servers: {name: ...}}` shape that function already expects, rather than re-deriving which
+// fields are secret a second time.
+function patchWritesRedactedSentinel(patch: Patch): boolean {
+  if (patch.op !== "mcp.server.set") return false
+  const wrapped = { servers: { [patch.name]: patch.value } }
+  return mcpSecretPaths(wrapped).some((path) => getAtPath(wrapped, path) === REDACTED)
+}
+
+export class RedactedValueRejectedError extends Schema.TaggedErrorClass<RedactedValueRejectedError>()(
+  "Config.Document.RedactedValueRejectedError",
+  { id: Schema.String },
+) {}
 
 function parseDiagnostics(errors: ParseError[]): Diagnostic[] {
   return errors.map(
@@ -157,12 +246,15 @@ export interface Interface {
   /** Atomic temp-file-then-rename replacement, gated on an optimistic hash check against the
    * target's current on-disk content (StaleHashError on mismatch -- a 409 at the protocol layer).
    * Never serializes `Config.Info` back to the file: only ever applies a typed jsonc patch to the
-   * target's own text, preserving comments and any fields this schema doesn't know about. */
+   * target's own text, preserving comments and any fields this schema doesn't know about. Rejects
+   * (RedactedValueRejectedError) a patch that writes the literal redaction sentinel to a secret
+   * field -- a read-then-write UI that never touched the real value must not silently overwrite
+   * it, since `readTarget`'s own response never carries that value for the client to echo back. */
   readonly applyPatch: (
     id: TargetID,
     expectedHash: string,
     patch: Patch,
-  ) => Effect.Effect<ApplyResult, TargetNotFoundError | StaleHashError>
+  ) => Effect.Effect<ApplyResult, TargetNotFoundError | StaleHashError | RedactedValueRejectedError>
 }
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/ConfigDocument") {}
@@ -248,7 +340,13 @@ const layer = Layer.effect(
       const target = yield* findTarget(id)
       const text = yield* readTargetText(target)
       const { parsed, diagnostics } = parseAndDiagnose(text)
-      return new ReadResult({ target, text, hash: Hash.sha256(text), parsed, diagnostics })
+      // hash is over the REAL text, always -- applyPatch's optimistic-concurrency check compares
+      // it against the actual on-disk file, so it must never be computed from the redacted display
+      // copy a client echoes back.
+      const hash = Hash.sha256(text)
+      const mcp = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>).mcp : undefined
+      const redactedText = mcp === undefined ? text : redactSecretsInText(text, mcp)
+      return new ReadResult({ target, text: redactedText, hash, parsed: redactParsed(parsed), diagnostics })
     })
 
     const validatePatch: Interface["validatePatch"] = Effect.fn("ConfigDocument.validatePatch")(function* (id, patch) {
@@ -261,6 +359,7 @@ const layer = Layer.effect(
     })
 
     const applyPatch: Interface["applyPatch"] = Effect.fn("ConfigDocument.applyPatch")(function* (id, expectedHash, patch) {
+      if (patchWritesRedactedSentinel(patch)) return yield* Effect.fail(new RedactedValueRejectedError({ id }))
       const target = yield* findTarget(id)
       const text = yield* readTargetText(target)
       const actualHash = Hash.sha256(text)
