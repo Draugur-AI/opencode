@@ -70,7 +70,7 @@ export const HistoryGetTool = Tool.define(
           if (!entries) throw new Error(`No message ${params.messageID} in this session.`)
           return {
             title: `${entries.length} message${entries.length === 1 ? "" : "s"}`,
-            output: JSON.stringify(entries, null, 2),
+            output: JSON.stringify({ entries }, null, 2),
             metadata: { count: entries.length },
           }
         }).pipe(Effect.orDie),

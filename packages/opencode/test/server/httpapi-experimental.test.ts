@@ -235,7 +235,7 @@ describe("experimental HttpApi", () => {
         for (const id of v2ToolIDs) expect(ids).toContain(id)
 
         expect(toolList.status).toBe(200)
-        const list = yield* json<Array<{ id: string }>>(toolList)
+        const list = yield* json<Array<{ id: string; description: string }>>(toolList)
         for (const id of v2ToolIDs) {
           expect(list).toContainEqual(expect.objectContaining({ id, description: expect.any(String) }))
         }
