@@ -192,6 +192,8 @@ export const dict = {
   "command.session.unshare": "Отменить публикацию",
   "command.session.unshare.description": "Прекратить публикацию сессии",
 
+  "command.session.goal": "Цель и реестр",
+  "command.session.goal.description": "Открыть панель цели сессии и рабочего реестра",
   "command.session.export": "Экспортировать сессию",
   "command.session.export.description": "Экспортировать полную историю сессии в формате JSON",
 
@@ -1275,4 +1277,24 @@ export const dict = {
   "error.childStore.persistedProjectIconCreateFailed": "Не удалось создать постоянный значок проекта",
   "error.childStore.storeCreateFailed": "Не удалось создать хранилище",
   "terminal.connectionLost.abnormalClose": "WebSocket закрыт аварийно: {{code}}",
+
+  "goal.objective.title": "Цель",
+  "goal.objective.placeholder": "Что должна достичь эта сессия?",
+  "goal.empty": "Цель для этой сессии пока не установлена.",
+  "goal.setGoal": "Установить цель",
+  "goal.acceptanceCriteria.title": "Критерии приёмки",
+  "goal.acceptanceCriteria.empty": "Критерии приёмки пока не заданы.",
+  "goal.acceptanceCriteria.met": "Выполнено",
+  "goal.acceptanceCriteria.waive": "Проигнорировать",
+  "goal.constraints.title": "Ограничения",
+  "goal.constraints.empty": "Ограничения пока не заданы.",
+  "goal.constraints.fromMessage": "Из сообщения",
+  "goal.status.title": "Статус",
+  "goal.toast.objectiveRequired": "Цель не может быть пустой",
+  "goal.toast.saved": "Цель сохранена",
+  "goal.ledger.title": "Рабочий реестр",
+  "goal.ledger.empty": "Записей в реестре пока нет.",
+  "goal.ledger.supersede": "Заменить",
+  "session.tab.goal": "Цель",
+  "common.add": "Добавить",
 }

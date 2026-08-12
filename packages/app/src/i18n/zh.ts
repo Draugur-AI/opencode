@@ -220,6 +220,8 @@ export const dict = {
 
   "command.session.export": "导出会话",
   "command.session.export.description": "将完整会话记录导出为 JSON",
+  "command.session.goal": "目标与工作账本",
+  "command.session.goal.description": "打开会话目标和工作账本面板",
 
   "palette.search.placeholder": "搜索文件、命令和会话",
   "palette.search.placeholder.home": "搜索命令和会话",

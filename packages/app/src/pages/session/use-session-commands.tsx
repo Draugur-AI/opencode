@@ -619,6 +619,24 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     }),
   ]
 
+  const openGoalPanel = () => {
+    if (!view().reviewPanel.opened()) view().reviewPanel.open()
+    void tabs().open("goal")
+    tabs().setActive("goal")
+  }
+
+  const goalCmds = () => [
+    sessionCommand({
+      id: "session.goal",
+      title: language.t("command.session.goal"),
+      description: language.t("command.session.goal.description"),
+      keybind: "mod+shift+g",
+      slash: "goal",
+      disabled: !params.id,
+      onSelect: openGoalPanel,
+    }),
+  ]
+
   const permissionsCmds = () => [
     permissionsCommand({
       id: "permissions.autoaccept",
@@ -640,6 +658,7 @@ export const useSessionCommands = (actions: SessionCommandContext) => {
     ...terminalCmds(),
     ...messageCmds(),
     ...mcpCmds(),
+    ...goalCmds(),
     ...permissionsCmds(),
   ])
 }

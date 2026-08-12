@@ -579,6 +579,8 @@ export const dict = {
   "context.usage.cost": "ހަރަދު",
   "context.usage.clickToView": "ކޮންޓެކްސްޓް ބަލާލުމަށް ކްލިކް ކުރާށެވެ",
   "context.usage.view": "ކޮންޓެކްސްޓް ބޭނުންކުރުން ބަލާށެވެ",
+  "command.session.goal": "ޓެޖެޓެއް ވެއި ކުރުމުގެ މަސައްކަތް ކުރާނެ މަގު",
+  "command.session.goal.description": "ސެޝަންގެ ޓެޖެޓެއް ވެއި ކުރުމުގެ މަސައްކަތް ކުރާނެ މަގު ޕެނަލް ހުޅުވާށެވެ",
   "language.en": "އިނގިރޭސި",
   "language.zh": "简体中文 ގެ ވާހަކައެވެ",
   "language.zht": "繁體中文 ގެ ވާހަކައެވެ",
