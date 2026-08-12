@@ -53,6 +53,7 @@ import { Format } from "../../src/format"
 import { TestInstance } from "../fixture/fixture"
 import { awaitWithTimeout, pollWithTimeout, testEffect } from "../lib/effect"
 import { reply, TestLLMServer } from "../lib/llm-server"
+import { Server } from "../../src/server/server"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
@@ -1051,6 +1052,44 @@ it.instance("gives a fresh session's default agent the V2 tools on the wire, not
     ]) {
       expect(names.has(id)).toBe(true)
     }
+  }),
+)
+
+// TKT-397: guards the WIRING, which the pure docsEnvLines() tests cannot -- deleting the
+// docsEnvLines(Server.url) call from environment() leaves those green while the live path silently
+// loses the line, and silent-absence-on-the-live-path is the exact defect this ticket exists to fix.
+// A REAL listener, so Server.url is genuinely set: the harness's own TestLLMServer is the fake
+// provider, not opencode's HTTP server, and without listen() there is no /docs being served to name.
+//
+// The assertion anchors inside <env>, deliberately. `toContain("Documentation for this build")` on
+// the whole system prompt PASSES WITH THE WIRING DELETED, because the prompt instruction itself
+// contains that phrase ("at the URL given as 'Documentation for this build' in <env>"). A guard
+// that matches the text it is guarding is not a guard.
+it.instance("advertises this instance's own docs URL inside <env> on the wire", () =>
+  Effect.gen(function* () {
+    const listener = yield* Effect.acquireRelease(
+      Effect.promise(() => Server.listen({ hostname: "127.0.0.1", port: 0 })),
+      (listener) => Effect.promise(() => listener.stop(true)),
+    )
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "docs url on the wire" })
+    yield* llm.text("done")
+    yield* user(chat.id, "hello")
+
+    yield* prompt.loop({ sessionID: chat.id })
+
+    const hits = yield* llm.hits
+    expect(hits).toHaveLength(1)
+    const body = hits[0]!.body as { messages?: Array<{ role: string; content?: unknown }> }
+    const system = (body.messages ?? [])
+      .filter((message) => message.role === "system")
+      .map((message) => (typeof message.content === "string" ? message.content : JSON.stringify(message.content)))
+      .join("\n")
+    const env = system.match(/<env>[\s\S]*?<\/env>/)?.[0]
+    expect(env).toBeDefined()
+    expect(env).toContain(`Documentation for this build: ${new URL("/docs", listener.url).toString()}`)
   }),
 )
 
