@@ -186,9 +186,12 @@ three.
 - **Every PR carries its validation dossier** per the validation post: invariants touched,
   fixtures exercised, crash/differential/browser cases added as applicable, performance budget
   before/after where relevant, and compatibility paths retained plus their removal condition.
-- **No automated review runs on fork PRs** (see "Does automated review run on fork PRs?" below —
-  confirmed, with evidence, as of TKT-305). Say so explicitly in every PR and report — local
-  per-package tests are the gate, and an absence of review comments is not evidence of a clean diff.
+- **Automated (Copilot) review runs on fork PRs as of 2026-08-11** (see "Does automated review run
+  on fork PRs?" below — ruleset `20729187`, first real firing on TKT-323/#191/PR #32 caught two
+  genuine findings). Pass `--base dev` explicitly at PR-open — a wrong-based PR gets no review,
+  silently — and confirm the review actually fired before treating its absence as a clean diff.
+  It runs alongside peer review, not instead of it; local per-package tests remain the primary
+  gate underneath both.
 - **LLM-generated source is checked like source, not trusted like data.** A `script/translate-app.ts`
   batch (TKT-314) wrote a syntax error into one locale file out of 63 — a smart quote opened a
   string, a plain ASCII quote closed it, breaking the literal — invisible on read, and it segfaulted
@@ -521,35 +524,70 @@ host is linux/aarch64, so `unit (windows)` and `e2e (windows)` are dropped from 
 matrices rather than burning GitHub-hosted minutes for a platform this runner can't serve.
 Revisit when GH-hosted minutes reset or a Windows runner exists elsewhere.
 
-## Does automated review run on fork PRs? — No.
+## Does automated review run on fork PRs? — Yes, as of 2026-08-11.
 
-Answer, with evidence, for the standing "assume no review runs" convention already baked into
-every ticket in this tree:
+**Superseded 2026-08-11 (TKT-323, feedback #191, PR #32).** The "No" answer below stood on real
+evidence (no branch protection, no rulesets, `/review` non-functional) and misled nobody while it
+was true — but it went stale the moment Sean funded GH Actions and enabled a Copilot Review
+ruleset on this fork (id `20729187`, active, on the default branch), and it sat as a stale "No"
+for one night before this update, which is its own lesson: a "does X run" answer needs to be
+re-verified before being relied on, not just cited.
 
-1. **Nothing runs automatically on PR open.** There is no branch protection (`GET
-   .../branches/dev/protection` → 404) and no rulesets (`GET .../rulesets` → `[]`) on this repo —
-   unlike the workspace repo's Copilot-review ruleset. `.github/workflows/review.yml` is the only
-   review-shaped workflow, and it triggers on `issue_comment: [created]` gated to comments
-   starting with `/review` from an `OWNER`/`MEMBER` author — never on `pull_request` itself.
+**Current state, confirmed by the mechanism's first real firing:** PR #32 (the readTarget
+redaction reversal — itself a security fix) triggered an automatic Copilot review with **two
+inline findings, both real, both fixed**:
+1. A second, independent leak path in the same redaction logic PR #32 was fixing — `readTarget`'s
+   secret-path lookup keyed off a `parsed` value that gets discarded on *any* unrelated JSONC
+   diagnostic, so a config file with a syntax error elsewhere but a real mcp secret still leaked
+   the secret in raw text.
+2. `InvalidRequestError.field` set to a target ID (a value) instead of a stable field name,
+   inconsistent with the convention used elsewhere in the handler layer.
+
+Both were caught on the review's first live PR, before merge, on a security-sensitive diff our
+own process had already run through the full `/work` §6/§10 validation pass. **This retires the
+"treat review as absent" convention everywhere it was cited** (see "Not yet running…" note above,
+§ "No automated review runs on fork PRs").
+
+**Review process now:** Copilot review (automatic, runs on PR open and on every push to an open
+PR) **plus** peer review, same as before — Copilot does not replace a human reviewer, it runs
+alongside one, per `/work` §6.
+
+**Caveat — the wrong-base footgun:** a branch cut from another feature branch (rather than from
+`dev` directly) silently inherits that branch as its PR base unless `--base` is passed explicitly
+at PR-open. A PR opened against the wrong base gets **no automated review** — the ruleset is
+scoped to PRs targeting the default branch. Always pass `--base dev` explicitly when opening a PR
+here, and confirm the review actually fired (not just that CI ran) before treating its silence as
+a clean diff — an absent review on a wrong-based PR looks identical to an absent review on a
+genuinely quiet one.
+
+---
+
+<details>
+<summary>Original "No" finding, for the historical record (superseded above, evidence retained)</summary>
+
+Answer, with evidence, for the (now superseded) "assume no review runs" convention:
+
+1. **Nothing ran automatically on PR open**, as of this writing. There was no branch protection
+   (`GET .../branches/dev/protection` → 404) and no rulesets (`GET .../rulesets` → `[]`) on this
+   repo — unlike the workspace repo's Copilot-review ruleset. `.github/workflows/review.yml` was
+   the only review-shaped workflow, and it triggered on `issue_comment: [created]` gated to
+   comments starting with `/review` from an `OWNER`/`MEMBER` author — never on `pull_request`
+   itself.
 2. **`pr-standards.yml` and `pr-management.yml` are compliance bots, not code review.** They check
    PR title format (conventional-commit prefix), template-section presence, linked-issue
    presence, and duplicate-PR detection — labels and comments only, no line-level code
    feedback.
-3. **Even the manual `/review` trigger is currently non-functional on this fork, for two
-   independent reasons:**
-   - Its job (`check-guidelines`) is `runs-on: blacksmith-4vcpu-ubuntu-2404` — same queued-forever
-     problem as above. **Left un-retargeted deliberately**: fixing the runner alone would not
-     make it work (see next point), and provisioning secrets is not a worker-level fix.
+3. **Even the manual `/review` trigger was non-functional on this fork, for two independent
+   reasons:**
+   - Its job (`check-guidelines`) was `runs-on: blacksmith-4vcpu-ubuntu-2404` — same
+     queued-forever problem as above.
    - `OPENCODE_API_KEY` (the secret the review step needs to actually invoke the opencode agent)
-     is not configured on this repo — `gh secret list --repo Draugur-AI/opencode` and `gh
-     variable list --repo Draugur-AI/opencode` both return empty. The step would fail on
-     missing credentials even if the runner picked it up.
+     was not configured on this repo.
 
-**Conclusion: treat review as absent on every fork PR, full stop, exactly as the standing
-per-ticket convention already says.** Local per-package tests (the merge gate below) are
-the actual quality gate. If `/review` is ever wanted, it needs both a runner-label fix (same
-one-line pattern as `typecheck.yml`) *and* an operator-provisioned `OPENCODE_API_KEY` secret —
-neither is done here.
+Local per-package tests (the merge gate below) remain the primary quality gate; Copilot review is
+now an additional layer on top, not a replacement for them.
+
+</details>
 
 ## PR hygiene: the compliance bot and the 2-hour auto-close
 
