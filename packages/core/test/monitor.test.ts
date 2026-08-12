@@ -6,13 +6,14 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Monitor } from "@opencode-ai/core/monitor"
 import { MonitorTable } from "@opencode-ai/core/monitor/sql"
+import { MonitorEvent } from "@opencode-ai/schema/monitor-event"
 import { Project } from "@opencode-ai/core/project"
 import { ProjectTable } from "@opencode-ai/core/project/sql"
 import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
 import { SessionTable } from "@opencode-ai/core/session/sql"
-import { Effect } from "effect"
+import { DateTime, Effect } from "effect"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(
@@ -138,6 +139,64 @@ describe("Monitor", () => {
 
       const second = yield* monitor.recover()
       expect(second).toHaveLength(0)
+    }),
+  )
+
+  it.effect("a stale previousStatus snapshot, published after a winning pass already moved the row, is rejected by the CAS -- and a plain refetch would have misreported it as this pass's own", () =>
+    Effect.gen(function* () {
+      const events = yield* EventV2.Service
+      const monitor = yield* Monitor.Service
+      const sessionID = yield* seed()
+      const created = yield* declare(sessionID, "raced by two recover passes")
+
+      // The snapshot a second concurrent recover() pass would have captured in its own scan,
+      // before the winning pass below ran.
+      const staleStatus = created.status // "starting"
+
+      const winner = yield* monitor.recover()
+      expect(winner.some((m) => m.id === created.id)).toBe(true)
+      const afterWinner = yield* monitor.get(created.id)
+      expect(afterWinner?.status).toBe("orphaned")
+
+      // The second pass publishes against that stale snapshot -- exactly what its own recover()
+      // loop body would do for this row. The event still commits (durable events are never
+      // rejected), but projectOrphaned's CAS must not match: the row is no longer `staleStatus`.
+      const stalePublish = yield* events.publish(MonitorEvent.Orphaned, {
+        sessionID,
+        monitorID: created.id,
+        timestamp: yield* DateTime.now,
+        previousStatus: staleStatus,
+      })
+      const afterStale = yield* monitor.get(created.id)
+
+      // The CAS protects the row: untouched by the losing pass, still exactly the winner's revision.
+      expect(afterStale?.revision).toBe(afterWinner?.revision)
+      // And this is finding (1) made concrete: a plain, unconditional `get(row.id)` -- the bug --
+      // STILL reports "orphaned" here, even though THIS publish did not cause it. recover() cannot
+      // use that alone to decide "did I do this"; it must compare against the seq this exact
+      // publish committed at, which the row's revision provably does not match.
+      expect(afterStale?.status).toBe("orphaned")
+      expect(stalePublish.durable).toBeDefined()
+      expect(afterStale?.revision).not.toBe(stalePublish.durable!.seq + 1)
+    }),
+  )
+
+  it.effect("8 genuinely concurrent recover passes over one stale row: exactly one reports it orphaned, never more -- deleting the CAS-return filter turns this red (observed: 8/8 double-counted it)", () =>
+    Effect.gen(function* () {
+      const monitor = yield* Monitor.Service
+      const sessionID = yield* seed()
+      const created = yield* declare(sessionID, "raced by many concurrent recover passes")
+
+      // recover() cedes the scheduler between its scan and acting on it (see the Effect.yieldNow
+      // in recover() itself), so these fibers' scans genuinely interleave with each other's
+      // publishes -- unlike the sequential test above, whose second pass's own scan already
+      // excludes the row and so never even attempts the CAS.
+      const results = yield* Effect.all(Array.from({ length: 8 }, () => monitor.recover()), { concurrency: "unbounded" })
+      const hits = results.filter((r) => r.some((m) => m.id === created.id)).length
+      expect(hits).toBe(1)
+
+      const final = yield* monitor.get(created.id)
+      expect(final?.status).toBe("orphaned")
     }),
   )
 })

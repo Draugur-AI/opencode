@@ -30,11 +30,18 @@ const options = {
   },
 } as const
 
+// Deliberately does not spread the full Base: `info` already carries `id` and `sessionID`, and
+// spreading a sibling `monitorID` field alongside it would let a durable event validate and
+// persist with `monitorID !== info.id` -- a bad row that outlives the bug that wrote it. `info.id`
+// is the single source; consumers read that, never a top-level `monitorID` for this event. `
+// sessionID` stays -- the aggregate router reads `data.sessionID` directly by field name
+// (event.ts's durable-commit path), so it cannot live only inside `info`.
 export const Created = Event.define({
   type: "session.next.monitor.created",
   ...options,
   schema: {
-    ...Base,
+    timestamp: Base.timestamp,
+    sessionID: Base.sessionID,
     info: Monitor.Info,
   },
 })

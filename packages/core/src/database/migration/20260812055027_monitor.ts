@@ -2,7 +2,7 @@ import { Effect } from "effect"
 import type { DatabaseMigration } from "../migration"
 
 export default {
-  id: "20260812052519_monitor",
+  id: "20260812055027_monitor",
   up(tx) {
     return Effect.gen(function* () {
       yield* tx.run(`
@@ -28,7 +28,7 @@ export default {
         );
       `)
       yield* tx.run(`CREATE INDEX \`monitor_session_idx\` ON \`monitor\` (\`session_id\`);`)
-      yield* tx.run(`CREATE INDEX \`monitor_session_status_idx\` ON \`monitor\` (\`session_id\`,\`status\`);`)
+      yield* tx.run(`CREATE INDEX \`monitor_status_idx\` ON \`monitor\` (\`status\`);`)
     })
   },
 } satisfies DatabaseMigration.Migration

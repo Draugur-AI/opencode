@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "d4e2272a-167f-4c12-b605-d8e181be6219",
+  "id": "99c121bd-2b12-4977-962a-b3e7ebd0031c",
   "prevIds": [
     "9a24ad67-84b1-4b97-9e39-9274d9f114b7"
   ],
@@ -2825,10 +2825,6 @@
     {
       "columns": [
         {
-          "value": "session_id",
-          "isExpression": false
-        },
-        {
           "value": "status",
           "isExpression": false
         }
@@ -2836,7 +2832,7 @@
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "monitor_session_status_idx",
+      "name": "monitor_status_idx",
       "entityType": "indexes",
       "table": "monitor"
     },

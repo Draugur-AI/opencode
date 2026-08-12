@@ -33,7 +33,9 @@ export const MonitorTable = sqliteTable(
   },
   (table) => [
     index("monitor_session_idx").on(table.session_id),
-    // Restart recovery scans "which monitors were live" -- diary 2435 §1.
-    index("monitor_session_status_idx").on(table.session_id, table.status),
+    // Restart recovery scans "which monitors were live" (diary 2435 §1) with no session_id
+    // predicate at all (Monitor.recover() is process-global) -- a composite leading with
+    // session_id cannot serve that query (leftmost-column rule), so this leads with status.
+    index("monitor_status_idx").on(table.status),
   ],
 )

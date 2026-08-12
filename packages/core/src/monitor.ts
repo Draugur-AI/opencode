@@ -4,6 +4,7 @@ import { and, eq, inArray } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer } from "effect"
 import { Monitor as MonitorSchema } from "@opencode-ai/schema/monitor"
 import { MonitorEvent } from "@opencode-ai/schema/monitor-event"
+import type { SessionProfile } from "@opencode-ai/schema/session-profile"
 import { Database } from "./database/database"
 import { makeGlobalNode } from "./effect/app-node"
 import { EventV2 } from "./event"
@@ -130,7 +131,7 @@ export interface Interface {
     readonly condition: Condition
     readonly maxAttempts?: number
     readonly outputPolicy: OutputPolicy
-    readonly profileSnapshotID?: string
+    readonly profileSnapshotID?: SessionProfile.SnapshotID
   }) => Effect.Effect<Info>
   readonly list: (sessionID: SessionSchema.ID) => Effect.Effect<ReadonlyArray<Info>>
   readonly get: (monitorID: ID) => Effect.Effect<Info | undefined>
@@ -180,13 +181,12 @@ const layer = Layer.effect(
         attempt: 0,
         maxAttempts: input.maxAttempts,
         outputPolicy: input.outputPolicy,
-        profileSnapshotID: input.profileSnapshotID as Info["profileSnapshotID"],
+        profileSnapshotID: input.profileSnapshotID,
         time: { created: now },
         revision: 0,
       }
       yield* events.publish(MonitorEvent.Created, {
         sessionID: input.sessionID,
-        monitorID: id,
         timestamp: now,
         info,
       })
@@ -203,16 +203,27 @@ const layer = Layer.effect(
         .where(inArray(MonitorTable.status, ["starting", "running"]))
         .all()
         .pipe(Effect.orDie)
+      // Cede the scheduler between the scan and acting on it -- recover() can run concurrently
+      // (two processes booting at once, or a retry racing a still-running call), and this is the
+      // exact window projectOrphaned's CAS exists to protect.
+      yield* Effect.yieldNow
       const orphaned: Info[] = []
       for (const row of stale) {
-        yield* events.publish(MonitorEvent.Orphaned, {
+        const published = yield* events.publish(MonitorEvent.Orphaned, {
           sessionID: row.session_id,
           monitorID: row.id,
           timestamp: now,
           previousStatus: row.status,
         })
+        // The CAS in projectOrphaned protects the row, not this return value -- a plain refetch
+        // would report a row as "orphaned by this call" even when a concurrent pass's CAS is the
+        // one that actually won and this call's own update matched nothing. Only count it as ours
+        // when the row's current revision is exactly what THIS event's commit would have set it
+        // to; a no-op CAS leaves the row at whatever revision the actual winner left it at, which
+        // can never equal that value.
         const updated = yield* get(row.id)
-        if (updated) orphaned.push(updated)
+        const wonHere = published.durable !== undefined && updated?.revision === published.durable.seq + 1
+        if (updated && wonHere) orphaned.push(updated)
       }
       return orphaned
     })
