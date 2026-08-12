@@ -641,7 +641,7 @@ export default function Home() {
 
                 <p>
                   {i18n.t("home.privacy.body")} {i18n.t("home.privacy.learnMore")}{" "}
-                  <a href={language.route("/docs/enterprise/")}>{i18n.t("home.privacy.link")}</a>.
+                  <a href={language.route("/docs")}>{i18n.t("home.privacy.link")}</a>.
                 </p>
               </div>
             </div>
@@ -687,7 +687,7 @@ export default function Home() {
               <li>
                 <Faq question={i18n.t("home.faq.q7")}>
                   {i18n.t("home.faq.a7.p1")} {i18n.t("home.faq.a7.p2.beforeModels")}{" "}
-                  <a href={language.route("/docs/zen/#privacy")}>{i18n.t("home.faq.a7.p2.modelsLink")}</a>{" "}
+                  <a href={language.route("/docs")}>{i18n.t("home.faq.a7.p2.modelsLink")}</a>{" "}
                   {i18n.t("home.faq.a7.p2.and")}{" "}
                   <a href={language.route("/docs/share/#privacy")}>{i18n.t("home.faq.a7.p2.shareLink")}</a>.
                 </Faq>

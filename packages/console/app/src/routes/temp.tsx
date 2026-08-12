@@ -85,7 +85,7 @@ export default function Home() {
             </li>
             <li>
               <strong>{i18n.t("temp.zen")}</strong> {i18n.t("temp.feature.zen.beforeLink")}{" "}
-              <a href={language.route("/docs/zen")}>{i18n.t("temp.feature.zen.link")}</a>{" "}
+              <a href={language.route("/docs")}>{i18n.t("temp.feature.zen.link")}</a>{" "}
               {i18n.t("temp.feature.zen.afterLink")} <label>{i18n.t("home.banner.badge")}</label>
             </li>
             <li>
