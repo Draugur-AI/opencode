@@ -64,9 +64,30 @@ export class EffectiveResult extends Schema.Class<EffectiveResult>("Config.Docum
 // raw filesystem path, never an arbitrary nested key). Each catalog that becomes editable through
 // this module adds its own variants here as that chunk lands (TKT-323 chunk 2: skills/plugins,
 // chunk 3: profiles/data) -- chunk 1 only needs MCP server set/remove.
+//
+// 🛑 `mcp.server.set`'s value is `ConfigMCP.ServerNonSecret`, NOT `ConfigMCP.Server` -- deliberately
+// (TKT-323 MCP config editing, caught before this op had a real consumer). The full `Server` type
+// can carry `environment`/`headers`/`oauth.client_secret`; a client editing connection details
+// (command, url, disabled, ...) never holds those real values to round-trip (every read response
+// redacts them), so a whole-value write through the full type would silently destroy credentials
+// on every edit that did not happen to also resupply them. Narrowing the payload TYPE makes that
+// structurally impossible rather than a discipline to remember -- `mcp.server.set` cannot mention
+// a secret field at all. Credential writes go through their own field ops below instead, each
+// touching exactly one named secret slot and never reading one back.
 export const Patch = Schema.Union([
-  Schema.Struct({ op: Schema.Literal("mcp.server.set"), name: Schema.String, value: ConfigMCP.Server }),
+  Schema.Struct({ op: Schema.Literal("mcp.server.set"), name: Schema.String, value: ConfigMCP.ServerNonSecret }),
   Schema.Struct({ op: Schema.Literal("mcp.server.remove"), name: Schema.String }),
+  Schema.Struct({
+    op: Schema.Literal("mcp.server.credential.set"),
+    name: Schema.String,
+    key: ConfigMCP.CredentialKey,
+    value: Schema.String,
+  }),
+  Schema.Struct({
+    op: Schema.Literal("mcp.server.credential.remove"),
+    name: Schema.String,
+    key: ConfigMCP.CredentialKey,
+  }),
 ])
 export type Patch = typeof Patch.Type
 

@@ -1,8 +1,8 @@
 import { type Accessor, createEffect, onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useServerSDK } from "@/context/server-sdk"
-import { createMcpCatalogClient, isServiceUnavailableError } from "@/utils/mcp-catalog-client"
-import type { McpListResult, McpStatusResult } from "@/utils/mcp-catalog-client"
+import { createMcpClient, isServiceUnavailableError } from "@/utils/mcp-client"
+import type { McpListResult, McpStatusResult } from "@/utils/mcp-client"
 
 export type McpCatalogEntry = McpListResult["data"][number]
 export type McpLiveStatus = McpStatusResult["data"][string]
@@ -35,7 +35,7 @@ export function useMcpCatalog(directory: Accessor<string | undefined>) {
     // Created once per effect run (directory/server change), not once per call -- list and every
     // status poll share the same server connection instead of each allocating its own client
     // (Copilot review, PR #36).
-    const client = createMcpCatalogClient(sdk().server)
+    const client = createMcpClient(sdk().server)
     let dead = false
     setCatalog("loading", true)
     setStatus("state", { tag: "loading" })

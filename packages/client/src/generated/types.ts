@@ -4026,7 +4026,6 @@ export type ConfigDocumentTargetValidateInput = {
                 readonly type: "local"
                 readonly command: ReadonlyArray<string>
                 readonly cwd?: string | undefined
-                readonly environment?: { readonly [x: string]: string } | undefined
                 readonly disabled?: boolean | undefined
                 readonly timeout?:
                   | { readonly startup?: number | undefined; readonly request?: number | undefined }
@@ -4035,11 +4034,9 @@ export type ConfigDocumentTargetValidateInput = {
             | {
                 readonly type: "remote"
                 readonly url: string
-                readonly headers?: { readonly [x: string]: string } | undefined
                 readonly oauth?:
                   | {
                       readonly client_id?: string | undefined
-                      readonly client_secret?: string | undefined
                       readonly scope?: string | undefined
                       readonly callback_port?: number | undefined
                       readonly redirect_uri?: string | undefined
@@ -4053,6 +4050,23 @@ export type ConfigDocumentTargetValidateInput = {
               }
         }
       | { readonly op: "mcp.server.remove"; readonly name: string }
+      | {
+          readonly op: "mcp.server.credential.set"
+          readonly name: string
+          readonly key:
+            | { readonly field: "environment"; readonly key: string }
+            | { readonly field: "headers"; readonly key: string }
+            | { readonly field: "oauth.client_secret" }
+          readonly value: string
+        }
+      | {
+          readonly op: "mcp.server.credential.remove"
+          readonly name: string
+          readonly key:
+            | { readonly field: "environment"; readonly key: string }
+            | { readonly field: "headers"; readonly key: string }
+            | { readonly field: "oauth.client_secret" }
+        }
   }["patch"]
 }
 
@@ -4091,7 +4105,6 @@ export type ConfigDocumentTargetApplyInput = {
                 readonly type: "local"
                 readonly command: ReadonlyArray<string>
                 readonly cwd?: string | undefined
-                readonly environment?: { readonly [x: string]: string } | undefined
                 readonly disabled?: boolean | undefined
                 readonly timeout?:
                   | { readonly startup?: number | undefined; readonly request?: number | undefined }
@@ -4100,11 +4113,9 @@ export type ConfigDocumentTargetApplyInput = {
             | {
                 readonly type: "remote"
                 readonly url: string
-                readonly headers?: { readonly [x: string]: string } | undefined
                 readonly oauth?:
                   | {
                       readonly client_id?: string | undefined
-                      readonly client_secret?: string | undefined
                       readonly scope?: string | undefined
                       readonly callback_port?: number | undefined
                       readonly redirect_uri?: string | undefined
@@ -4118,6 +4129,23 @@ export type ConfigDocumentTargetApplyInput = {
               }
         }
       | { readonly op: "mcp.server.remove"; readonly name: string }
+      | {
+          readonly op: "mcp.server.credential.set"
+          readonly name: string
+          readonly key:
+            | { readonly field: "environment"; readonly key: string }
+            | { readonly field: "headers"; readonly key: string }
+            | { readonly field: "oauth.client_secret" }
+          readonly value: string
+        }
+      | {
+          readonly op: "mcp.server.credential.remove"
+          readonly name: string
+          readonly key:
+            | { readonly field: "environment"; readonly key: string }
+            | { readonly field: "headers"; readonly key: string }
+            | { readonly field: "oauth.client_secret" }
+        }
   }["expectedHash"]
   readonly patch: {
     readonly expectedHash: string
@@ -4130,7 +4158,6 @@ export type ConfigDocumentTargetApplyInput = {
                 readonly type: "local"
                 readonly command: ReadonlyArray<string>
                 readonly cwd?: string | undefined
-                readonly environment?: { readonly [x: string]: string } | undefined
                 readonly disabled?: boolean | undefined
                 readonly timeout?:
                   | { readonly startup?: number | undefined; readonly request?: number | undefined }
@@ -4139,11 +4166,9 @@ export type ConfigDocumentTargetApplyInput = {
             | {
                 readonly type: "remote"
                 readonly url: string
-                readonly headers?: { readonly [x: string]: string } | undefined
                 readonly oauth?:
                   | {
                       readonly client_id?: string | undefined
-                      readonly client_secret?: string | undefined
                       readonly scope?: string | undefined
                       readonly callback_port?: number | undefined
                       readonly redirect_uri?: string | undefined
@@ -4157,6 +4182,23 @@ export type ConfigDocumentTargetApplyInput = {
               }
         }
       | { readonly op: "mcp.server.remove"; readonly name: string }
+      | {
+          readonly op: "mcp.server.credential.set"
+          readonly name: string
+          readonly key:
+            | { readonly field: "environment"; readonly key: string }
+            | { readonly field: "headers"; readonly key: string }
+            | { readonly field: "oauth.client_secret" }
+          readonly value: string
+        }
+      | {
+          readonly op: "mcp.server.credential.remove"
+          readonly name: string
+          readonly key:
+            | { readonly field: "environment"; readonly key: string }
+            | { readonly field: "headers"; readonly key: string }
+            | { readonly field: "oauth.client_secret" }
+        }
   }["patch"]
 }
 

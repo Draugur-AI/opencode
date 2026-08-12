@@ -9,8 +9,9 @@
  *
  * 🛑 This file is one of exactly FOUR bounded importers of `@opencode-ai/client-next` — the
  * others are `session-lifecycle-client.ts` (session lifecycle), `project-client.ts` (project
- * data), and `mcp-catalog-client.ts` (MCP catalog + live status, TKT-323 chunk 3). Each owns its
- * own verbs and none edit the others; nothing else may import the alias at all. Four client
+ * data), and `mcp-client.ts` (MCP catalog, live status, and config-document editing for the MCP
+ * tab, TKT-323 chunk 3). Each owns its own verbs and none edit the others; nothing else may
+ * import the alias at all. Four client
  * generations in one app is a wart we carry on purpose and for a bounded time, not a pattern to
  * spread. TKT-328 migrates every call site onto one client and deletes the alias and all four
  * modules. See FORK.md's ledger.
@@ -18,10 +19,12 @@
  * This is the third importer, added by the lead's re-scope of TKT-328 (2026-08-11): the ticket
  * was mechanical-migration-shaped until a real attempt measured 534 semantic type errors, and was
  * re-scoped to a designed migration with an explicit interim state of three bounded importers
- * (session-lifecycle, project, goal-ledger) rather than two. A fourth (mcp-catalog-client.ts)
- * followed the next day, 2026-08-12, because the Integrations page has no other client that can
- * serve it. If you are adding a FIFTH importer, that is a stronger signal still to finish TKT-328
- * instead.
+ * (session-lifecycle, project, goal-ledger) rather than two. A fourth (`mcp-client.ts`, named
+ * `mcp-catalog-client.ts` at first) followed the next day, 2026-08-12, because the Integrations
+ * page has no other client that can serve it -- then widened in place (same file, renamed) hours
+ * later the same day to also cover config-document editing for the same tab, rather than opening
+ * a fifth file for a verb family the MCP tab already needed. If you are adding a FIFTH importer,
+ * that is a stronger signal still to finish TKT-328 instead.
  *
  * Six calls, nothing else: goal get/update/status, ledger list/add/supersede. Input/output shapes
  * are the generated client's own wire types (ultimately produced from `@opencode-ai/schema`'s
