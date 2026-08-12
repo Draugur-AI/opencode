@@ -7,9 +7,9 @@ import type { Config } from "../../../src/config/config"
 
 import type { MessageV2 } from "../../../src/session/message-v2"
 import { MessageID, PartID } from "../../../src/session/schema"
-import { call, callAuthProbe, disposeApps } from "./backend"
-import { exerciseDatabasePath, original } from "./environment"
-import { Database as SQLite } from "bun:sqlite"
+import { isRecord } from "./assertions"
+import { call, callAuthProbe, directRequest, disposeApps } from "./backend"
+import { original } from "./environment"
 import { runtime } from "./runtime"
 import type { ActiveScenario, Options, ProjectOptions, Result, Scenario, ScenarioContext, SeededContext } from "./types"
 import { ProviderV2 } from "@opencode-ai/core/provider"
@@ -124,12 +124,13 @@ function withContext<A, E>(
           if (!context.llm) throw new Error("scenario needs fake LLM")
           return context.llm
         }
+        const headers = (extra?: Record<string, string>) => ({
+          ...(context.dir?.path ? { "x-opencode-directory": context.dir.path } : {}),
+          ...extra,
+        })
         const base: ScenarioContext = {
           directory: context.dir?.path,
-          headers: (extra) => ({
-            ...(context.dir?.path ? { "x-opencode-directory": context.dir.path } : {}),
-            ...extra,
-          }),
+          headers,
           file: (name, content) =>
             Effect.promise(() => {
               return Bun.write(`${directory()}/${name}`, content)
@@ -140,20 +141,26 @@ function withContext<A, E>(
             run(modules.Session.Service.use((svc) => svc.get(sessionID))).pipe(
               Effect.catchCause(() => Effect.succeed(undefined)),
             ),
+          // TKT-349: reads through the live GET routes, the same request path every other
+          // assertion in this file uses -- not a raw database file open. A direct open desyncs
+          // from whatever construction/reset choreography the harness uses underneath (a
+          // deterministic 2-scenario failure this exact helper caused, root-caused as the
+          // harness's Database.Service construction count changing, not file-handle survival --
+          // see FORK.md's node-assembly-sites section for the corrected mechanism).
           sessionLifecycle: (sessionID) =>
-            // Read the row directly. The V2 Session service is provided into the route pipeline,
-            // not into the layer scenarios run against, and the V1 service has no lifecycle field.
-            Effect.sync(() => {
-              const database = new SQLite(exerciseDatabasePath, { readonly: true })
-              try {
-                const found = database
-                  .query("SELECT lifecycle, lifecycle_revision FROM session WHERE id = ?")
-                  .get(sessionID) as { lifecycle: string; lifecycle_revision: number } | null
-                return found ? { state: found.lifecycle, revision: found.lifecycle_revision } : undefined
-              } finally {
-                database.close()
-              }
-            }),
+            directRequest(`/api/session/${sessionID}`, headers()).pipe(
+              Effect.map(({ status, body }) => {
+                if (status !== 200 || !isRecord(body) || !isRecord(body.data)) return undefined
+                const lifecycle = body.data.lifecycle
+                if (!isRecord(lifecycle) || typeof lifecycle.state !== "string") return undefined
+                const revision = body.data.lifecycleRevision
+                return { state: lifecycle.state, revision: typeof revision === "number" ? revision : 0 }
+              }),
+            ),
+          sessionTombstone: (sessionID) =>
+            directRequest(`/api/session/${sessionID}/tombstone`, headers()).pipe(
+              Effect.map(({ status }) => status === 200),
+            ),
           project: () =>
             Effect.sync(() => {
               if (!instance) throw new Error("scenario needs a project directory")

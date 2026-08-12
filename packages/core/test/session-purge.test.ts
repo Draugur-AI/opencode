@@ -316,6 +316,95 @@ describe("SessionPurge", () => {
     }).pipe(Effect.provide(sessionsLayer)),
   )
 
+  it.effect("purges the whole subtree and writes a tombstone for EVERY session in it", () =>
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service
+      const sessions = yield* SessionV2.Service
+      const parent = yield* seedTrashed("purge_parent")
+      // Two children and a grandchild, so the walk has to go deeper than one level.
+      const kids: SessionV2.ID[] = []
+      for (const [suffix, parentOf] of [["child_a", parent], ["child_b", parent]] as const) {
+        const id = SessionV2.ID.make(`ses_${suffix}_${seq++}`)
+        yield* db
+          .insert(SessionTable)
+          .values({
+            id,
+            project_id: Project.ID.global,
+            parent_id: parentOf,
+            slug: id,
+            directory: "/project",
+            title: id,
+            version: "test",
+          })
+          .run()
+          .pipe(Effect.orDie)
+        kids.push(id)
+      }
+      const grandchild = SessionV2.ID.make(`ses_grandchild_${seq++}`)
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: grandchild,
+          project_id: Project.ID.global,
+          parent_id: kids[0],
+          slug: grandchild,
+          directory: "/project",
+          title: grandchild,
+          version: "test",
+        })
+        .run()
+        .pipe(Effect.orDie)
+
+      yield* sessions.purge({ sessionID: parent, requestID: request("p-tree"), confirmation: parent })
+
+      // Every row gone — a live orphan pointing at a tombstoned parent is worse than either
+      // outcome on its own.
+      for (const id of [parent, ...kids, grandchild]) {
+        const row = yield* db.select().from(SessionTable).where(eq(SessionTable.id, id)).get().pipe(Effect.orDie)
+        expect({ id, row }).toEqual({ id, row: undefined })
+        // ...and each one has its OWN tombstone. A child ID is an ID some client still holds, so
+        // a parent-only tombstone would leave every child indistinguishable from "not fetched".
+        const stone = yield* sessions.tombstone(id)
+        expect({ id, tombstoned: stone?.id }).toEqual({ id, tombstoned: id })
+      }
+    }).pipe(Effect.provide(sessionsLayer)),
+  )
+
+  it.effect("a failed subtree purge leaves the WHOLE tree intact, not half of it", () =>
+    Effect.gen(function* () {
+      const { db } = yield* Database.Service
+      const sessions = yield* SessionV2.Service
+      const parent = yield* seedTrashed("purge_atomic")
+      const child = SessionV2.ID.make(`ses_atomic_child_${seq++}`)
+      yield* db
+        .insert(SessionTable)
+        .values({
+          id: child,
+          project_id: Project.ID.global,
+          parent_id: parent,
+          slug: child,
+          directory: "/project",
+          title: child,
+          version: "test",
+        })
+        .run()
+        .pipe(Effect.orDie)
+
+      // Wrong confirmation: refused before anything is deleted. The point of the assertion is the
+      // CHILD — a purge that had already walked into the subtree before failing would leave it
+      // missing while the parent survived, and nothing downstream would ever notice.
+      yield* sessions
+        .purge({ sessionID: parent, requestID: request("p-atomic"), confirmation: SessionV2.ID.make("ses_wrong") })
+        .pipe(Effect.exit)
+
+      for (const id of [parent, child]) {
+        const row = yield* db.select().from(SessionTable).where(eq(SessionTable.id, id)).get().pipe(Effect.orDie)
+        expect({ id, present: row !== undefined }).toEqual({ id, present: true })
+        expect({ id, tombstoned: (yield* sessions.tombstone(id)) !== undefined }).toEqual({ id, tombstoned: false })
+      }
+    }).pipe(Effect.provide(sessionsLayer)),
+  )
+
   it.effect("the worker claims only sessions whose grace period has expired", () =>
     Effect.gen(function* () {
       const { db } = yield* Database.Service

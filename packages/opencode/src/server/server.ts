@@ -123,6 +123,12 @@ function startWithPortFallback(opts: ListenOptions) {
 
 function startListener(opts: ListenOptions, port: number) {
   const scope = Scope.makeUnsafe()
+  // TKT-349: a process singleton is a singleton PER MEMO MAP, not per process -- a fresh one
+  // here means WebSocketTracker (and anything else reachable from listenerLayer) knowingly gets
+  // its own separate live instance for THIS listener, not shared with any other concurrent
+  // `Server.listen()` call. Deliberate: each listener's config isolation (see the ConfigProvider
+  // comment above) depends on not sharing this map. Do not copy this pattern to a boundary that
+  // expects ONE shared instance across builds -- pass the shared `memoMap` there instead.
   return Layer.buildWithMemoMap(listenerLayer(opts, port), Layer.makeMemoMapUnsafe(), scope).pipe(
     Effect.provide(HttpApiApp.context),
     Effect.onError(() => Scope.close(scope, Exit.void).pipe(Effect.ignore)),

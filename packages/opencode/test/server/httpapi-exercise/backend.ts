@@ -17,6 +17,18 @@ export function call(scenario: ActiveScenario, ctx: SeededContext<unknown>, opti
   )
 }
 
+/** A raw GET against the app under test, for context helpers (sessionLifecycle,
+ * sessionTombstone) that need to read durable state without a full scenario request/response
+ * shape. Reads through the SAME live service every scenario's own assertions do -- unlike a
+ * direct database file open, this cannot desync from whatever reset/construction choreography
+ * the harness uses, because it is the harness's own request path (TKT-349). */
+export function directRequest(path: string, headers: Record<string, string> = {}) {
+  return Effect.promise(async () => {
+    const response = await app(await runtime(), {}).request(new Request(new URL(path, "http://localhost"), { headers }))
+    return { status: response.status, body: parse(await response.text()) }
+  })
+}
+
 export function callAuthProbe(scenario: ActiveScenario, credentials: "missing" | "valid" = "missing") {
   return Effect.promise(async () => {
     const controller = new AbortController()

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Scope } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 
 class Value extends Context.Service<Value, { readonly value: string }>()("test/LayerNodeValue") {}
@@ -257,5 +257,75 @@ describe("layer node", () => {
       kind: "group",
       dependencies: [],
     })
+  })
+
+  // TKT-349: a "process singleton" node is a singleton PER MEMO MAP, not per process. Two
+  // independent compile() calls that each reach the same node -- mirroring server.ts's two
+  // separate AppNodeBuilderV1.build(...) calls that both reach SessionV2.node -- construct it
+  // TWICE unless both builds share one MemoMap. No functional assertion catches this (each half
+  // of the split still behaves correctly in isolation); only a construction counter does. This
+  // is the regression shape for that bug class, not a reproduction of the specific
+  // SessionExecutionLocal coordinator it surfaced on.
+  test("a node reached from two separate compile() calls constructs once with a shared MemoMap, twice without", async () => {
+    let constructions = 0
+    const counted = LayerNode.make({
+      service: Value,
+      layer: Layer.effect(
+        Value,
+        Effect.sync(() => {
+          constructions++
+          return Value.of({ value: "shared" })
+        }),
+      ),
+      deps: [],
+    })
+    const left = LayerNode.make({
+      service: Left,
+      layer: Layer.effect(
+        Left,
+        Effect.map(Value, (item) => Left.of({ value: item.value })),
+      ),
+      deps: [counted],
+    })
+    const right = LayerNode.make({
+      service: Right,
+      layer: Layer.effect(
+        Right,
+        Effect.map(Value, (item) => Right.of({ value: item.value })),
+      ),
+      deps: [counted],
+    })
+    // Two SEPARATE compile() calls, each reaching `counted` through its own dependency edge --
+    // the exact shape of server.ts's SessionV2.node build and its separate `app` group build
+    // both reaching SessionExecution.node.
+    const leftLayer = LayerNode.compile(LayerNode.group([left])) as Layer.Layer<Left>
+    const rightLayer = LayerNode.compile(LayerNode.group([right])) as Layer.Layer<Right>
+
+    constructions = 0
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope
+          // Each build gets its OWN fresh MemoMap -- the unshared case (server.ts's original
+          // bug, before the harness/acp riders in this PR).
+          yield* Layer.buildWithMemoMap(leftLayer, Layer.makeMemoMapUnsafe(), scope)
+          yield* Layer.buildWithMemoMap(rightLayer, Layer.makeMemoMapUnsafe(), scope)
+        }),
+      ),
+    )
+    expect(constructions).toBe(2)
+
+    constructions = 0
+    await Effect.runPromise(
+      Effect.scoped(
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope
+          const sharedMemoMap = Layer.makeMemoMapUnsafe()
+          yield* Layer.buildWithMemoMap(leftLayer, sharedMemoMap, scope)
+          yield* Layer.buildWithMemoMap(rightLayer, sharedMemoMap, scope)
+        }),
+      ),
+    )
+    expect(constructions).toBe(1)
   })
 })

@@ -59,6 +59,7 @@ retires it without reading every PR.
 | Normalized app session entities + tab reconciliation: `session-entities.ts` reducer keyed by (server scope, session ID), `SessionEntitiesProvider`, and `TabsProvider.reconcile()` ([#11](https://github.com/Draugur-AI/opencode/pull/11)) | Upstream keeps three independent session truths in the browser — a sorted array merged by ID in `global-sync/bootstrap.ts`, tab references validated against known *servers* rather than known *sessions*, and a browser-only `opencode:session-tabs-removed` custom event. Races between them are structural, not incidental: an archived session can flash back on an SSE race. Design post, "Fix session lifecycle before session chrome" | not yet filed | none — client-side projection only; types are imported from `@opencode-ai/schema`, the package the generated client is produced from | none | **upstream** — the client half of the lifecycle domain, proposed back with it |
 | Temporary `@opencode-ai/client-next` alias in `packages/app`, reaching the workspace client for **six** session-lifecycle calls: four mutations (`restore`, `trash`, `restoreFromTrash`, `purge`) plus `list` (lifecycle-aware, index-summary shape) and `get` (TKT-314, session-entities feed) ([#11](https://github.com/Draugur-AI/opencode/pull/11)) | `packages/app` pins `@opencode-ai/client` to a vendored tarball generated before session lifecycle existed, so those routes are absent from it — including a lifecycle-filterable list, which the normalized entity store's snapshot feed needs (`lifecycle: "all"`) and the vendored client cannot express at all. Archive is deliberately NOT on the alias: it still goes through the V1 route, which the slice-1 server adapter drives into the same lifecycle service. Migrating the app off the vendored client is 42 files and its own ticket | n/a — fork-only packaging workaround | none | none | **remove** — deleted together with the vendored tarball by **TKT-328** (app + session-ui onto one client, amended to cover both importers below). Bounded by construction: `packages/app/src/utils/session-lifecycle-client.ts` is this alias's only importer for session-lifecycle calls and says so in its header — see the next row for the project-calls sibling, added by ruling rather than by drift. Two importers total, neither accretes further |
 | Second `@opencode-ai/client-next` importer, `packages/app/src/utils/project-client.ts`, reaching the workspace client for **five** project calls (`list`, `get`, `updateMetadata`, preference `read`, preference `write`) (TKT-315) | Same vendored-tarball gap as the row above, for project data instead of session lifecycle: the vendored client predates PR #8's project/preference endpoints entirely, so TKT-315's app half (favorites that persist server-side — the entire point of "two browsers converge on the same favorites") cannot be built against it. Ruled rather than assumed: extending `session-lifecycle-client.ts` itself was rejected because that file is Henry's, under active use by his views work, and editing it mid-flight would manufacture the exact collision the one-importer discipline exists to prevent. A second, equally narrow, equally bounded file was the correct shape instead of either widening the first file or blocking the ticket on a vendored client with no preference support at all | n/a — fork-only packaging workaround | none | none | **remove** — deleted together with the vendored tarball and the row above by **TKT-328**, now covering both importers by amendment. Bounded by construction, same discipline as the row above: `project-client.ts` is this half's only importer and says so in its own header |
+| App "Delete…" session action rewired from the legacy `DELETE /session/:id` route (`sdk().api.session.remove`, a permanent, non-recoverable hard delete) to the `trash` lifecycle route (`session-lifecycle-client.ts`'s `client.trash(...)`), in `packages/app/src/pages/session/timeline/message-timeline.tsx` (TKT-349) | Found by the day-two runbook walk: clicking Delete… on an active session made it permanently, unrecoverably gone instead of trash-with-grace-period, the app's own stated promise. Root cause: the app called the legacy V1 remove route directly rather than any lifecycle route at all. This row is the app-side half of the fix — it is independent of, and does not depend on, the V1 `session.remove` adapter (deferred, see the section above); the legacy route itself still exists and still hard-deletes for its remaining CLI/ACP/teardown callers | n/a — bug fix, not a divergence pattern | none | none | **remove** — once the deferred V1 `session.remove` adapter lands with its own designed dependency shape, this row's "the legacy route still hard-deletes" caveat should be re-verified and this row closed alongside it |
 | Session profiles: `Profile.Definition`/`Profile.Snapshot` schemas, immutable `session_profile_snapshot` table + `session.profile_snapshot_id`, `SessionEvent.ProfileSwitched` (event-sourced, carries the full resolved snapshot so the projector needs no second read), `SessionProfile` core service (`resolve`/`get`/`context`/`toolDenyRuleset`), `PermissionV2.configured` merging a profile's deny-only ruleset into every leaf `assert`/`ask` call, `ToolRegistry.materialize` widened from `materialize(permissions)` to `materialize({permissions, profileToolRules})`, `SkillGuidance.load` widened with an optional `skillRules` filter, built-in `coding`/`chat` definitions (core code constants, not DB rows), and a contained V1 hook-identity refactor (`packages/opencode/src/plugin/index.ts`'s flat `Hooks[]` → `LoadedHooks{pluginID, origin, hooks}[]`) (TKT-321) | Upstream has no durable per-session policy overlay at all — a "chat vs. coding" toggle would have to hide UI without touching what the model can actually invoke, exactly the "profiles produce security theater" risk the validation post names. Design post, "Session profiles solve chat versus coding behavior"; build post, "Profiles: persist behavior, not just a label" | not yet filed | Adds `session_profile_snapshot` (append-only, FK cascade to `session`) and a nullable `session.profile_snapshot_id`; one new durable event type, additive. `MaterializeRequest`/`SkillGuidance.load`'s new param are both additive/optional — no existing caller signature became invalid without a corresponding call-site fix in the same PR | `20260811182549_session_profile_snapshot`: additive DDL only, no backfill (pre-migration sessions simply read as "no profile resolved yet," per `SessionProfile.get`'s documented undefined case) | **upstream** for the schema/policy/skill-filtering half — exactly what the design/build posts argue upstream needs. **Deferred, not upstream, not fork-only**: (1) resolve-on-session-create wiring (a session does not yet get a profile automatically; the demo test in `test/permission.test.ts` resolves one explicitly), (2) MCP tool materialization filtering (`mcpRules` exists in the schema, but `packages/core/src/tool` has no MCP tool registration path to filter yet — the comment in `tool/builtins.ts` says as much), (3) the app-side composer UI (current profile display, switch diff) — coordinate-with-Henry per the ticket, not attempted this PR, (4) threading `TriggerContext` (sessionID + resolved profile) through `Plugin.Service.trigger` for session-aware hook filtering — `trigger()` has 20+ call sites across `packages/opencode/src`, too large a blast radius for this PR; `LoadedHooks` preserves the identity a follow-up needs without touching any of them |
 | Config document writer, chunk 1: `packages/core/src/config/document.ts` (`listTargets`/`readTarget`/`effective`-with-provenance/`validatePatch`/`applyPatch`, allowlisted typed `Patch` union, atomic temp-file-then-rename write, sha256 optimistic hash check, opaque server-derived `TargetID` — never a browser-supplied path), `McpCatalog` core read model (declared servers only), two new Protocol groups (`config-document`: generic patch-apply surface every future catalog reuses; `mcp`: read-only `mcp.list`), wire types relocated `packages/core/src/config/mcp.ts` → `packages/schema/src/config-mcp.ts` (protocol cannot depend on core; core now re-exports, same pattern as Integration/SessionProfile) plus two new schema modules (`config-document.ts`, `mcp-catalog.ts`) (TKT-323) | Upstream has no editable-config surface at all — `Config.Info` is read-oriented and merges global/project silently; a settings UI serializing the merged result back to one file would destroy comments, provenance, and overrides. Build post, "Configuration UI: edit a source document, never the merged result" | not yet filed | No table changes — config lives in files, not the DB. Two new durable-free schema modules (config-document.ts, mcp-catalog.ts); `ConfigMCP.Server`/`Local`/`Remote`/`OAuth`/`Timeout` moved from core to schema, core re-exports — no consumer signature changed | none | **upstream** for `document.ts`'s patch-apply model and the config-document/mcp protocol groups — exactly the "edit a source document" pattern the build post argues for. **Deferred, not upstream, not fork-only**: live MCP connection/tool/resource status (`McpCatalog.Status` is `"configured"\|"disabled"` only — no core service can reach the live runtime in `packages/opencode/src/mcp/index.ts` yet; chunk 2 adds a core `McpRuntime` service TAG with the live implementation supplied as a layer at `packages/opencode`'s httpapi-assembly time, preserving the dependency direction rather than relocating the runtime), skills/plugins/profiles catalogs and their settings-v2 UI routes (chunks 2-3), `.opencode`-directory supplementary files are not yet listed as patchable targets (MCP servers live in the top-level file only) |
 
@@ -210,6 +211,55 @@ the provide site. `HttpRouter.serve` (used by `packages/cli`'s daemon) does not 
 distinction, which is why the equivalent fix there was just adding the node to the existing
 `Layer.provide(AppNodeBuilder.build(...))` list.
 
+### A process singleton is a singleton PER MEMO MAP (TKT-349)
+
+Listing a global node at every reachable assembly site (above) is necessary but **not
+sufficient** on its own. Two separate `AppNodeBuilder`/`AppNodeBuilderV1.build(...)` (or
+`Layer.buildWithMemoMap(...)`) calls that both reach the same global node, each without a
+**shared** `MemoMap`, construct it **twice** — two live, independent instances of what the
+codebase assumes is one process-wide singleton (`SessionExecutionLocal`'s coordinator, in the
+case that surfaced this: a keyed `Map` + `FiberSet` split in two, each half seeing only some of
+the sessions it should be coordinating). A green functional test suite does not catch this class
+of bug — every individual assertion can still pass against whichever half of the split it
+happened to be routed to. **Only a construction counter does**: instrument the layer's own
+construction path and assert it runs exactly once across every boundary that is supposed to
+share it.
+
+The fix is always the same shape: **pass the shared `memoMap` instance
+(`@opencode-ai/core/effect/memo-map`) at every assembly boundary that is supposed to produce one
+shared instance of a node.** Production's own server assembly already did this correctly
+everywhere the `httpapi-exercise` test harness did not, which is why the split was invisible until
+a change (a since-reverted TKT-349 session-removal adapter prototype) added a new edge that made a
+previously-single build path fan out across two boundaries. That prototype surfaced two more
+boundaries this rule applies to and is still open, **not yet fixed**:
+
+1. The V1 `session.remove` adapter itself — routing it through `SessionV2.Service` means V1's
+   `Session.node` needs `SessionV2.node` as a dependency, which reaches `SessionExecution.node`
+   (unbound) from **every** consumer of `Session.Service`, not just `remove`. That broke 35
+   otherwise-unrelated test fixtures across the suite that build `Session.node` in their own
+   narrow harness and never needed a `SessionExecution` replacement before. The fixtures were not
+   wrong — the edge's shape was: a whole-service dependency for what should be one function's
+   concern. Needs a narrower capability (a `serviceOption`-style optional dependency, or a
+   narrower interface `remove` alone requires) rather than 35 individual fixture patches.
+2. `acp/service.ts`'s `makeDirectoryService` is **not** a true process-global the shared-memoMap
+   rule applies to as-is: `Directory.Loader`'s replacement is parameterized by the caller's own
+   `sdk` (a distinct `OpencodeClient` per ACP connection), so passing the shared memoMap dedups
+   instances that are legitimately supposed to stay distinct — confirmed by real ACP test
+   failures (wrong JSON-RPC error codes) the moment the shared memoMap was applied there. Needs
+   its own per-sdk-vs-global memo structure, not a blanket pass.
+
+Both are tracked open on TKT-349 pending a designed shape for each — the pre-existing V1
+`session.remove` raw hard-delete (no tombstone, no crash safety) remains live for its CLI/ACP/
+teardown callers until the first is resolved. No app-facing path reaches it after this PR: the
+app's own "Delete…" action was moved to the `trash` lifecycle route directly (see the app-side
+row below), independent of this adapter entirely.
+
+**Where a fresh, unshared `MemoMap` is deliberate** (per-listener config isolation in
+`server/server.ts`'s `startListener`, for example), that is legitimate — but the code must say,
+at the point the fresh map is created, which singletons it is knowingly duplicating as a result.
+A silent fresh map reads identically to a forgotten shared one; only the comment tells the next
+person which case they are looking at.
+
 ## Merge-blocking gates
 
 These gates are **merge-blocking conditions**, not aspirations. A PR that trips one does not
@@ -360,6 +410,14 @@ Conventional-commit title prefixes (`feat|fix|docs|chore|refactor|test`, optiona
 linked-issue requirement** — a `fix:`/`chore:`/`test:` title still needs `Closes #<number>` in the
 body or the same bot flags it.
 
+**Issues were disabled on this fork** (`has_issues: false`, discovered on TKT-349's PR #24 when
+the linked-issue requirement above had nothing to link to) — re-enabled via `gh api
+repos/Draugur-AI/opencode -X PATCH -F has_issues=true` (additive, reversible, our own fork). Until
+the inherited `pr-standards.yml`/`compliance-close.yml` workflows are adjusted to not require one,
+**every `fix:`/`chore:`/`test:` PR carries a linked shim issue**: title + one paragraph + a
+cross-reference to the tracking ticket, with the issue body saying explicitly that it is a
+compliance shim and the ticket is the source of truth. `Closes #<that issue>` in the PR body.
+
 ## The merge gate: all green, any red blocks
 
 **As of TKT-336, this fork does not run a known-red-exceptions regime any more.** That regime
@@ -424,6 +482,28 @@ hides (that was the whole reason for abolishing it), so each observational check
   it — no judgment required. Scattered single-spec flakes across different specs, run to run, are
   not.** This is checkable by anyone reading the last 3 runs' failure lists side by side; it does
   not require characterising *why* a test is flaky, only whether the *same* one keeps failing.
+- **`unit (linux)`** (the actual merge gate, unlike observational `e2e` above) **can show the
+  same scattered-flake shape, timer-correlated:** first seen on TKT-349's PR #24 — reruns of one
+  unchanged commit repeatedly failed different, unrelated, timer-shaped specs
+  (`observe-element-offset`'s `setTimeout(0)` assertion, `plugin.openai.ws-pool`'s idle-connection
+  pruning timer, `ModelsDev Service`'s cache-fetch hitting its 30000ms timeout at 30000.20ms),
+  none touching the PR's own diff. An earlier version of this entry proposed a "wait for host load
+  under ~6" precondition before rerunning — **retracted**: checked directly, `load average ~9` is
+  this host's *normal* operating state while two fleets work (vLLM inference serving both fleets,
+  concurrent test/worker sessions), not a spike to wait out. A threshold set from one settling
+  sample is the same unmeasured-threshold mistake as elsewhere in this ledger — don't repeat the
+  shape even when the specific number looks plausible. **Corrected, bounded policy:** unit reruns
+  take the host as it is, no load precondition — fire one rerun of the failed job whenever the
+  runner is free. If a spec fails that has already failed in a **prior run of the same PR**
+  (`plugin.openai.ws-pool` reached 3 failures across TKT-349's own reruns), treat it as
+  known-flaky-under-normal-load: skip it with `test.skip` and a comment linking the deflake
+  feedback item, and add a row to the "Resolved CI reds" table below (Sean's standing directive:
+  cheaper to skip a particular known unit test with a comment than to keep re-running around it).
+  A spec with only one failure across a PR's runs stays live — no skip on a single occurrence.
+  Fix shape for whoever picks up hardening these: fake-clock (`bun:test`'s `setSystemTime`/a
+  controlled timer, rather than a real `setTimeout`/timeout race), which removes the host-load
+  dependency entirely instead of tolerating
+  it.
 - **`nix-eval`:** disabled (auto-trigger removed, see "Blacksmith runner sweep" below) rather
   than gated or merely observational — Nix packaging validity is not this fork's concern at all,
   so there is nothing to read a rule against.
@@ -447,6 +527,7 @@ like; nothing here is a currently-live gate exception.
 | `unit (linux)` — 7 additional `run-process.test.ts` tests, briefly, only on TKT-315's own PR: clustered 700-800ms over the harness's 30\_000ms default `timeoutMs` | TKT-315 added `ProjectV2.node`/`SessionGoal.node`/`SessionLedger.node` to `app-runtime.ts`'s CLI/TUI `AppLayer` (see "Adding a new global `.node`?" above — all three traced reachable, not removable). None do eager I/O, but building 3 more global nodes has nonzero per-process construction cost; invisible in isolated timing (8 runs each, branch vs. dev, fully overlapping) but real under `run-process.test.ts`'s 13 concurrent `cliIt.concurrent()` subprocess spawns (6x full-file runs, non-overlapping ranges). | **Interim `timeoutMs` widen shipped in the same PR** (30\_000 → 45\_000 on the 7 affected tests only, each commented, feedback #150) — the real fix (lazy node construction so a CLI invocation that never touches project/goal/ledger data pays nothing for them) is still open, tracked in #150. This is the one row here that is not fully closed — it is an accepted, narrow, linked interim, not a currently-observed red. |
 | `packages/opencode test:httpapi`, `mode=effect` only — `v2.session.goal.get`, "a session with no goal set should report no data" | Was masked by a crash (see the `SessionGoal.node`/`SessionLedger.node` wiring gap above) until TKT-315 fixed the wiring and let the route's assertion actually run; the assertion itself then failed, a real bug in TKT-317's goal-get response path (filed as feedback #145). | **Fixed** ([#10](https://github.com/Draugur-AI/opencode/pull/10), Gemma) — confirmed dead on `dev@441ad185`: `test:httpapi --mode effect` went from 227/0 (crash-masked) to 226/1 (this assertion, post-TKT-315) to 229/0 (post-#10, three new scenarios added along the way, zero fail). No exception needed in the simplified gate above. |
 | `e2e (windows)`, first run only — apparent ~40 `e2e/regression/*.spec.ts` failures | **Misread, not a real symptom** — the ~40 count was a grep artifact (spec-file-path occurrences anywhere in the log, which also matches Playwright's test-discovery listing) mistaken for a failure list. The real first-run result was 2 failed / 87 passed. A subsequent run showed `e2e (linux)` — clean on its first two runs — fail 1 spec too, a *different* spec. Both platforms show the same class of ordinary, low-rate E2E flakiness, pre-existing and simply never observed before (e2e never ran on either platform pre-TKT-336, both queued forever on blacksmith). | **Not a red to resolve — moved out of the gate entirely, symmetrically on both platforms** (Ethan's ruling: stabilizing genuine Playwright flakiness is a different body of work than CI hygiene, belongs to the milestone-3 real-browser-matrix slice). See "Observational checks" above for the deterministic reading rule that replaces the skip. Feedback #156 corrected in place rather than superseded — the correction is part of its own record. |
+| `unit (linux)` — `plugin.openai.ws-pool`, "prunes idle websocket connections after completed responses" | Real `setTimeout`-based idle-connection-pruning race, timing-sensitive under normal host load (this host runs ~9 load average continuously serving two fleets' inference/tests — not a spike). Failed 3 times across TKT-349's own CI reruns of one unchanged commit, unrelated to that PR's diff. | **Skipped** (TKT-349, feedback #180): `test.skip` with a comment linking the feedback item. Un-skip condition: feedback #180 is triaged — fake-clock (`setSystemTime`/a controlled timer) replacing the real timer removes the flake at its root rather than just tolerating it. |
 
 ## Blacksmith runner sweep (TKT-336)
 

@@ -70,7 +70,7 @@ export function SessionEntitiesSync() {
   const runSnapshot = async () => {
     const conn = sdk().server
     if (conn.type !== "http") return
-    const client = createSessionLifecycleClient(conn.http)
+    const client = createSessionLifecycleClient(conn)
     const serverKey = ServerConnection.key(conn)
     const sessions = await fetchAllSessions(client)
     entities.dispatch({ type: "snapshot", serverKey, sessions })
@@ -97,7 +97,7 @@ export function SessionEntitiesSync() {
       const event = e.details as { type: string; properties?: unknown }
 
       const refetchAndDispatch = (sessionID: string) => {
-        const client = createSessionLifecycleClient(conn.http)
+        const client = createSessionLifecycleClient(conn)
         // SessionsGetOutput is already the flat session shape (its own generated type alias is
         // self-indexed to `["data"]`) -- no wrapper to unwrap here, unlike SessionsListOutput.
         // A 404 here is a real, if rare, race (the session was purged between the event firing

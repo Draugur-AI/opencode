@@ -1500,6 +1500,11 @@ const scenarios: Scenario[] = [
       body: { title: 1 },
     }))
     .status(400),
+  // TKT-349: the V1 remove adapter (routing this route through the crash-safe purge transaction,
+  // same as POST /api/session/{id}/purge) was reverted out of this PR pending Henry's designed
+  // shape for the dependency edge it needed -- see the ticket. This route is still the pre-fix
+  // raw hard-delete; no tombstone to assert here yet. `ctx.sessionTombstone` stays available in
+  // ScenarioContext for whichever PR lands the adapter to use directly.
   http.protected
     .delete("/session/{sessionID}", "session.delete")
     .mutating()

@@ -35,8 +35,8 @@ export function createArchivedController() {
 
   const restore = async (session: Session.Info) => {
     const conn = server.current
-    if (!conn || conn.type !== "http") return
-    const client = createSessionLifecycleClient(conn.http)
+    if (!conn) return
+    const client = createSessionLifecycleClient(conn)
     try {
       await client.restore({
         sessionID: session.id,
