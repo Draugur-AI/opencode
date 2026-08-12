@@ -1,4 +1,4 @@
-import { describe, expect, mock, test } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Effect, Layer } from "effect"
 import type { Agent } from "../../src/agent/agent"
@@ -7,22 +7,8 @@ import { Skill } from "../../src/skill"
 import { Permission } from "../../src/permission"
 import type { Provider } from "../../src/provider/provider"
 import { SystemPrompt } from "../../src/session/system"
-import { InstanceRef } from "../../src/effect/instance-ref"
-import type { InstanceContext } from "../../src/project/instance-context"
 import { MCP } from "../../src/mcp"
 import { testEffect } from "../lib/effect"
-
-// TKT-397: system.ts reaches Server via a dynamic import (a static one closes a module cycle), so
-// the URL is controlled here by mocking that module rather than by assigning to it -- `export let
-// url` is writable only inside its own module, and the `export * as Server` namespace is frozen.
-let serverURL: URL | undefined
-void mock.module("../../src/server/server", () => ({
-  Server: {
-    get url() {
-      return serverURL
-    },
-  },
-}))
 
 const skills: Skill.Info[] = [
   {
@@ -49,15 +35,6 @@ const skills: Skill.Info[] = [
     content: "# manual-skill",
   },
 ]
-
-const model = { providerID: "anthropic", api: { id: "claude-sonnet-4" } } as Provider.Model
-
-// A real directory: Reference.list() stats it, so a synthetic path fails before the assertion.
-const instance = {
-  directory: process.cwd(),
-  worktree: process.cwd(),
-  project: { vcs: "git" },
-} as InstanceContext
 
 const build: Agent.Info = {
   name: "build",
@@ -153,31 +130,20 @@ describe("session.system", () => {
     }),
   )
 
-  // TKT-397: the three prompts tell the model to fetch docs from the URL <env> names. If that line
-  // is silently absent the instruction degrades to naming a URL nobody supplied, which is the
-  // upstream-docs failure again in a new costume -- so both branches are pinned, not just the happy
-  // one. Asserting the built string, since that is the artifact the model receives.
-  it.effect("env advertises this instance's own docs URL when the server is listening", () =>
-    Effect.gen(function* () {
-      serverURL = new URL("http://127.0.0.1:4633")
-      const prompt = yield* SystemPrompt.Service
-      const output = (yield* prompt.environment(model).pipe(Effect.provideService(InstanceRef, instance))).join("\n")
+  // TKT-397: the three prompts tell the model to fetch docs from the URL <env> names. A silently
+  // absent line degrades that instruction to naming a URL nobody supplied -- the upstream-docs
+  // failure in a new costume -- so both branches are pinned, not just the happy one.
+  test("docs env line carries this instance's own /docs URL", () => {
+    expect(SystemPrompt.docsEnvLines(new URL("http://127.0.0.1:4633"))).toEqual([
+      "  Documentation for this build: http://127.0.0.1:4633/docs",
+    ])
+  })
 
-      expect(output).toContain("  Documentation for this build: http://127.0.0.1:4633/docs")
-      expect(output).not.toContain("opencode.ai")
-    }),
-  )
-
-  it.effect("env omits the docs line rather than guessing when no server is listening", () =>
-    Effect.gen(function* () {
-      serverURL = undefined
-      const prompt = yield* SystemPrompt.Service
-      const output = (yield* prompt.environment(model).pipe(Effect.provideService(InstanceRef, instance))).join("\n")
-
-      expect(output).not.toContain("Documentation for this build")
-      expect(output).toContain("</env>")
-    }),
-  )
+  // `opencode run` never calls Server.listen, so nothing is serving /docs: omitting beats naming a
+  // URL that would refuse the connection.
+  test("docs env line is omitted, not guessed, when no server is listening", () => {
+    expect(SystemPrompt.docsEnvLines(undefined)).toEqual([])
+  })
 
   it.effect("MCP output omits servers when all advertised tools are denied", () =>
     Effect.gen(function* () {
