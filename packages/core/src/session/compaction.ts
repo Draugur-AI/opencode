@@ -15,13 +15,15 @@ const DEFAULT_KEEP_TOKENS = 8_000
 // TKT-377, diary 2584/2594: Token.estimate's char/4 heuristic under-counts structured tool output
 // (measured ratios against live usage.prompt_tokens: git log 0.69, JSON tool output 0.73, file
 // listings 0.86; realistic agent request 0.88) -- the exact content mix a long agentic session is
-// dominated by. At the fleet's real qwen3-6 limits (context 131072, reserve max(8192,20000)=20000)
-// the margin at average mix is ~3.7% of the context window, and PROD-CONFIRMED overflow occurred
-// at that content mix (diary 2600: litellm ContextWindowExceededError at exactly the estimated
-// trigger + 1). Interim fix pending a proper anchor-on-real-usage redesign (diary 2584 §5): inflate
-// the trigger estimate by this factor, which covers the measured 0.88 aggregate with margin and
-// most of the 0.69 worst case. Pushes the average case into earlier compaction rather than
-// overflow -- the safe direction. Do not remove this without re-measuring against a live model.
+// dominated by.
+//
+// The anchor redesign (diary 2584 §5, this comment updated when it landed) scopes this factor to
+// ONLY the delta-estimate portion of exceedsCapacity's input -- the anchored portion is real
+// usage.prompt_tokens from the last assistant turn, never estimated, so it never needed inflating.
+// REMOVAL CONDITION: once there is live evidence that a delta-only estimate (typically a handful
+// of new messages since the last real measurement, not a whole conversation) doesn't need this
+// margin -- e.g. a repeat of diary 2584's live-measurement methodology run against delta-sized
+// samples specifically -- this can drop to 1.0. Do not remove on reasoning alone; re-measure.
 const ESTIMATOR_SAFETY_FACTOR = 1.2
 const TOOL_OUTPUT_MAX_CHARS = 2_000
 const SUMMARY_OUTPUT_TOKENS = 4_096
@@ -63,7 +65,7 @@ Rules:
   history_search's call rate from 100% to 20% because the model receives no cue that older detail
   might exist at all.`
 
-type Entry = {
+export type Entry = {
   readonly seq: number
   readonly message: SessionMessage.Message
 }
@@ -92,12 +94,19 @@ type Input = {
 const estimate = (value: unknown) => Token.estimate(JSON.stringify(value))
 
 // Pure so the safety-factor boundary is testable without a live model or LLM request -- TKT-377.
+// `anchoredTokens` is real usage.prompt_tokens (from a real assistant turn) and is never inflated;
+// `estimatedTokens` is char/4-derived and is the only part the safety factor applies to. The
+// no-anchor fallback (findAnchor below) calls this with anchoredTokens=0 and the full
+// char-count estimate in estimatedTokens -- identical to the pre-anchor behavior.
 export const exceedsCapacity = (input: {
-  readonly rawEstimate: number
+  readonly anchoredTokens: number
+  readonly estimatedTokens: number
   readonly context: number
   readonly output: number
   readonly buffer: number
-}) => input.rawEstimate * ESTIMATOR_SAFETY_FACTOR > input.context - Math.max(input.output, input.buffer)
+}) =>
+  input.anchoredTokens + input.estimatedTokens * ESTIMATOR_SAFETY_FACTOR >
+  input.context - Math.max(input.output, input.buffer)
 
 const truncate = (value: string) =>
   value.length <= TOOL_OUTPUT_MAX_CHARS ? value : `${value.slice(0, TOOL_OUTPUT_MAX_CHARS)}\n[truncated]`
@@ -137,6 +146,37 @@ export const serialize = (message: SessionMessage.Message) => {
   if (message.type === "synthetic") return `[Synthetic context]: ${message.text}`
   if (message.type === "shell") return `[Shell]: ${message.command}\n${truncate(message.output)}`
   return ""
+}
+
+// TKT-377, diary 2584 §5: the most recent assistant message with recorded usage carries the REAL
+// prompt-token count for that turn (message.tokens.input, exactly what the provider reported
+// usage.prompt_tokens as) plus its own real response size (message.tokens.output) -- together,
+// the real total context size as of right after that turn completed. Everything appended to
+// `entries` since then (a new user message, this turn's own tool results so far) is the only part
+// that still needs char-count estimation, and it is normally small relative to a whole
+// conversation. Assumes system/tools are unchanged since the anchor turn (the common case for one
+// agent loop); does not re-estimate them, so a mid-session profile/tool-list change between the
+// anchor and now is not separately accounted for -- diary 2584's measured error was in structured
+// tool OUTPUT content, not schema size, so this is the right thing to leave unestimated rather
+// than the right thing to chase.
+const findAnchor = (entries: readonly Entry[]) => {
+  for (let index = entries.length - 1; index >= 0; index--) {
+    const message = entries[index]!.message
+    if (message.type === "assistant" && message.tokens !== undefined)
+      return { realTokens: message.tokens.input + message.tokens.output, afterIndex: index }
+  }
+  return undefined
+}
+
+// Exported for direct testing -- TKT-377.
+export const anchoredEstimate = (entries: readonly Entry[]) => {
+  const anchor = findAnchor(entries)
+  if (!anchor) return undefined
+  const delta = entries.slice(anchor.afterIndex + 1)
+  return {
+    anchoredTokens: anchor.realTokens,
+    estimatedTokens: delta.reduce((total, entry) => total + Token.estimate(serialize(entry.message)), 0),
+  }
 }
 
 const settings = (documents: readonly Config.Entry[]) => {
@@ -280,12 +320,13 @@ export const make = (dependencies: Dependencies) => {
     const context = input.model.route.defaults.limits?.context
     if (context === undefined || context <= 0) return false
     const output = input.request.generation?.maxTokens ?? input.model.route.defaults.limits?.output ?? 0
-    const rawEstimate = estimate({
-      system: input.request.system,
-      messages: input.request.messages,
-      tools: input.request.tools,
-    })
-    if (!exceedsCapacity({ rawEstimate, context, output, buffer: config.buffer })) return false
+    // No anchor yet (session start, or nothing since the last compaction has a real usage number)
+    // falls back to the pre-anchor full char-count estimate, unchanged.
+    const { anchoredTokens, estimatedTokens } = anchoredEstimate(input.entries) ?? {
+      anchoredTokens: 0,
+      estimatedTokens: estimate({ system: input.request.system, messages: input.request.messages, tools: input.request.tools }),
+    }
+    if (!exceedsCapacity({ anchoredTokens, estimatedTokens, context, output, buffer: config.buffer })) return false
     return yield* compactAfterOverflow(input)
   })
   return {
