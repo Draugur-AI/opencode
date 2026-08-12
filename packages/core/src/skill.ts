@@ -53,6 +53,50 @@ export interface Interface extends State.Transformable<Draft> {
 
 export class Service extends Context.Service<Service, Interface>()("@opencode/v2/Skill") {}
 
+export type LoadedSource = { readonly source: Source; readonly skills: readonly Info[] }
+
+export type MergeEntry = {
+  readonly skill: Info
+  readonly source: Source
+  readonly sourceIndex: number
+  /** The source (later in `loaded`'s order, i.e. registered later / closer-wins) that shadows
+   * this one, if any. Undefined means this is the effective (winning) skill for this name. */
+  readonly shadowedBy?: { readonly source: Source; readonly sourceIndex: number }
+}
+
+/**
+ * Pure so the catalog (TKT-323 SkillCatalog) and this module's own runtime resolution cannot
+ * disagree about which skill wins a name collision: both consume this exact function rather than
+ * each deriving their own ordering that "should" match the other's (lead ruling, TKT-323 diary
+ * 2554 follow-up, 2026-08-12 -- "truth flows runtime -> catalog, never the reverse"; a report
+ * surface must never be a second, independently-derived source of truth for a runtime mechanism).
+ * `list()` below delegates to this unchanged in behavior -- same last-write-wins-by-name Map
+ * semantics as before this extraction, just re-derived from this function's full entry list
+ * instead of computed inline, so `list()`'s own consumers see no behavior change.
+ *
+ * `loaded` must be in the SAME registration order `state.get().sources` produces it in, which is
+ * itself `Config.Service.entries()`'s global-then-closer-project-then-`.opencode`-dirs order
+ * (`config/plugin/skill.ts`) -- later index wins, matching "closer overrides farther."
+ */
+export const mergeSkills = (loaded: readonly LoadedSource[]): MergeEntry[] => {
+  const winnerIndexByName = new Map<string, number>()
+  loaded.forEach(({ skills }, sourceIndex) => {
+    for (const skill of skills) winnerIndexByName.set(skill.name, sourceIndex)
+  })
+  const entries: MergeEntry[] = []
+  loaded.forEach(({ source, skills }, sourceIndex) => {
+    for (const skill of skills) {
+      const winnerIndex = winnerIndexByName.get(skill.name)!
+      entries.push(
+        winnerIndex === sourceIndex
+          ? { skill, source, sourceIndex }
+          : { skill, source, sourceIndex, shadowedBy: { source: loaded[winnerIndex]!.source, sourceIndex: winnerIndex } },
+      )
+    }
+  })
+  return entries
+}
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -108,14 +152,16 @@ const layer = Layer.effect(
     // events, following the reload policy chosen for other context sources?
     const cache = new Map<string, Info[]>()
     const list = Effect.fn("SkillV2.list")(function* () {
-      const skills = new Map<string, Info>()
+      const loaded: LoadedSource[] = []
       for (const source of state.get().sources) {
         const key = Source.key(source)
-        const loaded = cache.get(key) ?? (yield* load(source))
-        cache.set(key, loaded)
-        for (const skill of loaded) skills.set(skill.name, skill)
+        const skills = cache.get(key) ?? (yield* load(source))
+        cache.set(key, skills)
+        loaded.push({ source, skills })
       }
-      return Array.from(skills.values())
+      return mergeSkills(loaded)
+        .filter((entry) => !entry.shadowedBy)
+        .map((entry) => entry.skill)
     })
 
     return Service.of({
