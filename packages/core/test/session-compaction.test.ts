@@ -10,6 +10,22 @@ test("compaction prompt preserves detailed work state and relevant files", () =>
   expect(prompt).toContain("## Relevant Files")
 })
 
+test("exceedsCapacity applies the estimator safety factor -- a request the raw estimate clears still exceeds capacity once inflated by 1.2x (TKT-377, diary 2584/2594: char/4 under-counts structured tool output by up to 31%)", () => {
+  // context=100000, buffer=1000 -> usable capacity is 99000. rawEstimate=90000 clears that
+  // raw (90000 <= 99000), but 90000 * 1.2 = 108000 exceeds it -- exactly the gap the live
+  // measurements found between the estimate and the model's own reported prompt_tokens.
+  const input = { rawEstimate: 90_000, context: 100_000, output: 0, buffer: 1_000 }
+  expect(SessionCompaction.exceedsCapacity(input)).toBe(true)
+  // Delete-the-fix check: without the factor (raw comparison only), this same input would NOT
+  // have triggered -- 90000 <= 99000.
+  expect(input.rawEstimate <= input.context - Math.max(input.output, input.buffer)).toBe(true)
+})
+
+test("exceedsCapacity still returns false comfortably under capacity, factor included", () => {
+  const input = { rawEstimate: 10_000, context: 100_000, output: 0, buffer: 1_000 }
+  expect(SessionCompaction.exceedsCapacity(input)).toBe(false)
+})
+
 test("compaction describes tool media without embedding base64", () => {
   const base64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB"
   const serialized = SessionCompaction.serializeToolContent([
