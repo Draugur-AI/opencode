@@ -819,7 +819,9 @@ function App(props: { onSnapshot?: () => Promise<string[]>; pluginHost: TuiPlugi
         name: "docs.open",
         title: "Open docs",
         run: () => {
-          open("https://opencode.ai/docs").catch(() => {})
+          // TKT-391: docs ship in this instance's own distribution, served at /docs -- not
+          // upstream's hosted docs, which no longer describe this fork's own behavior.
+          open(new URL("/docs", sdk.url).toString()).catch(() => {})
           dialog.clear()
         },
         category: "System",

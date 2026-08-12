@@ -22,6 +22,7 @@ const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const skipEmbedDocs = process.argv.includes("--skip-embed-docs")
 
 const createEmbeddedWebUIBundle = async () => {
   console.log(`Building Web UI to embed in the binary`)
@@ -47,7 +48,60 @@ const createEmbeddedWebUIBundle = async () => {
   ].join("\n")
 }
 
+// TKT-391: docs ship in the distribution, embedded the same way the web UI already is. Only the
+// root (English) locale -- packages/web builds all 17 locales into dist/docs, ~85MB; every
+// non-root top-level directory in that output is one locale's own subtree (astro.config.mjs's
+// `locales` block names them), so filtering to top-level paths NOT in that set keeps the shared
+// _astro/pagefind assets (needed by every locale, including English) while dropping ~57MB of
+// translated content nothing in this build serves yet. Revisit if a hosted, non-embedded docs
+// deployment ever wants the full set.
+const NON_ROOT_DOCS_LOCALES = new Set([
+  "ar",
+  "bs",
+  "da",
+  "de",
+  "es",
+  "fr",
+  "it",
+  "ja",
+  "ko",
+  "nb",
+  "pl",
+  "pt-br",
+  "ru",
+  "th",
+  "tr",
+  "zh-cn",
+  "zh-tw",
+])
+
+const createEmbeddedDocsBundle = async () => {
+  console.log(`Building docs to embed in the binary`)
+  const webDir = path.join(import.meta.dirname, "../../web")
+  const dist = path.join(webDir, "dist", "docs")
+  await $`bun run --cwd ${webDir} build`
+  const files = (await Array.fromAsync(new Bun.Glob("**/*").scan({ cwd: dist })))
+    .map((file) => file.replaceAll("\\", "/"))
+    .filter((file) => !file.endsWith(".map"))
+    .filter((file) => !NON_ROOT_DOCS_LOCALES.has(file.split("/")[0]!))
+    .sort()
+  const imports = files.map((file, i) => {
+    const spec = path.relative(dir, path.join(dist, file)).replaceAll("\\", "/")
+    return `import file_${i} from ${JSON.stringify(spec.startsWith(".") ? spec : `./${spec}`)} with { type: "file" };`
+  })
+  const entries = files.map((file, i) => `  ${JSON.stringify(file)}: file_${i},`)
+  return [
+    `// Import all files as file_$i with type: "file"`,
+    ...imports,
+    `// Export with original mappings`,
+    `export default {`,
+    ...entries,
+    `}`,
+  ].join("\n")
+}
+
 const embeddedFileMap = skipEmbedWebUi ? null : await createEmbeddedWebUIBundle()
+const embeddedDocsMap = skipEmbedDocs ? null : await createEmbeddedDocsBundle()
 const treeSitterWorker = await Bun.file(fileURLToPath(import.meta.resolve("@opentui/core/parser.worker"))).text()
 
 const allTargets: {
@@ -182,12 +236,14 @@ for (const item of targets) {
     files: {
       [treeSitterWorkerPath]: treeSitterWorker,
       ...(embeddedFileMap ? { "opencode-web-ui.gen.ts": embeddedFileMap } : {}),
+      ...(embeddedDocsMap ? { "opencode-docs.gen.ts": embeddedDocsMap } : {}),
     },
     entrypoints: [
       "./src/index.ts",
       workerPath,
       treeSitterWorkerPath,
       ...(embeddedFileMap ? ["opencode-web-ui.gen.ts"] : []),
+      ...(embeddedDocsMap ? ["opencode-docs.gen.ts"] : []),
     ],
     define: {
       FFF_LIBC: JSON.stringify(item.abi === "musl" ? "musl" : "gnu"),

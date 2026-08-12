@@ -155,10 +155,10 @@ export default defineConfig({
       ],
       lastUpdated: true,
       expressiveCode: { themes: ["github-light", "github-dark"] },
-      social: [
-        { icon: "github", label: "GitHub", href: config.github },
-        { icon: "discord", label: "Discord", href: config.discord },
-      ],
+      // Discord intentionally not linked here (TKT-391, Ethan/Sean ruling): pointing fork users
+      // at upstream's community is wrong, and inventing a community identity for this fork is
+      // not this PR's call. One-line restore if an operator supplies a real one later.
+      social: [{ icon: "github", label: "GitHub", href: config.github }],
       editLink: {
         baseUrl: `${config.github}/edit/dev/packages/web/`,
       },

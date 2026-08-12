@@ -75,6 +75,7 @@ import * as SessionExecutionLocal from "@opencode-ai/core/session/execution/loca
 import { lazy } from "@/util/lazy"
 import { CorsConfig, isAllowedCorsOrigin, type CorsOptions } from "@opencode-ai/server/cors"
 import { serveUIEffect } from "@/server/shared/ui"
+import { serveDocsEffect } from "@/server/shared/docs"
 import { ServerAuth } from "@/server/auth"
 import { InstanceHttpApi, RootHttpApi } from "./api"
 import { Api } from "@opencode-ai/server/api"
@@ -197,6 +198,20 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
   Layer.provide(authOnlyRouterLayer),
 )
 
+// TKT-391: docs ship in the distribution, served from this instance rather than linking out to
+// upstream's hosted docs. A specific prefix route, registered ahead of uiRoute's own catch-all
+// (matches docRoute's own precedent for /doc) rather than folded into serveUIEffect -- docs have
+// no upstream-proxy fallback (see docs.ts), a deliberately different failure mode than the UI's.
+const docsRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    const fs = yield* FSUtil.Service
+    const flags = yield* RuntimeFlags.Service
+    yield* router.add("*", "/docs/*", (request) =>
+      serveDocsEffect(new URL(request.url, "http://localhost").pathname, fs, flags.disableEmbeddedDocs),
+    )
+  }),
+).pipe(Layer.provide(authOnlyRouterLayer))
+
 const uiRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     const fs = yield* FSUtil.Service
@@ -302,6 +317,7 @@ export function createRoutes(
     instanceRoutes,
     serverRoutes,
     docRoute,
+    docsRoute,
     uiRoute,
   ).pipe(
     Layer.provide([
