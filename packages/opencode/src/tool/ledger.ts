@@ -51,7 +51,7 @@ export const LedgerAddTool = Tool.define(
             )
           return {
             title: "Ledger entry added",
-            output: JSON.stringify(entry, null, 2),
+            output: JSON.stringify({ entry }, null, 2),
             metadata: { entryID: entry.id },
           }
         }).pipe(Effect.orDie),

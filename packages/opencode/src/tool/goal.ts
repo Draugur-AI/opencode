@@ -21,7 +21,7 @@ export const GoalGetTool = Tool.define(
           const current = yield* goal.get(ctx.sessionID)
           return {
             title: current ? "Session goal" : "No goal set",
-            output: current ? JSON.stringify(current, null, 2) : "No goal is set for this session.",
+            output: JSON.stringify({ goal: current }, null, 2),
             metadata: { hasGoal: !!current },
           }
         }).pipe(Effect.orDie),
@@ -75,7 +75,7 @@ export const GoalUpdateProgressTool = Tool.define(
             )
           return {
             title: `Criterion ${params.criterionID} marked met`,
-            output: JSON.stringify(updated, null, 2),
+            output: JSON.stringify({ goal: updated }, null, 2),
             metadata: { criterionID: params.criterionID },
           }
         }).pipe(Effect.orDie),

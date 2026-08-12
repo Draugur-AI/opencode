@@ -54,7 +54,7 @@ export const MonitorCreateTool = Tool.define(
           })
           return {
             title: `Monitor declared: ${info.title}`,
-            output: JSON.stringify(info, null, 2),
+            output: JSON.stringify({ monitor: info }, null, 2),
             metadata: { monitorID: info.id },
           }
         }).pipe(Effect.orDie),
@@ -77,7 +77,7 @@ export const MonitorListTool = Tool.define(
           const monitors = yield* monitor.list(ctx.sessionID)
           return {
             title: `${monitors.length} monitor${monitors.length === 1 ? "" : "s"}`,
-            output: JSON.stringify(monitors, null, 2),
+            output: JSON.stringify({ monitors }, null, 2),
             metadata: { count: monitors.length },
           }
         }).pipe(Effect.orDie),
