@@ -2001,22 +2001,32 @@ const KNOWN_MISSING: readonly (
 
 describe("i18n parity", () => {
   /**
-   * Pinned total, same pattern as `EventManifest.Latest.size` (packages/schema/test/
+   * Pinned PER KIND, same pattern as `EventManifest.Latest.size` (packages/schema/test/
    * event-manifest.test.ts) -- nothing else watches this list's size, so without a pin it grows
    * by ambient drift: every future feature adds its own individually-justified entries while
    * overall parity quietly degrades with no signal anywhere. Growing the list is now a deliberate,
-   * same-commit bump of this number (lead ruling, TKT-323 chunk 3, 2026-08-12) -- the loosening
-   * this pin guards is this same PR's own creation (319 verified-failed + 183 pending-first-
-   * attempt = 502). Per-locale pins are deliberately NOT required: TKT-373's real translation
-   * pipeline run will collapse this total massively, and the pin update landing in that same
-   * commit is the mechanism working as designed, not a violation of it.
+   * same-commit bump of these numbers (lead ruling, TKT-323 chunk 3, 2026-08-12).
    *
-   * Bumped 502 -> 1844 (+1342 = 22 new keys x 61 app locales) for TKT-323's MCP config editing
-   * add/edit/remove UI, same-commit, same TKT-373 folding, no new reasoning needed -- the pin
-   * doing exactly what it's for.
+   * Split by kind (Henry's review, PR #40) rather than one combined total: `pending-first-attempt`
+   * dominates (83% of the list) and spikes with every feature that adds locale keys, so a future
+   * PR quietly adding a handful of `verified-failed` entries inside a thousand-entry pending bump
+   * would be invisible against a single total -- and a handful of newly-untranslatable strings is
+   * exactly the signal this mechanism exists to catch. `verified-failed` should stay near-static
+   * (a real translation attempt actually ran and failed); `pending-first-attempt` is expected to
+   * breathe with feature work and collapse when TKT-373's real translation pipeline runs. Two
+   * numbers, each bumped deliberately for its own reason, not one number hiding two different
+   * kinds of drift.
+   *
+   * verified-failed: 319 (unchanged by this PR). pending-first-attempt: 183 -> 1525 (+1342 = 22
+   * new keys x 61 app locales) for TKT-323's MCP config editing add/edit/remove UI, same-commit,
+   * same TKT-373 folding, no new reasoning needed -- the pin doing exactly what it's for.
    */
-  test("KNOWN_MISSING's total size is a deliberate, same-commit bump, never ambient drift", () => {
-    expect(KNOWN_MISSING.length).toBe(1844)
+  test("KNOWN_MISSING's verified-failed count is a deliberate, same-commit bump, never ambient drift", () => {
+    expect(KNOWN_MISSING.filter((entry) => entry.kind === "verified-failed").length).toBe(319)
+  })
+
+  test("KNOWN_MISSING's pending-first-attempt count is a deliberate, same-commit bump, never ambient drift", () => {
+    expect(KNOWN_MISSING.filter((entry) => entry.kind === "pending-first-attempt").length).toBe(1525)
   })
 
   test("non-English locales have every English key and required plural variants", async () => {
