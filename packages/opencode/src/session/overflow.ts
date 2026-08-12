@@ -14,9 +14,18 @@ export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outpu
   const reserved =
     input.cfg.compaction?.reserved ??
     Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
-  return input.model.limit.input
-    ? Math.max(0, input.model.limit.input - reserved)
-    : Math.max(0, context - ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
+  if (input.model.limit.input) return Math.max(0, input.model.limit.input - reserved)
+  // TKT-377: isOverflow compares this against the PREVIOUS completed turn's real usage
+  // (lastFinished.tokens, prompt.ts) -- by the time the NEXT request actually goes out, a new
+  // user message and this turn's own tool results have grown the prompt past what was measured.
+  // A reserve of exactly maxOutputTokens (no additional cushion) budgets zero room for that
+  // growth. Prod-confirmed (diary 2600): qwen3-6 (context 131072, output 8192, no limit.input
+  // configured, so this branch) overflowed at prompt=122,881 -- one token past the un-cushioned
+  // trigger of 131072-8192=122880 -- plus the 8192 requested output, exactly 131,073 = window+1.
+  // Same max-with-floor shape as the V2 estimator's reserve (session/compaction.ts's
+  // Math.max(output, config.buffer)): guarantee at least COMPACTION_BUFFER of headroom for
+  // between-turn growth, not just whatever the model's own (possibly much smaller) output cap is.
+  return Math.max(0, context - Math.max(ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax), COMPACTION_BUFFER))
 }
 
 export function isOverflow(input: {

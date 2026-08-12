@@ -547,6 +547,43 @@ describe("session.compaction.isOverflow", () => {
       },
     ),
   )
+
+  // TKT-377 diary 2628/Ethan's re-derivation, confirmed against this code: isOverflow compares
+  // the PREVIOUS completed turn's real usage against context minus reserve, and (no limit.input
+  // configured, the fleet's actual qwen3-6 shape) that reserve was exactly maxOutputTokens with no
+  // cushion for what the NEXT turn adds before it is sent. Prod-confirmed (diary 2600): context
+  // 131072, output 8192, overflowed at prompt=122,881 -- one past the un-cushioned trigger of
+  // 122,880. These fixtures use those exact numbers.
+  it.live(
+    "TKT-377: a small-output model (no limit.input) now reserves at least COMPACTION_BUFFER, not just its own output cap",
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const compact = yield* SessionCompaction.Service
+        // Matches the fleet's real qwen3-6 config: context 131072, output 8192, no limit.input.
+        const model = createModel({ context: 131_072, output: 8_192 })
+        // 122,000 real usage: BELOW the old un-cushioned trigger (131072-8192=122880), so the
+        // old code would not have triggered here even though only ~9,072 tokens of room remain
+        // for whatever the next turn adds before its own request is built and sent.
+        const tokens = { input: 122_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(yield* compact.isOverflow({ tokens, model })).toBe(true)
+      }),
+    ),
+  )
+
+  it.live(
+    "TKT-377: a wide-output model (output already above COMPACTION_BUFFER) is unaffected by the floor",
+    provideTmpdirInstance(() =>
+      Effect.gen(function* () {
+        const compact = yield* SessionCompaction.Service
+        const model = createModel({ context: 100_000, output: 32_000 })
+        // Same relative margin as the first case above (usable would be 68,000 either way, since
+        // max(32000, 20000) = 32000): the floor is a no-op once the model's own output already
+        // exceeds it.
+        const tokens = { input: 67_000, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+        expect(yield* compact.isOverflow({ tokens, model })).toBe(false)
+      }),
+    ),
+  )
 })
 
 describe("session.compaction.create", () => {
