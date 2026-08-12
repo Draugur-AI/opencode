@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "99c121bd-2b12-4977-962a-b3e7ebd0031c",
+  "id": "25e23a83-13fb-4e99-bb86-8272a7ca4707",
   "prevIds": [
-    "9a24ad67-84b1-4b97-9e39-9274d9f114b7"
+    "99c121bd-2b12-4977-962a-b3e7ebd0031c"
   ],
   "ddl": [
     {
@@ -36,6 +36,10 @@
     },
     {
       "name": "event",
+      "entityType": "tables"
+    },
+    {
+      "name": "monitor_check",
       "entityType": "tables"
     },
     {
@@ -569,6 +573,126 @@
       "name": "data",
       "entityType": "columns",
       "table": "event"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "monitor_id",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "session_id",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "check_seq",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "time_created",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "exit_code",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "triggered",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "detail",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "tail_preview",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "checksum",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "bytes",
+      "entityType": "columns",
+      "table": "monitor_check"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "object_ref",
+      "entityType": "columns",
+      "table": "monitor_check"
     },
     {
       "type": "text",
@@ -2277,6 +2401,36 @@
     },
     {
       "columns": [
+        "monitor_id"
+      ],
+      "tableTo": "monitor",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_monitor_check_monitor_id_monitor_id_fk",
+      "entityType": "fks",
+      "table": "monitor_check"
+    },
+    {
+      "columns": [
+        "session_id"
+      ],
+      "tableTo": "session",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "NO ACTION",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_monitor_check_session_id_session_id_fk",
+      "entityType": "fks",
+      "table": "monitor_check"
+    },
+    {
+      "columns": [
         "session_id"
       ],
       "tableTo": "session",
@@ -2638,6 +2792,15 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "monitor_check_pk",
+      "table": "monitor_check",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "monitor_pk",
       "table": "monitor",
       "entityType": "pks"
@@ -2807,6 +2970,42 @@
       "name": "event_aggregate_type_seq_idx",
       "entityType": "indexes",
       "table": "event"
+    },
+    {
+      "columns": [
+        {
+          "value": "session_id",
+          "isExpression": false
+        },
+        {
+          "value": "time_created",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "monitor_check_session_time_idx",
+      "entityType": "indexes",
+      "table": "monitor_check"
+    },
+    {
+      "columns": [
+        {
+          "value": "monitor_id",
+          "isExpression": false
+        },
+        {
+          "value": "check_seq",
+          "isExpression": false
+        }
+      ],
+      "isUnique": true,
+      "where": null,
+      "origin": "manual",
+      "name": "monitor_check_monitor_seq_idx",
+      "entityType": "indexes",
+      "table": "monitor_check"
     },
     {
       "columns": [

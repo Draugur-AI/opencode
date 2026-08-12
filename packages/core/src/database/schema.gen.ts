@@ -87,6 +87,24 @@ export default {
         );
       `)
       yield* tx.run(`
+        CREATE TABLE \`monitor_check\` (
+          \`id\` text PRIMARY KEY,
+          \`monitor_id\` text NOT NULL,
+          \`session_id\` text NOT NULL,
+          \`check_seq\` integer NOT NULL,
+          \`time_created\` integer NOT NULL,
+          \`exit_code\` integer,
+          \`triggered\` integer,
+          \`detail\` text,
+          \`tail_preview\` text,
+          \`checksum\` text,
+          \`bytes\` integer,
+          \`object_ref\` text,
+          CONSTRAINT \`fk_monitor_check_monitor_id_monitor_id_fk\` FOREIGN KEY (\`monitor_id\`) REFERENCES \`monitor\`(\`id\`) ON DELETE CASCADE,
+          CONSTRAINT \`fk_monitor_check_session_id_session_id_fk\` FOREIGN KEY (\`session_id\`) REFERENCES \`session\`(\`id\`) ON DELETE CASCADE
+        );
+      `)
+      yield* tx.run(`
         CREATE TABLE \`monitor\` (
           \`id\` text PRIMARY KEY,
           \`session_id\` text NOT NULL,
@@ -346,6 +364,12 @@ export default {
       `)
       yield* tx.run(`CREATE UNIQUE INDEX \`event_aggregate_seq_idx\` ON \`event\` (\`aggregate_id\`,\`seq\`);`)
       yield* tx.run(`CREATE INDEX \`event_aggregate_type_seq_idx\` ON \`event\` (\`aggregate_id\`,\`type\`,\`seq\`);`)
+      yield* tx.run(
+        `CREATE INDEX \`monitor_check_session_time_idx\` ON \`monitor_check\` (\`session_id\`,\`time_created\`);`,
+      )
+      yield* tx.run(
+        `CREATE UNIQUE INDEX \`monitor_check_monitor_seq_idx\` ON \`monitor_check\` (\`monitor_id\`,\`check_seq\`);`,
+      )
       yield* tx.run(`CREATE INDEX \`monitor_session_idx\` ON \`monitor\` (\`session_id\`);`)
       yield* tx.run(`CREATE INDEX \`monitor_status_idx\` ON \`monitor\` (\`status\`);`)
       yield* tx.run(

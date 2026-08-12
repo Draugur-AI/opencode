@@ -111,7 +111,29 @@ export const Orphaned = Event.define({
 })
 export type Orphaned = typeof Orphaned.Type
 
-export const DurableDefinitions = Event.inventory(Created, Started, Checked, Triggered, Failed, Cancelled, Orphaned)
+// Added in the execution phase: a monitor that exhausted maxAttempts without its condition ever
+// firing reaches Monitor.Status's "completed" value -- a clean natural end, distinct from Failed
+// (an error) and Triggered (the condition fired). No dedicated field: the row's own attempt count
+// already states how many checks ran.
+export const Completed = Event.define({
+  type: "session.next.monitor.completed",
+  ...options,
+  schema: {
+    ...Base,
+  },
+})
+export type Completed = typeof Completed.Type
+
+export const DurableDefinitions = Event.inventory(
+  Created,
+  Started,
+  Checked,
+  Triggered,
+  Failed,
+  Cancelled,
+  Completed,
+  Orphaned,
+)
 // Every Monitor event is durable -- there is no streaming/delta variant, unlike session-event.ts's
 // Text/Reasoning/Tool.Input -- so the full definitions set is the same as the durable one.
 export const Definitions = DurableDefinitions

@@ -1,6 +1,6 @@
 export * as Monitor from "./monitor"
 
-import { and, eq, inArray } from "drizzle-orm"
+import { and, eq, inArray, sql } from "drizzle-orm"
 import { Context, DateTime, Effect, Layer } from "effect"
 import { Monitor as MonitorSchema } from "@opencode-ai/schema/monitor"
 import { MonitorEvent } from "@opencode-ai/schema/monitor-event"
@@ -15,6 +15,8 @@ type DatabaseService = Database.Interface["db"]
 
 export const ID = MonitorSchema.ID
 export type ID = typeof ID.Type
+export const CheckID = MonitorSchema.CheckID
+export type CheckID = typeof CheckID.Type
 export const Status = MonitorSchema.Status
 export type Status = typeof Status.Type
 export const Source = MonitorSchema.Source
@@ -121,6 +123,97 @@ export const projectOrphaned = Effect.fn("Monitor.projectOrphaned")(function* (
     )
     .run()
     .pipe(Effect.orDie)
+})
+
+/**
+ * Applies one committed execution-phase status event. Unlike projectOrphaned, these do not need a
+ * compare-and-set: each is published only by the single MonitorRuntime instance's own sequential
+ * drain loop for that monitor (Delta 2's exactly-once construction guarantees there is only one),
+ * so there is no concurrent writer to race against within one process's lifetime. `recover()`
+ * racing a live drain loop is structurally impossible -- recover() runs once at startup, before
+ * any drain loop for a freshly-recovered monitor could exist.
+ *
+ * This omission is load-bearing on that guarantee, not just an optimization: if
+ * `MonitorRuntime.layer`'s exactly-once construction is ever weakened, two runtimes racing the
+ * same monitor would silently clobber each other's status writes with no CAS to catch it. Revisit
+ * this decision if `packages/core/test/monitor-runtime.test.ts`'s construction-counter test ever
+ * needs to change what it asserts.
+ */
+const projectStatus = (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly status: Status; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) =>
+  db
+    .update(MonitorTable)
+    .set({
+      status: input.status,
+      time_finished: ["triggered", "completed", "failed", "cancelled"].includes(input.status)
+        ? DateTime.toEpochMillis(input.timestamp)
+        : undefined,
+      revision: input.aggregateSeq + 1,
+    })
+    .where(eq(MonitorTable.id, input.monitorID))
+    .run()
+    .pipe(Effect.orDie)
+
+export const projectStarted = Effect.fn("Monitor.projectStarted")(function* (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) {
+  yield* db
+    .update(MonitorTable)
+    .set({
+      status: "running",
+      time_started: DateTime.toEpochMillis(input.timestamp),
+      revision: input.aggregateSeq + 1,
+    })
+    .where(eq(MonitorTable.id, input.monitorID))
+    .run()
+    .pipe(Effect.orDie)
+})
+
+export const projectChecked = Effect.fn("Monitor.projectChecked")(function* (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) {
+  yield* db
+    .update(MonitorTable)
+    .set({
+      attempt: sql`${MonitorTable.attempt} + 1`,
+      time_checked: DateTime.toEpochMillis(input.timestamp),
+      revision: input.aggregateSeq + 1,
+    })
+    .where(eq(MonitorTable.id, input.monitorID))
+    .run()
+    .pipe(Effect.orDie)
+})
+
+export const projectTriggered = Effect.fn("Monitor.projectTriggered")(function* (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) {
+  yield* projectStatus(db, { monitorID: input.monitorID, status: "triggered", aggregateSeq: input.aggregateSeq, timestamp: input.timestamp })
+})
+
+export const projectFailed = Effect.fn("Monitor.projectFailed")(function* (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) {
+  yield* projectStatus(db, { monitorID: input.monitorID, status: "failed", aggregateSeq: input.aggregateSeq, timestamp: input.timestamp })
+})
+
+export const projectCancelled = Effect.fn("Monitor.projectCancelled")(function* (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) {
+  yield* projectStatus(db, { monitorID: input.monitorID, status: "cancelled", aggregateSeq: input.aggregateSeq, timestamp: input.timestamp })
+})
+
+export const projectCompleted = Effect.fn("Monitor.projectCompleted")(function* (
+  db: DatabaseService,
+  input: { readonly monitorID: ID; readonly aggregateSeq: number; readonly timestamp: DateTime.Utc },
+) {
+  yield* projectStatus(db, { monitorID: input.monitorID, status: "completed", aggregateSeq: input.aggregateSeq, timestamp: input.timestamp })
 })
 
 export interface Interface {

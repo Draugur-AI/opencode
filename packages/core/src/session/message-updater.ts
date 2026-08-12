@@ -166,6 +166,20 @@ export function update(adapter: Adapter, event: SessionEvent.Event) {
           }),
         )
       },
+      // TKT-322: same projection as "session.next.synthetic" -- the durable event carries
+      // structured monitorID/checkSeq for anything that wants to observe it directly, but what the
+      // runner actually renders into context is a plain synthetic message, same as any other.
+      "session.next.external-signal": (event) => {
+        return adapter.appendMessage(
+          SessionMessage.Synthetic.make({
+            sessionID: event.data.sessionID,
+            text: event.data.text,
+            id: event.data.messageID,
+            type: "synthetic",
+            time: { created: event.data.timestamp },
+          }),
+        )
+      },
       "session.next.shell.started": (event) => {
         return adapter.appendMessage(
           SessionMessage.Shell.make({

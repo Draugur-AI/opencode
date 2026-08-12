@@ -12,6 +12,14 @@ export const ID = Schema.String.check(Schema.isStartsWith("mon_")).pipe(
 )
 export type ID = typeof ID.Type
 
+// One row per check attempt (packages/core/src/monitor/sql.ts's monitor_check table) -- bounded,
+// prunable, keyed, matching session_lifecycle_request's shape (diary 2435 §1's table).
+export const CheckID = Schema.String.check(Schema.isStartsWith("mck_")).pipe(
+  Schema.brand("Monitor.CheckID"),
+  statics((schema) => ({ create: () => schema.make("mck_" + ascending()) })),
+)
+export type CheckID = typeof CheckID.Type
+
 // Declaration + current status live in the `monitor` row (packages/core/src/monitor/sql.ts).
 // TKT-322 design note diary 2435 §1: this is the split the build post asks for -- declaration and
 // status here, bounded per-check records in `monitor_check`, full output in managed storage, live
