@@ -8,16 +8,5 @@ export const config = {
   // GitHub
   github: {
     repoUrl: "https://github.com/Draugur-AI/opencode",
-    starsFormatted: {
-      compact: "195K",
-      full: "195,000",
-    },
-  },
-
-  // Static stats (used on landing page)
-  stats: {
-    contributors: "950",
-    commits: "13,000",
-    monthlyUsers: "16M",
   },
 } as const
