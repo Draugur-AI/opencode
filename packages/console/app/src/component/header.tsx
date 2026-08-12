@@ -150,9 +150,6 @@ export function Header(props: { zen?: boolean }) {
           <li>
             <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
           </li>
-          <li>
-            <A href={language.route("/enterprise")}>{i18n.t("nav.enterprise")}</A>
-          </li>
           <Show when={props.zen}>
             <li>
               <a href="/auth">{i18n.t("nav.login")}</a>
@@ -218,9 +215,6 @@ export function Header(props: { zen?: boolean }) {
                 </li>
                 <li>
                   <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
-                </li>
-                <li>
-                  <A href={language.route("/enterprise")}>{i18n.t("nav.enterprise")}</A>
                 </li>
                 <Show when={props.zen}>
                   <li>
