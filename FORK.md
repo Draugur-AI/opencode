@@ -483,22 +483,27 @@ hides (that was the whole reason for abolishing it), so each observational check
   not.** This is checkable by anyone reading the last 3 runs' failure lists side by side; it does
   not require characterising *why* a test is flaky, only whether the *same* one keeps failing.
 - **`unit (linux)`** (the actual merge gate, unlike observational `e2e` above) **can show the
-  same scattered-flake shape, load-correlated:** first seen on TKT-349's PR #24 — 3 back-to-back
-  reruns of one unchanged commit each failed a different, unrelated, timer-shaped spec
+  same scattered-flake shape, timer-correlated:** first seen on TKT-349's PR #24 — reruns of one
+  unchanged commit repeatedly failed different, unrelated, timer-shaped specs
   (`observe-element-offset`'s `setTimeout(0)` assertion, `plugin.openai.ws-pool`'s idle-connection
   pruning timer, `ModelsDev Service`'s cache-fetch hitting its 30000ms timeout at 30000.20ms),
-  none touching the PR's own diff, none repeating across attempts. The discriminator: host load
-  average was ~9.4 across the failing window and had settled to ~4 by the time a clean rerun
-  passed. **N reruns inside one loaded window are ONE sample of the window, not N independent
-  samples — back-to-back reruns cannot distinguish flake from regression while the load stays
-  high.** Check `uptime` before burning a rerun, same rule as above but gated on load instead of
-  spec identity: one rerun in a quiet window (1-minute load average below ~6) is a real second
-  sample; three reruns inside a loaded window are not three chances to see through a regression,
-  they are three chances to see three different timers miss under contention. Same-spec-3-
-  consecutive-in-a-quiet-window still means real regression, unchanged from the e2e rule above.
-  Load-sensitive deflake candidates (the 3 specs above) filed as feedback for whoever picks up
-  hardening them — fake-clock (`bun:test`'s `setSystemTime`/a controlled timer, rather than a
-  real `setTimeout`/timeout race) is the fix shape that removes the host-load dependency entirely.
+  none touching the PR's own diff. An earlier version of this entry proposed a "wait for host load
+  under ~6" precondition before rerunning — **retracted**: checked directly, `load average ~9` is
+  this host's *normal* operating state while two fleets work (vLLM inference serving both fleets,
+  concurrent test/worker sessions), not a spike to wait out. A threshold set from one settling
+  sample is the same unmeasured-threshold mistake as elsewhere in this ledger — don't repeat the
+  shape even when the specific number looks plausible. **Corrected, bounded policy:** unit reruns
+  take the host as it is, no load precondition — fire one rerun of the failed job whenever the
+  runner is free. If a spec fails that has already failed in a **prior run of the same PR**
+  (`plugin.openai.ws-pool` reached 3 failures across TKT-349's own reruns), treat it as
+  known-flaky-under-normal-load: skip it with `test.skip` and a comment linking the deflake
+  feedback item, and add a row to the "Resolved CI reds" table below (Sean's standing directive:
+  cheaper to skip a particular known unit test with a comment than to keep re-running around it).
+  A spec with only one failure across a PR's runs stays live — no skip on a single occurrence.
+  Fix shape for whoever picks up hardening these: fake-clock (`bun:test`'s `setSystemTime`/a
+  controlled timer, rather than a real `setTimeout`/timeout race), which removes the host-load
+  dependency entirely instead of tolerating
+  it.
 - **`nix-eval`:** disabled (auto-trigger removed, see "Blacksmith runner sweep" below) rather
   than gated or merely observational — Nix packaging validity is not this fork's concern at all,
   so there is nothing to read a rule against.
@@ -522,6 +527,7 @@ like; nothing here is a currently-live gate exception.
 | `unit (linux)` — 7 additional `run-process.test.ts` tests, briefly, only on TKT-315's own PR: clustered 700-800ms over the harness's 30\_000ms default `timeoutMs` | TKT-315 added `ProjectV2.node`/`SessionGoal.node`/`SessionLedger.node` to `app-runtime.ts`'s CLI/TUI `AppLayer` (see "Adding a new global `.node`?" above — all three traced reachable, not removable). None do eager I/O, but building 3 more global nodes has nonzero per-process construction cost; invisible in isolated timing (8 runs each, branch vs. dev, fully overlapping) but real under `run-process.test.ts`'s 13 concurrent `cliIt.concurrent()` subprocess spawns (6x full-file runs, non-overlapping ranges). | **Interim `timeoutMs` widen shipped in the same PR** (30\_000 → 45\_000 on the 7 affected tests only, each commented, feedback #150) — the real fix (lazy node construction so a CLI invocation that never touches project/goal/ledger data pays nothing for them) is still open, tracked in #150. This is the one row here that is not fully closed — it is an accepted, narrow, linked interim, not a currently-observed red. |
 | `packages/opencode test:httpapi`, `mode=effect` only — `v2.session.goal.get`, "a session with no goal set should report no data" | Was masked by a crash (see the `SessionGoal.node`/`SessionLedger.node` wiring gap above) until TKT-315 fixed the wiring and let the route's assertion actually run; the assertion itself then failed, a real bug in TKT-317's goal-get response path (filed as feedback #145). | **Fixed** ([#10](https://github.com/Draugur-AI/opencode/pull/10), Gemma) — confirmed dead on `dev@441ad185`: `test:httpapi --mode effect` went from 227/0 (crash-masked) to 226/1 (this assertion, post-TKT-315) to 229/0 (post-#10, three new scenarios added along the way, zero fail). No exception needed in the simplified gate above. |
 | `e2e (windows)`, first run only — apparent ~40 `e2e/regression/*.spec.ts` failures | **Misread, not a real symptom** — the ~40 count was a grep artifact (spec-file-path occurrences anywhere in the log, which also matches Playwright's test-discovery listing) mistaken for a failure list. The real first-run result was 2 failed / 87 passed. A subsequent run showed `e2e (linux)` — clean on its first two runs — fail 1 spec too, a *different* spec. Both platforms show the same class of ordinary, low-rate E2E flakiness, pre-existing and simply never observed before (e2e never ran on either platform pre-TKT-336, both queued forever on blacksmith). | **Not a red to resolve — moved out of the gate entirely, symmetrically on both platforms** (Ethan's ruling: stabilizing genuine Playwright flakiness is a different body of work than CI hygiene, belongs to the milestone-3 real-browser-matrix slice). See "Observational checks" above for the deterministic reading rule that replaces the skip. Feedback #156 corrected in place rather than superseded — the correction is part of its own record. |
+| `unit (linux)` — `plugin.openai.ws-pool`, "prunes idle websocket connections after completed responses" | Real `setTimeout`-based idle-connection-pruning race, timing-sensitive under normal host load (this host runs ~9 load average continuously serving two fleets' inference/tests — not a spike). Failed 3 times across TKT-349's own CI reruns of one unchanged commit, unrelated to that PR's diff. | **Skipped** (TKT-349, feedback #180): `test.skip` with a comment linking the feedback item. Un-skip condition: feedback #180 is triaged — fake-clock (`setSystemTime`/a controlled timer) replacing the real timer removes the flake at its root rather than just tolerating it. |
 
 ## Blacksmith runner sweep (TKT-336)
 
