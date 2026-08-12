@@ -43,9 +43,11 @@ const fromRow = (row: Row): Info => ({
   profileSnapshotID: row.profile_snapshot_id ?? undefined,
   time: {
     created: DateTime.makeUnsafe(row.time_created),
-    started: row.time_started ? DateTime.makeUnsafe(row.time_started) : undefined,
-    checked: row.time_checked ? DateTime.makeUnsafe(row.time_checked) : undefined,
-    finished: row.time_finished ? DateTime.makeUnsafe(row.time_finished) : undefined,
+    // Nullish, not truthy -- epoch millis 0 is a real timestamp (TestClock starts there), and a
+    // truthy check would read it back as unset.
+    started: row.time_started != null ? DateTime.makeUnsafe(row.time_started) : undefined,
+    checked: row.time_checked != null ? DateTime.makeUnsafe(row.time_checked) : undefined,
+    finished: row.time_finished != null ? DateTime.makeUnsafe(row.time_finished) : undefined,
   },
   revision: row.revision,
 })

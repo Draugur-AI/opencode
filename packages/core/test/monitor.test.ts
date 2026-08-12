@@ -122,6 +122,10 @@ describe("Monitor", () => {
       const orphanedIDs = orphaned.map((o) => o.id).sort()
 
       expect(orphanedIDs).toEqual([starting.id, running.id].sort())
+      // TestClock starts at epoch 0, so this is exactly the case a truthy (rather than nullish)
+      // check on time_finished would misread as unset -- a real timestamp of 0 is still a
+      // timestamp.
+      expect(orphaned.every((o) => o.time.finished !== undefined)).toBe(true)
 
       const stillCompleted = yield* monitor.get(completed.id)
       expect(stillCompleted?.status).toBe("completed")
