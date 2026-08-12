@@ -62,7 +62,8 @@ export const ConfigDocumentHandler = HttpApiBuilder.group(Api, "server.config-do
                     return new InvalidRequestError({
                       message:
                         "This patch would write the redaction placeholder over a secret field -- read the real value from the config file directly if you need to edit it",
-                      field: error.id,
+                      field: "patch",
+                      kind: error.id,
                     })
                 }
               }),

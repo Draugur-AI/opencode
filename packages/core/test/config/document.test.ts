@@ -222,6 +222,35 @@ describe("ConfigDocument", () => {
     ),
   )
 
+  // Regression for a Copilot review finding on PR #32: `parseAndDiagnose` discards its whole
+  // `parsed` value on ANY diagnostic, even one unrelated to mcp -- readTarget's redaction used to
+  // key off that same discarded value, so a file with an unrelated syntax error but a real,
+  // otherwise-valid mcp secret came back over the wire completely unredacted. mcp is valid and
+  // appears before a genuine, unrelated syntax error (a missing colon) later in the same document
+  // -- jsonc-parser recovers from it and still needs to redact.
+  it.live("readTarget still redacts secrets in text when the rest of the document has a syntax error", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = `{
+  "mcp": { "servers": { "local": { "type": "local", "command": ["x"], "environment": { "API_KEY": "sk-real-secret" } } } },
+  "bad_field" 1
+}`
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          expect(read.diagnostics.length).toBeGreaterThan(0)
+          expect(read.text).not.toContain("sk-real-secret")
+          expect(read.text).toContain("[redacted]")
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
   it.live("validatePatch previews the merged effect of an mcp.server.set without writing the file", () =>
     withTmp((tmp) =>
       Effect.gen(function* () {

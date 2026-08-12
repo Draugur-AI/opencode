@@ -344,7 +344,15 @@ const layer = Layer.effect(
       // it against the actual on-disk file, so it must never be computed from the redacted display
       // copy a client echoes back.
       const hash = Hash.sha256(text)
-      const mcp = parsed && typeof parsed === "object" ? (parsed as Record<string, unknown>).mcp : undefined
+      // Redaction must not depend on the document parsing cleanly: `parseAndDiagnose` discards its
+      // `parsed` value on ANY diagnostic, even one unrelated to mcp, which would otherwise leave a
+      // secret in `text` unredacted whenever the file has an unrelated syntax error elsewhere
+      // (Copilot review, PR #32) -- exactly the leak this change exists to close, reachable through
+      // a different path. Use jsonc-parser's own lenient parse directly, ignoring its error list,
+      // purely to locate secret paths -- the same forgiving parse it always performs internally.
+      const lenientParsed: unknown = text.trim() === "" ? undefined : parse(text, [], { allowTrailingComma: true })
+      const mcp =
+        lenientParsed && typeof lenientParsed === "object" ? (lenientParsed as Record<string, unknown>).mcp : undefined
       const redactedText = mcp === undefined ? text : redactSecretsInText(text, mcp)
       return new ReadResult({ target, text: redactedText, hash, parsed: redactParsed(parsed), diagnostics })
     })
