@@ -7,17 +7,11 @@ export const config = {
 
   // GitHub
   github: {
-    repoUrl: "https://github.com/anomalyco/opencode",
+    repoUrl: "https://github.com/Draugur-AI/opencode",
     starsFormatted: {
       compact: "195K",
       full: "195,000",
     },
-  },
-
-  // Social links
-  social: {
-    twitter: "https://x.com/opencode",
-    discord: "https://discord.gg/opencode",
   },
 
   // Static stats (used on landing page)

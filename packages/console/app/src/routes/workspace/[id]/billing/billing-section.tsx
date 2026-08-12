@@ -142,8 +142,10 @@ export function BillingSection() {
       <div data-slot="section-title">
         <h2>{i18n.t("workspace.billing.title")}</h2>
         <p>
-          {i18n.t("workspace.billing.subtitle.beforeLink")}{" "}
-          <a href="mailto:help@anoma.ly">{i18n.t("workspace.billing.contactUs")}</a>{" "}
+          {/* href removed (TKT-396 item 6, Ethan's ruling): misdirected billing mail into
+              upstream's own inbox; text kept, not a link, since this fork has no destination of
+              its own yet. Does not preempt Sean's own billing-surface decision. */}
+          {i18n.t("workspace.billing.subtitle.beforeLink")} {i18n.t("workspace.billing.contactUs")}{" "}
           {i18n.t("workspace.billing.subtitle.afterLink")}
         </p>
       </div>

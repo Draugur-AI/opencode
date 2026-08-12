@@ -28,9 +28,6 @@ export function Footer() {
       <div data-slot="cell">
         <a href={language.route("/docs")}>{i18n.t("footer.docs")}</a>
       </div>
-      <div data-slot="cell">
-        <a href={config.social.twitter}>{i18n.t("footer.x")}</a>
-      </div>
     </footer>
   )
 }
