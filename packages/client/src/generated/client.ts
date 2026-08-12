@@ -113,6 +113,8 @@ import type {
   CommandsListOutput,
   SkillsListInput,
   SkillsListOutput,
+  SkillsCatalogInput,
+  SkillsCatalogOutput,
   EventsSubscribeOutput,
   PtysListInput,
   PtysListOutput,
@@ -1030,6 +1032,18 @@ export function make(options: ClientOptions) {
           {
             method: "GET",
             path: `/api/skill`,
+            query: { location: input?.["location"] },
+            successStatus: 200,
+            declaredStatuses: [401, 400],
+            empty: false,
+          },
+          requestOptions,
+        ),
+      catalog: (input?: SkillsCatalogInput, requestOptions?: RequestOptions) =>
+        request<SkillsCatalogOutput>(
+          {
+            method: "GET",
+            path: `/api/skill/catalog`,
             query: { location: input?.["location"] },
             successStatus: 200,
             declaredStatuses: [401, 400],

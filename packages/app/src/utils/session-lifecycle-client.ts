@@ -6,25 +6,27 @@
  * list, or get, because those routes did not exist when it was packed. `@opencode-ai/client-next`
  * aliases the workspace client, which is regenerated from the live protocol.
  *
- * 🛑 This file is one of exactly FOUR bounded importers of `@opencode-ai/client-next` — the
+ * 🛑 This file is one of a small, bounded set of importers of `@opencode-ai/client-next` — the
  * others are `project-client.ts` (project surface), `goal-ledger-client.ts` (session goal and
- * working ledger, TKT-335), and `mcp-client.ts` (MCP catalog, live status, and config-document
- * editing for the MCP tab, TKT-323 chunk 3). Each owns its own verbs and none edit the others;
- * nothing else may import the alias at all.
- * Four client generations in one app is a wart we carry on purpose and for a bounded time, not a
- * pattern to spread. TKT-328 migrates every call site onto one client and deletes the alias and
- * all four modules. See FORK.md's ledger.
+ * working ledger, TKT-335), `mcp-client.ts` (MCP catalog, live status, and config-document editing
+ * for the MCP tab, TKT-323 chunk 3), and `skill-client.ts` (skill catalog for the Skills tab,
+ * TKT-323 chunk 3). Each owns its own verbs and none edit the others; nothing else may import the
+ * alias at all. FORK.md's ledger is the single count authority for how many importers exist and
+ * why — this header does not restate the number, so the two cannot drift apart (Henry's finding,
+ * PR #40 review lineage: six hand-counted copies of a thrice-moved number is indefensible). Client
+ * generations in one app is a wart we carry on purpose and for a bounded time, not a pattern to
+ * spread. TKT-328 migrates every call site onto one client and deletes the alias and every module
+ * the ledger lists.
  *
- * The siblings exist so several agents can work separate surfaces without touching one file. This
- * bound was two importers until the lead's TKT-328 re-scope (2026-08-11) admitted a third, then
- * four when the Integrations page (2026-08-12) needed a surface neither other client has at all;
- * if you are adding a fifth, that is a stronger signal still to finish TKT-328 instead.
+ * The siblings exist so several agents can work separate surfaces without touching one file. If
+ * you are adding a new one, that is a stronger signal still to finish TKT-328 instead — and the
+ * ledger, not this comment, is where the re-scope gets recorded.
  *
  * Archive is NOT here. It still goes through the V1 route the app already uses, which the slice-1
  * server-side adapter now drives into the same lifecycle service — so archive already produces the
  * same durable result without a second client.
  *
- * Six calls, nothing else: four lifecycle mutations (restore, trash, restoreFromTrash, purge) plus
+ * Calls, nothing else: four lifecycle mutations (restore, trash, restoreFromTrash, purge) plus
  * list and get (TKT-314) — the lifecycle-aware snapshot feed for the normalized session-entities
  * store needs `lifecycle: "all"`, which the vendored client's list endpoint does not support at
  * all. Widening this file's own verb count instead of opening a third importer keeps the
