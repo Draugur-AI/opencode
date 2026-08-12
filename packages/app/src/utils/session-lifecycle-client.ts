@@ -6,16 +6,18 @@
  * list, or get, because those routes did not exist when it was packed. `@opencode-ai/client-next`
  * aliases the workspace client, which is regenerated from the live protocol.
  *
- * 🛑 This file is one of exactly THREE bounded importers of `@opencode-ai/client-next` — the
- * others are `project-client.ts` (project surface) and `goal-ledger-client.ts` (session goal and
- * working ledger, TKT-335). Each owns its own verbs and none edit the others; nothing else may
- * import the alias at all. Three client generations in one app is a wart we carry on purpose and
- * for a bounded time, not a pattern to spread. TKT-328 migrates every call site onto one client
- * and deletes the alias and all three modules. See FORK.md's ledger.
+ * 🛑 This file is one of exactly FOUR bounded importers of `@opencode-ai/client-next` — the
+ * others are `project-client.ts` (project surface), `goal-ledger-client.ts` (session goal and
+ * working ledger, TKT-335), and `mcp-catalog-client.ts` (MCP catalog + live status, TKT-323 chunk
+ * 3). Each owns its own verbs and none edit the others; nothing else may import the alias at all.
+ * Four client generations in one app is a wart we carry on purpose and for a bounded time, not a
+ * pattern to spread. TKT-328 migrates every call site onto one client and deletes the alias and
+ * all four modules. See FORK.md's ledger.
  *
  * The siblings exist so several agents can work separate surfaces without touching one file. This
- * bound was two importers until the lead's TKT-328 re-scope (2026-08-11) admitted a third; if you
- * are adding a fourth, that is a stronger signal still to finish TKT-328 instead.
+ * bound was two importers until the lead's TKT-328 re-scope (2026-08-11) admitted a third, then
+ * four when the Integrations page (2026-08-12) needed a surface neither other client has at all;
+ * if you are adding a fifth, that is a stronger signal still to finish TKT-328 instead.
  *
  * Archive is NOT here. It still goes through the V1 route the app already uses, which the slice-1
  * server-side adapter now drives into the same lifecycle service — so archive already produces the

@@ -8,14 +8,15 @@
  * live protocol.
  *
  * 🛑 This file is deliberately the whole surface of this alias's project half. Nothing else may
- * import `@opencode-ai/client-next` for project calls: three client generations in one app is a
+ * import `@opencode-ai/client-next` for project calls: four client generations in one app is a
  * wart we are carrying on purpose and for a bounded time, not a pattern to spread.
  * `packages/app/src/utils/session-lifecycle-client.ts` is the sibling file for the session-
- * lifecycle half (restore/trash/restoreFromTrash/purge) and `goal-ledger-client.ts` (TKT-335) is
- * the sibling for the session goal and working ledger half — these three files are the only
- * importers, by ruling (TKT-315, then the lead's TKT-328 re-scope 2026-08-11, both cross-referenced
- * in FORK.md's divergence ledger). TKT-328 migrates every call site onto one client and deletes
- * all three files along with the vendored tarball.
+ * lifecycle half (restore/trash/restoreFromTrash/purge), `goal-ledger-client.ts` (TKT-335) is
+ * the sibling for the session goal and working ledger half, and `mcp-catalog-client.ts` (TKT-323
+ * chunk 3) is the sibling for the MCP catalog + live status half — these four files are the only
+ * importers, by ruling (TKT-315, then the lead's TKT-328 re-scope 2026-08-11, then the Integrations
+ * page 2026-08-12, all cross-referenced in FORK.md's divergence ledger). TKT-328 migrates every
+ * call site onto one client and deletes all four files along with the vendored tarball.
  *
  * Five calls, nothing else: list, get, updateMetadata, preference read, preference write.
  */
