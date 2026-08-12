@@ -79,6 +79,15 @@ http://<hostname>:<port>/doc
 
 For example, `http://localhost:4096/doc`. Use the spec to generate clients or inspect request and response types. Or view it in a Swagger explorer.
 
+The server also publishes its own config and TUI theme JSON Schemas, generated from this fork's actual config types:
+
+```
+http://<hostname>:<port>/config.json
+http://<hostname>:<port>/tui.json
+```
+
+Point your editor's `$schema` at these (not `opencode.ai`'s) to validate against what this instance actually parses, e.g. `http://localhost:4096/config.json` in your `opencode.json`.
+
 ---
 
 ## APIs

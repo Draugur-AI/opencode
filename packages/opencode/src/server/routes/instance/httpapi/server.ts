@@ -10,6 +10,9 @@ import { Auth } from "@/auth"
 import { BackgroundJob } from "@/background/job"
 import { Command } from "@/command"
 import { Config } from "@/config/config"
+import { generateEffect } from "@/config/schema"
+import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
+import { TuiConfig } from "@opencode-ai/tui/config"
 import { Workspace } from "@/control-plane/workspace"
 import { Env } from "@/env"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -198,6 +201,26 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
   Layer.provide(authOnlyRouterLayer),
 )
 
+// TKT-394: the embedded docs' example opencode.json/opencode.jsonc files point their $schema at
+// this instance rather than upstream's https://opencode.ai/config.json, which describes upstream's
+// shape, not this fork's. Generated at request time from this fork's OWN Effect Schema (same
+// generateEffect() the build-time CLI script/schema.ts uses) rather than reused from the
+// packages/web astro build: that build-time artifact landed at dist/config.json, a sibling of
+// dist/docs/ rather than inside it, so it was never swept into the embedded-docs bundle and was
+// unreachable regardless -- serving it fresh from the running binary is simpler than fixing the
+// astro output path, and it can never drift from what this exact server actually parses. Same
+// lazy-once-then-reuse caching as docResponse, same reasoning: cheap to construct, no reason to
+// redo it per request.
+const configJsonResponse = lazy(() => HttpServerResponse.jsonUnsafe(generateEffect(ConfigV1.Info)))
+const tuiJsonResponse = lazy(() => HttpServerResponse.jsonUnsafe(generateEffect(TuiConfig.Info)))
+
+const configSchemaRoute = HttpRouter.use((router) =>
+  Effect.gen(function* () {
+    yield* router.add("GET", "/config.json", () => Effect.succeed(configJsonResponse()))
+    yield* router.add("GET", "/tui.json", () => Effect.succeed(tuiJsonResponse()))
+  }),
+).pipe(Layer.provide(authOnlyRouterLayer))
+
 // TKT-391: docs ship in the distribution, served from this instance rather than linking out to
 // upstream's hosted docs. A specific prefix route, registered ahead of uiRoute's own catch-all
 // (matches docRoute's own precedent for /doc) rather than folded into serveUIEffect -- docs have
@@ -317,6 +340,7 @@ export function createRoutes(
     instanceRoutes,
     serverRoutes,
     docRoute,
+    configSchemaRoute,
     docsRoute,
     uiRoute,
   ).pipe(
