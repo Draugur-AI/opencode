@@ -1146,6 +1146,11 @@ export const dict = {
   "settings.mcp.error.unavailable": "No live server to write through.",
   "settings.mcp.error.nameRequired": "A server name is required.",
 
+  "settings.skills.title": "Skills",
+  "settings.skills.empty": "No skills configured",
+  "settings.skills.slash": "slash",
+  "settings.skills.shadowed": "shadowed",
+
   "settings.permissions.title": "Permissions",
   "settings.permissions.description": "Control what tools the server can use by default.",
   "settings.permissions.section.tools": "Tools",
