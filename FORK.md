@@ -196,6 +196,10 @@ three.
   that means the reminder needs to live in the mechanism, not in memory. A reviewer checks the
   PR's file list for a `FORK.md` diff before approving anything that touches schema, migrations,
   or CI; its absence on an intentional-divergence PR is a request-changes, not a nit.
+- **A PR removing or redirecting a console route greps `generate-sitemap.ts`.** Missed twice in one
+  day on the same file (TKT-396): `/zen` in one pass, `/enterprise` and `/go` in the next — a
+  hidden route left in the sitemap still gets crawled and indexed, so this is a correctness check,
+  not tidiness.
 - **Fork-only behavior stays behind capability discovery while contracts are experimental** — not
   behind scattered build-time flags. A client (or upstream) that does not know about a fork-only
   capability should degrade cleanly, not fail to build or silently omit behavior.
