@@ -15,12 +15,6 @@ export function Legal() {
         <A href={language.route("/brand")}>{i18n.t("legal.brand")}</A>
       </span>
       <span>
-        <A href={language.route("/legal/privacy-policy")}>{i18n.t("legal.privacy")}</A>
-      </span>
-      <span>
-        <A href={language.route("/legal/terms-of-service")}>{i18n.t("legal.terms")}</A>
-      </span>
-      <span>
         <LanguagePicker align="right" />
       </span>
     </div>

@@ -254,7 +254,7 @@ export default function Home() {
       <Meta name="opencode:auth" content={workspaceID() ? "true" : "false"} />
 
       <div data-component="container">
-        <Header go hideGetStarted />
+        <Header go />
 
         <div data-component="content">
           <section data-component="hero">
