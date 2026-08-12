@@ -1,4 +1,4 @@
-import { type Accessor, createEffect, onCleanup } from "solid-js"
+import { type Accessor, createEffect, createSignal, onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useServerSDK } from "@/context/server-sdk"
 import { createMcpClient, isServiceUnavailableError } from "@/utils/mcp-client"
@@ -29,9 +29,16 @@ export function useMcpCatalog(directory: Accessor<string | undefined>) {
     loading: true,
   })
   const [status, setStatus] = createStore<{ state: McpStatusState }>({ state: { tag: "loading" } })
+  // Read inside the effect purely to make it a dependency -- bumping it re-runs the whole effect
+  // body (fresh catalog + status fetch), the same path a directory change already takes. Used by
+  // callers that just wrote through mcp-client.ts (add/edit/remove) to refresh immediately
+  // instead of waiting for the next 10s status poll, which would leave the catalog list itself
+  // stale for up to that long (the poll only re-fetches status, not the list).
+  const [refreshToken, setRefreshToken] = createSignal(0)
 
   createEffect(() => {
     const dir = directory()
+    refreshToken()
     // Created once per effect run (directory/server change), not once per call -- list and every
     // status poll share the same server connection instead of each allocating its own client
     // (Copilot review, PR #36).
@@ -75,5 +82,5 @@ export function useMcpCatalog(directory: Accessor<string | undefined>) {
     })
   })
 
-  return { catalog, status: () => status.state }
+  return { catalog, status: () => status.state, refetch: () => setRefreshToken((n) => n + 1) }
 }

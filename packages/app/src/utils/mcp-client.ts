@@ -32,13 +32,15 @@
  * convention. If you are adding a FIFTH importer for something the MCP tab does not need, that is
  * a stronger signal still to finish TKT-328 instead.
  *
- * Five calls: mcp.list (the static catalog), mcp.status (live connection status, per server name,
+ * Six calls: mcp.list (the static catalog), mcp.status (live connection status, per server name,
  * 503 when no live McpRuntime exists in this assembly -- see `isServiceUnavailableError`), and
- * config-document's targetRead/targetValidate/targetApply (the typed Patch mechanism editing goes
- * through -- see `document.ts`'s own doc comment for why a client editing through this never
- * round-trips a real secret value: editing a secret field always WRITES a new value, never reads
- * the old one back to prefill it; every read response is redacted, with no operation to reveal
- * one). Input/output shapes are the generated client's own wire types, never hand-written here.
+ * config-document's targetList/targetRead/targetValidate/targetApply (the typed Patch mechanism
+ * editing goes through -- see `document.ts`'s own doc comment for why a client editing through
+ * this never round-trips a real secret value: editing a secret field always WRITES a new value,
+ * never reads the old one back to prefill it; every read response is redacted, with no operation
+ * to reveal one). `targetList` specifically resolves a target for a brand-new server that has no
+ * existing catalog entry to read a target off of. Input/output shapes are the generated client's
+ * own wire types, never hand-written here.
  */
 
 import { OpenCode, isServiceUnavailableError } from "@opencode-ai/client-next"
@@ -47,6 +49,8 @@ import type {
   McpListOutput,
   McpStatusInput,
   McpStatusOutput,
+  ConfigDocumentTargetListInput,
+  ConfigDocumentTargetListOutput,
   ConfigDocumentTargetReadInput,
   ConfigDocumentTargetReadOutput,
   ConfigDocumentTargetValidateInput,
@@ -85,6 +89,10 @@ export const createMcpClient = (conn: ServerConnection.Any) => {
       status: (input?: McpStatusInput): Promise<McpStatusOutput> => client.mcp.status(input),
     },
     configDocument: {
+      /** The available targets (global + project) -- used to resolve which target a brand-new
+       * MCP server (no existing catalog entry to read a target off of) should be written to. */
+      targetList: (input?: ConfigDocumentTargetListInput): Promise<ConfigDocumentTargetListOutput> =>
+        client.configDocument.targetList(input),
       /** Raw text (redacted) + parsed value + hash for optimistic concurrency. The hash returned
        * here must be echoed back to `targetApply` unchanged -- it is over the REAL on-disk text,
        * not the redacted display copy. */
@@ -107,6 +115,7 @@ export type McpClient = ReturnType<typeof createMcpClient>
 // second time, keeping the alias's surface bounded to this one file (Copilot review, PR #36).
 export type McpListResult = Awaited<ReturnType<McpClient["mcp"]["list"]>>
 export type McpStatusResult = Awaited<ReturnType<McpClient["mcp"]["status"]>>
+export type McpConfigTargetListResult = Awaited<ReturnType<McpClient["configDocument"]["targetList"]>>
 export type McpConfigTargetReadResult = Awaited<ReturnType<McpClient["configDocument"]["targetRead"]>>
 export type McpConfigTargetValidateResult = Awaited<ReturnType<McpClient["configDocument"]["targetValidate"]>>
 export type McpConfigTargetApplyResult = Awaited<ReturnType<McpClient["configDocument"]["targetApply"]>>
