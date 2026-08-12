@@ -255,9 +255,7 @@ All managed preference keys appear in the resolved config and cannot be overridd
 
 ## Schema
 
-The server/runtime config schema is defined in [**`opencode.ai/config.json`**](https://opencode.ai/config.json).
-
-TUI config uses [**`opencode.ai/tui.json`**](https://opencode.ai/tui.json).
+Your own running [server](/docs/server) publishes the server/runtime config schema at `/config.json`, and the TUI config schema at `/tui.json` — not `opencode.ai`, which describes upstream's shape rather than this fork's.
 
 Your editor should be able to validate and autocomplete based on the schema.
 
