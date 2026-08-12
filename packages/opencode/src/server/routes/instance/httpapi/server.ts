@@ -12,7 +12,6 @@ import { Command } from "@/command"
 import { Config } from "@/config/config"
 import { generateEffect } from "@/config/schema"
 import { ConfigV1 } from "@opencode-ai/core/v1/config/config"
-import { TuiConfig } from "@opencode-ai/tui/config"
 import { Workspace } from "@/control-plane/workspace"
 import { Env } from "@/env"
 import { EventV2Bridge } from "@/event-v2-bridge"
@@ -212,12 +211,25 @@ const docRoute = HttpRouter.use((router) => router.add("GET", "/doc", () => Effe
 // lazy-once-then-reuse caching as docResponse, same reasoning: cheap to construct, no reason to
 // redo it per request.
 const configJsonResponse = lazy(() => HttpServerResponse.jsonUnsafe(generateEffect(ConfigV1.Info)))
-const tuiJsonResponse = lazy(() => HttpServerResponse.jsonUnsafe(generateEffect(TuiConfig.Info)))
+// Dynamic import, not static: this defers resolving packages/tui's .tsx module until the route
+// is actually hit, well after normal boot has already warmed that module via @/config/tui's own
+// (static) import -- a static import here made CLI-only subprocess tests (mcp add, run, acp) fail
+// to boot at all with "Cannot find module 'react/jsx-dev-runtime'", despite this exact server
+// working fine when actually run (verified: real `opencode serve` + curl /tui.json).
+let tuiJsonCache: ReturnType<typeof HttpServerResponse.jsonUnsafe> | undefined
+const tuiJsonResponse = () =>
+  Effect.gen(function* () {
+    if (!tuiJsonCache) {
+      const { TuiConfig } = yield* Effect.promise(() => import("@opencode-ai/tui/config"))
+      tuiJsonCache = HttpServerResponse.jsonUnsafe(generateEffect(TuiConfig.Info))
+    }
+    return tuiJsonCache
+  })
 
 const configSchemaRoute = HttpRouter.use((router) =>
   Effect.gen(function* () {
     yield* router.add("GET", "/config.json", () => Effect.succeed(configJsonResponse()))
-    yield* router.add("GET", "/tui.json", () => Effect.succeed(tuiJsonResponse()))
+    yield* router.add("GET", "/tui.json", () => tuiJsonResponse())
   }),
 ).pipe(Layer.provide(authOnlyRouterLayer))
 
