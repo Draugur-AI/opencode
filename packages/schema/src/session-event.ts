@@ -220,6 +220,29 @@ export const Synthetic = Event.define({
 })
 export type Synthetic = typeof Synthetic.Type
 
+// TKT-322, build post: "publish one dedicated SessionEvent.ExternalSignal containing monitor ID,
+// title, bounded result, and check sequence, project it into a synthetic session message, then
+// call SessionExecution.wake." Structured fields (monitorID/checkSeq) distinguish this from a
+// generic Synthetic event for anything that wants to observe "a monitor fired" specifically,
+// while still projecting into the same SessionMessage.Synthetic shape the runner already renders.
+// `messageID` MUST be derived deterministically from (monitorID, checkSeq) by the publisher --
+// that is the whole idempotency mechanism (diary 2435 §2): a duplicate publish for the same pair
+// collides on SessionMessageTable's primary key when projected and is rejected, never delivered
+// twice, without a second table or a separate uniqueness check.
+export const ExternalSignal = Event.define({
+  type: "session.next.external-signal",
+  ...options,
+  schema: {
+    ...Base,
+    messageID: SessionMessage.ID,
+    monitorID: Schema.String,
+    checkSeq: NonNegativeInt,
+    title: Schema.String,
+    text: Schema.String,
+  },
+})
+export type ExternalSignal = typeof ExternalSignal.Type
+
 export namespace Shell {
   export const Started = Event.define({
     type: "session.next.shell.started",
@@ -594,6 +617,7 @@ export const DurableDefinitions = Event.inventory(
   PromptAdmitted,
   ContextUpdated,
   Synthetic,
+  ExternalSignal,
   Shell.Started,
   Shell.Ended,
   Step.Started,
@@ -631,6 +655,7 @@ export const Definitions = Event.inventory(
   PromptAdmitted,
   ContextUpdated,
   Synthetic,
+  ExternalSignal,
   Shell.Started,
   Shell.Ended,
   Step.Started,

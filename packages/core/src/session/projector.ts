@@ -319,6 +319,66 @@ const layer = Layer.effectDiscard(
         })
       }),
     )
+    yield* events.project(MonitorEvent.Started, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectStarted(db, {
+          monitorID: event.data.monitorID,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(MonitorEvent.Checked, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectChecked(db, {
+          monitorID: event.data.monitorID,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(MonitorEvent.Triggered, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectTriggered(db, {
+          monitorID: event.data.monitorID,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(MonitorEvent.Failed, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectFailed(db, {
+          monitorID: event.data.monitorID,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(MonitorEvent.Cancelled, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectCancelled(db, {
+          monitorID: event.data.monitorID,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(MonitorEvent.Completed, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectCompleted(db, {
+          monitorID: event.data.monitorID,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
     yield* events.project(SessionEvent.LedgerAdded, (event) =>
       SessionLedger.projectAdded(db, {
         entryID: event.data.entryID,
@@ -498,6 +558,7 @@ const layer = Layer.effectDiscard(
     )
     yield* events.project(SessionEvent.ContextUpdated, (event) => run(db, event))
     yield* events.project(SessionEvent.Synthetic, (event) => run(db, event))
+    yield* events.project(SessionEvent.ExternalSignal, (event) => run(db, event))
     yield* events.project(SessionEvent.Shell.Started, (event) => run(db, event))
     yield* events.project(SessionEvent.Shell.Ended, (event) => run(db, event))
     yield* events.project(SessionEvent.Step.Started, (event) => run(db, event))

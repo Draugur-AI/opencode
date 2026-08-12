@@ -54,8 +54,10 @@ function bind(hostname: string, port: number, password: string) {
             ProjectV2.node,
             SessionGoal.node,
             SessionLedger.node,
-            // Monitor.node: absent by decision -- PR1 (TKT-322) has no consumer on this runtime
-            // yet (no tool/monitor.ts, no startup recovery hook); the execution-phase PR adds it.
+            // Monitor.node / MonitorRuntime.node: absent by decision -- the TKT-322 execution
+            // phase ships MonitorRuntime.layer but wires it into no assembly site (still no
+            // tool/monitor.ts, no startup recovery hook on this runtime). The tool-wiring PR
+            // adds both.
             Database.node,
           ]),
         ),

@@ -277,8 +277,10 @@ const app = LayerNode.group([
   // place a new global .node needs the same explicit entry.
   SessionGoal.node,
   SessionLedger.node,
-  // Monitor.node: absent by decision -- PR1 (TKT-322) has no consumer on this runtime yet (no
-  // tool/monitor.ts, no startup recovery hook); the execution-phase PR adds it here.
+  // Monitor.node / MonitorRuntime.node: absent by decision -- the TKT-322 execution phase ships
+  // MonitorRuntime.layer but wires it into no assembly site (still no tool/monitor.ts, no
+  // startup recovery hook consuming Monitor.Service or MonitorRuntime.Service on this runtime).
+  // The tool-wiring PR adds both here.
 ])
 
 export function createRoutes(
