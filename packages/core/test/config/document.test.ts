@@ -373,12 +373,241 @@ describe("ConfigDocument", () => {
     ),
   )
 
+  // TKT-323 MCP config editing: `mcp.server.set`'s value type (`ConfigMCP.ServerNonSecret`)
+  // structurally cannot mention a secret field at all -- editing connection details (command,
+  // url, ...) can no longer destroy credentials it never carries. This is the delete-the-fix
+  // regression test named in the ruling: red under a whole-value `mcp.server.set` (the shape this
+  // op had before the split, which this test would have caught had it existed then -- the split
+  // was a real, un-shipped trap, caught before any consumer existed), green under the split.
+  it.live("applyPatch: editing a server's command preserves its existing secret fields", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              local: {
+                type: "local",
+                command: ["old-command"],
+                environment: { API_KEY: "sk-real-secret" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          // Only `command` changes -- the patch's own type cannot express `environment` at all.
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.set",
+            name: "local",
+            value: { type: "local", command: ["new-command"] },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.local.command).toEqual(["new-command"])
+          expect(written.mcp.servers.local.environment).toEqual({ API_KEY: "sk-real-secret" })
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
+  // Same delete-the-fix shape as the command/environment test above, for the field that shipped
+  // WITH a gap (Copilot review, PR #40): `mergeNonSecretPatch`'s oauth carry-forward only fired
+  // when the incoming patch value ALREADY had a truthy `oauth` object -- which the current UI
+  // never sends (oauth editing is out of scope for this cut), so every remote-server `set`
+  // silently wiped the whole existing oauth block, including `client_secret`. Red before the
+  // `else if (existingOAuth !== undefined)` branch existed, green after.
+  it.live("applyPatch: editing a remote server's url preserves its existing oauth block, including client_secret", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              remote: {
+                type: "remote",
+                url: "https://old.example.test/mcp",
+                oauth: { client_id: "public-id", client_secret: "sk-real-secret" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          // Only `url` changes -- the patch value doesn't mention `oauth` at all, matching
+          // exactly what the current dialog sends (it has no oauth-editing fields).
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.set",
+            name: "remote",
+            value: { type: "remote", url: "https://new.example.test/mcp" },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.remote.url).toBe("https://new.example.test/mcp")
+          expect(written.mcp.servers.remote.oauth).toEqual({ client_id: "public-id", client_secret: "sk-real-secret" })
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
+  it.live("applyPatch: an explicit oauth: false on a remote server deliberately wipes the existing oauth block", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              remote: {
+                type: "remote",
+                url: "https://example.test/mcp",
+                oauth: { client_id: "public-id", client_secret: "sk-real-secret" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.set",
+            name: "remote",
+            value: { type: "remote", url: "https://example.test/mcp", oauth: false },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.remote.oauth).toBe(false)
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
+  it.live("applyPatch: changing a server's type does not carry over the old type's secret shape", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              swapped: { type: "local", command: ["x"], environment: { API_KEY: "sk-real-secret" } },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.set",
+            name: "swapped",
+            value: { type: "remote", url: "https://example.test/mcp" },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.swapped).toEqual({ type: "remote", url: "https://example.test/mcp" })
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
+  it.live("applyPatch: mcp.server.credential.set writes exactly one named secret, never reading the old one back", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              local: {
+                type: "local",
+                command: ["x"],
+                environment: { API_KEY: "sk-old-secret", OTHER_VAR: "unrelated" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          const result = yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.credential.set",
+            name: "local",
+            key: { field: "environment", key: "API_KEY" },
+            value: "sk-new-secret",
+          })
+          expect(result.hash).not.toBe(read.hash)
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.local.environment).toEqual({ API_KEY: "sk-new-secret", OTHER_VAR: "unrelated" })
+          expect(written.mcp.servers.local.command).toEqual(["x"])
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
+  it.live("applyPatch: mcp.server.credential.remove deletes exactly one named secret", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              remote: {
+                type: "remote",
+                url: "https://example.test/mcp",
+                oauth: { client_id: "public-id", client_secret: "sk-real-secret" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.credential.remove",
+            name: "remote",
+            key: { field: "oauth.client_secret" },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.remote.oauth.client_secret).toBeUndefined()
+          expect(written.mcp.servers.remote.oauth.client_id).toBe("public-id")
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
   // The corollary to the readTarget-redaction reversal above: a UI that reads a redacted value,
   // never touches it, and patches the field straight back must not silently persist the literal
   // sentinel as the real secret -- it would look like a successful save and only surface later
   // when the integration stops authenticating. This is only safe to enforce now that readTarget
-  // never returns a real value for a client to accidentally echo back unredacted.
-  it.live("applyPatch rejects a patch that would write the redaction sentinel over a secret field", () =>
+  // never returns a real value for a client to accidentally echo back unredacted. Post-narrowing,
+  // this can only happen through `mcp.server.credential.set` -- `mcp.server.set` cannot carry a
+  // secret value at all.
+  it.live("applyPatch rejects a credential.set patch that would write the redaction sentinel", () =>
     withTmp((tmp) =>
       Effect.gen(function* () {
         const filepath = path.join(tmp.path, "opencode.json")
@@ -394,9 +623,10 @@ describe("ConfigDocument", () => {
 
           const rejected = yield* doc
             .applyPatch(project.id, read.hash, {
-              op: "mcp.server.set",
+              op: "mcp.server.credential.set",
               name: "local",
-              value: { type: "local", command: ["x"], environment: { API_KEY: "[redacted]" } },
+              key: { field: "environment", key: "API_KEY" },
+              value: "[redacted]",
             })
             .pipe(Effect.exit)
           expect(rejected._tag).toBe("Failure")
@@ -410,9 +640,10 @@ describe("ConfigDocument", () => {
           // A genuinely new value for the same field is still allowed -- only the literal
           // sentinel is rejected, not the field itself.
           const result = yield* doc.applyPatch(project.id, read.hash, {
-            op: "mcp.server.set",
+            op: "mcp.server.credential.set",
             name: "local",
-            value: { type: "local", command: ["x"], environment: { API_KEY: "sk-new-real-secret" } },
+            key: { field: "environment", key: "API_KEY" },
+            value: "sk-new-real-secret",
           })
           expect(result.hash).not.toBe(read.hash)
         }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)

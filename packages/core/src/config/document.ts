@@ -4,6 +4,7 @@ import path from "path"
 import { type ParseError, applyEdits, modify, parse, printParseErrorCode } from "jsonc-parser"
 import { Context, Effect, Layer, Option, Schema } from "effect"
 import { ConfigDocument as ConfigDocumentSchema } from "@opencode-ai/schema/config-document"
+import { ConfigMCP } from "@opencode-ai/schema/config-mcp"
 import { Config } from "../config"
 import { FSUtil } from "../fs-util"
 import { Global } from "../global"
@@ -73,11 +74,77 @@ function jsonPathFor(patch: Patch): Array<string> {
     case "mcp.server.set":
     case "mcp.server.remove":
       return ["mcp", "servers", patch.name]
+    case "mcp.server.credential.set":
+    case "mcp.server.credential.remove":
+      return patch.key.field === "oauth.client_secret"
+        ? ["mcp", "servers", patch.name, "oauth", "client_secret"]
+        : ["mcp", "servers", patch.name, patch.key.field, patch.key.key]
   }
 }
 
+// Reads the target's CURRENT (pre-edit) server value for `name`, straight from the raw parsed
+// text -- not a typed decode, so a malformed-but-present secret field is still found and carried
+// forward rather than silently dropped by a failed decode. Returns `undefined` if the server
+// doesn't exist yet (a create) or the document doesn't parse.
+function existingServerRaw(text: string, name: string): unknown {
+  const { parsed } = parseAndDiagnose(text)
+  if (typeof parsed !== "object" || parsed === null) return undefined
+  const mcp = (parsed as Record<string, unknown>).mcp
+  if (typeof mcp !== "object" || mcp === null) return undefined
+  const servers = (mcp as Record<string, unknown>).servers
+  if (typeof servers !== "object" || servers === null) return undefined
+  return (servers as Record<string, unknown>)[name]
+}
+
+// Carries forward whatever secret-shaped fields the existing server already has onto an incoming
+// `mcp.server.set` patch's non-secret value -- the actual mechanism that makes the type-level
+// narrowing (`ConfigMCP.ServerNonSecret`) safe to write with: the patch value structurally cannot
+// mention environment/headers/oauth.client_secret, so this function is what puts the EXISTING
+// ones back rather than leaving them wiped by `modify`'s whole-value replace at
+// `["mcp","servers",name]`. Only carries forward when the server's own `type` is unchanged --
+// local's `environment` and remote's `headers`/`oauth` are different shapes, so a type change
+// (local server edited into a remote one, or vice versa) has nothing compatible to carry over;
+// treating it as a fresh server on type change is correct, not a gap.
+function mergeNonSecretPatch(value: ConfigMCP.ServerNonSecret, existingRaw: unknown): unknown {
+  const merged: Record<string, unknown> = { ...value }
+  if (typeof existingRaw !== "object" || existingRaw === null) return merged
+  const existing = existingRaw as Record<string, unknown>
+  if (existing.type !== value.type) return merged
+  if (value.type === "local" && existing.environment !== undefined) merged.environment = existing.environment
+  if (value.type === "remote") {
+    if (existing.headers !== undefined) merged.headers = existing.headers
+    const existingOAuth = existing.oauth
+    if (value.oauth === false) {
+      // Explicit disable -- the incoming patch deliberately says "no oauth", which wipes the
+      // existing block (including its secret) on purpose. Not a gap: this is the one case where
+      // destroying the secret IS the ask.
+    } else if (value.oauth && typeof value.oauth === "object") {
+      // The incoming patch specifies a real oauth object (a future oauth-editing UI --
+      // `ServerNonSecret`'s `OAuthNonSecret` structurally cannot carry `client_secret`, so carry
+      // the existing one forward onto the new shape).
+      if (existingOAuth && typeof existingOAuth === "object" && "client_secret" in existingOAuth) {
+        merged.oauth = { ...value.oauth, client_secret: (existingOAuth as Record<string, unknown>).client_secret }
+      }
+    } else if (existingOAuth !== undefined) {
+      // The incoming patch doesn't mention oauth at all -- the current UI never edits it, so
+      // every `mcp.server.set` this cut sends omits the field. Without this branch, the whole
+      // existing oauth block (client_id, scope, callback_port, redirect_uri, AND client_secret)
+      // silently disappears on any edit -- url, disabled, timeout -- exactly the secret-loss
+      // shape this PR exists to make inexpressible, just missed for this one field (Copilot
+      // review, PR #40). Carried forward whole, same treatment as headers/environment above.
+      merged.oauth = existingOAuth
+    }
+  }
+  return merged
+}
+
 function applyPatchToText(text: string, patch: Patch): string {
-  const value = patch.op === "mcp.server.remove" ? undefined : patch.value
+  if (patch.op === "mcp.server.set") {
+    const merged = mergeNonSecretPatch(patch.value, existingServerRaw(text, patch.name))
+    const edits = modify(text, jsonPathFor(patch), merged, { formattingOptions: { tabSize: 2, insertSpaces: true } })
+    return applyEdits(text, edits)
+  }
+  const value = patch.op === "mcp.server.remove" || patch.op === "mcp.server.credential.remove" ? undefined : patch.value
   const edits = modify(text, jsonPathFor(patch), value, { formattingOptions: { tabSize: 2, insertSpaces: true } })
   return applyEdits(text, edits)
 }
@@ -137,15 +204,6 @@ function mcpSecretPaths(mcp: unknown): SecretPath[] {
   return paths
 }
 
-function getAtPath(value: unknown, path: SecretPath): unknown {
-  let cursor = value
-  for (const segment of path) {
-    if (typeof cursor !== "object" || cursor === null) return undefined
-    cursor = (cursor as Record<string, unknown>)[segment]
-  }
-  return cursor
-}
-
 function redactMcpServers(mcp: unknown): unknown {
   const paths = mcpSecretPaths(mcp)
   if (paths.length === 0) return mcp
@@ -195,15 +253,18 @@ function redactParsed(parsed: unknown): unknown {
 // The corollary Henry's note names as mandatory once readTarget is redacted: a UI that reads a
 // redacted value, doesn't touch it, and patches the field back would otherwise persist the
 // literal string "[redacted]" as the real secret -- a silent, self-inflicted secret loss that
-// only surfaces later when the integration stops authenticating. Only meaningful for
-// `mcp.server.set`, whose value can itself carry secret fields; `mcp.server.remove` has none.
-// Reuses `mcpSecretPaths`' own allowlist by wrapping the single incoming server value in the same
-// `{servers: {name: ...}}` shape that function already expects, rather than re-deriving which
-// fields are secret a second time.
+// only surfaces later when the integration stops authenticating. Post-narrowing (TKT-323 MCP
+// config editing), only `mcp.server.credential.set` can carry a secret value at all --
+// `mcp.server.set`'s type (`ConfigMCP.ServerNonSecret`) structurally cannot mention a secret
+// field, so there is nothing on that op left for this check to catch. Direct string comparison,
+// not `mcpSecretPaths`: a credential patch's `value` already IS the secret value itself (never a
+// nested object to walk), so there is no allowlist to re-derive here.
+//
+// 🛑 This narrowing depends on `ConfigMCP.ServerNonSecret` (config-mcp.ts) staying unable to
+// express a secret field. If that type is ever widened to carry one, this function's coverage
+// silently goes stale in the same way -- see that type's own doc comment, which points back here.
 function patchWritesRedactedSentinel(patch: Patch): boolean {
-  if (patch.op !== "mcp.server.set") return false
-  const wrapped = { servers: { [patch.name]: patch.value } }
-  return mcpSecretPaths(wrapped).some((path) => getAtPath(wrapped, path) === REDACTED)
+  return patch.op === "mcp.server.credential.set" && patch.value === REDACTED
 }
 
 export class RedactedValueRejectedError extends Schema.TaggedErrorClass<RedactedValueRejectedError>()(

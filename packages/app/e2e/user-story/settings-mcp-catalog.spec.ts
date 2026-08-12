@@ -162,3 +162,179 @@ test("MCP tab surfaces a catalog fetch failure distinctly, never as a silent emp
   // fetch broke" apart from "there is nothing configured here".
   await expect(dialog.locator('[data-component="settings-v2-list"]')).not.toContainText("No MCPs configured")
 })
+
+const targetID = "project:e2e-target"
+
+/**
+ * Mocks the config-document surface (target list/read/apply) the add/edit/remove dialogs drive.
+ * The real secret-preserving MERGE logic lives server-side (packages/core/src/config/document.ts,
+ * covered by its own delete-the-fix unit tests) -- this mock always succeeds and just records
+ * every applied patch, so what this spec actually proves is the CLIENT wiring: does the dialog
+ * send the right sequence of patches for what the user typed, not whether the server merges them
+ * correctly (a different layer, already proven elsewhere).
+ */
+function mockConfigDocument(page: Page, opts: { existingText?: string; existingParsed?: unknown }) {
+  const applied: unknown[] = []
+  let hash = "hash-0"
+  page.route("**/api/config/document/target**", async (route) => {
+    // `**` (not a single trailing `*`) is load-bearing here for a DIFFERENT reason than the
+    // pathname-vs-full-url footgun below: a single `*` cannot cross a `/`, so it matches the bare
+    // `target` (list) path but never `target/<id>` or `target/<id>/apply` -- every targetRead/
+    // targetApply call would silently fall through unmocked. `**` matches across `/` the same way
+    // the leading `**` already does.
+    //
+    // `.pathname`, not the raw URL string -- every one of these requests carries a
+    // `?location[directory]=...` query string, so `url.endsWith(...)`/`url.includes(...)` against
+    // the FULL url is the same query-string footgun already found and fixed once in this file for
+    // /api/mcp*. Stripping to pathname first is what makes exact-suffix matching safe here.
+    const pathname = new URL(route.request().url()).pathname
+    const method = route.request().method()
+    if (pathname === "/api/config/document/target" && method === "GET") {
+      return jsonRoute(route, {
+        location: { directory, project: { id: project.id, directory } },
+        data: [{ id: targetID, kind: "project", path: "opencode.json", exists: true }],
+      })
+    }
+    if (pathname === `/api/config/document/target/${encodeURIComponent(targetID)}/apply`) {
+      const body = route.request().postDataJSON() as { expectedHash: string; patch: unknown }
+      applied.push(body.patch)
+      hash = `hash-${applied.length}`
+      return jsonRoute(route, { location: { directory, project: { id: project.id, directory } }, data: { hash, restartImpact: "restart" } })
+    }
+    if (pathname === `/api/config/document/target/${encodeURIComponent(targetID)}` && method === "GET") {
+      return jsonRoute(route, {
+        location: { directory, project: { id: project.id, directory } },
+        data: {
+          target: { id: targetID, kind: "project", path: "opencode.json", exists: true },
+          text: opts.existingText ?? "{}",
+          hash,
+          parsed: opts.existingParsed ?? {},
+          diagnostics: [],
+        },
+      })
+    }
+    return route.fallback()
+  })
+  return { applied: () => applied }
+}
+
+test("Add server dialog sends a set patch, then one credential.set per filled-in credential", async ({ page }) => {
+  await mockOpenCodeServer(page, {
+    directory,
+    project,
+    provider: () => ({ all: [], connected: [], default: undefined }),
+    sessions: [session],
+    pageMessages: () => ({ items: [] }),
+  })
+  await mockMcp(page, { catalog: [], status: {} })
+  const config = mockConfigDocument(page, {})
+
+  const dialog = await openMcpTab(page)
+  await dialog.getByRole("button", { name: "Add server" }).click()
+
+  const form = page.locator(".settings-v2-server-dialog")
+  await expect(form).toBeVisible()
+  await form.locator('input[type="text"]').first().fill("discord")
+  // Type defaults to local -- fill command + one credential.
+  await form.getByPlaceholder("npx some-mcp-server").fill("npx discord-mcp")
+  await form.getByRole("button", { name: "Add" }).click()
+  const credentialRow = form.locator(".settings-v2-mcp-credential-row").first()
+  await credentialRow.locator("input").first().fill("API_KEY")
+  await credentialRow.locator("input").last().fill("sk-e2e-secret")
+  await form.getByRole("button", { name: "Save" }).click()
+
+  await expect(form).toHaveCount(0)
+  expect(config.applied()).toEqual([
+    { op: "mcp.server.set", name: "discord", value: { type: "local", command: ["npx", "discord-mcp"] } },
+    {
+      op: "mcp.server.credential.set",
+      name: "discord",
+      key: { field: "environment", key: "API_KEY" },
+      value: "sk-e2e-secret",
+    },
+  ])
+})
+
+test("Edit dialog: leaving an existing credential blank sends no credential patch for it", async ({ page }) => {
+  await mockOpenCodeServer(page, {
+    directory,
+    project,
+    provider: () => ({ all: [], connected: [], default: undefined }),
+    sessions: [session],
+    pageMessages: () => ({ items: [] }),
+  })
+  await mockMcp(page, {
+    catalog: [{ name: "discord", transport: "local", status: "configured", target: targetID }],
+    status: { discord: { status: "connected" } },
+  })
+  const config = mockConfigDocument(page, {
+    existingParsed: {
+      mcp: {
+        servers: {
+          discord: { type: "local", command: ["old-command"], environment: { API_KEY: "[redacted]" } },
+        },
+      },
+    },
+  })
+
+  const dialog = await openMcpTab(page)
+  const row = dialog.locator(".settings-v2-mcp-row", { hasText: "discord" })
+  await row.getByLabel("Edit").click()
+
+  const form = page.locator(".settings-v2-server-dialog")
+  await expect(form).toBeVisible()
+  // Name is locked in edit mode, prefilled from the catalog entry.
+  await expect(form.locator('input[type="text"]').first()).toHaveValue("discord")
+  await expect(form.getByPlaceholder("npx some-mcp-server")).toHaveValue("old-command")
+  // The existing credential shows as a row (key visible) with no value prefilled.
+  const credentialRow = form.locator(".settings-v2-mcp-credential-row").first()
+  await expect(credentialRow.locator("input").first()).toHaveValue("API_KEY")
+  await expect(credentialRow.locator("input").last()).toHaveValue("")
+
+  await form.getByPlaceholder("npx some-mcp-server").fill("new-command")
+  await form.getByRole("button", { name: "Save" }).click()
+
+  await expect(form).toHaveCount(0)
+  // Only the connection-detail patch -- the untouched, blank credential row produces NOTHING,
+  // never a credential.set with an empty string. This is the client-side half of the same
+  // "editing preserves what it didn't touch" property the core-level merge tests prove server-side.
+  expect(config.applied()).toEqual([
+    { op: "mcp.server.set", name: "discord", value: { type: "local", command: ["new-command"] } },
+  ])
+})
+
+test("Remove confirmation sends a remove patch for the right server", async ({ page }) => {
+  await mockOpenCodeServer(page, {
+    directory,
+    project,
+    provider: () => ({ all: [], connected: [], default: undefined }),
+    sessions: [session],
+    pageMessages: () => ({ items: [] }),
+  })
+  await mockMcp(page, {
+    catalog: [{ name: "discord", transport: "local", status: "configured", target: targetID }],
+    status: { discord: { status: "connected" } },
+  })
+  const config = mockConfigDocument(page, {})
+
+  const dialog = await openMcpTab(page)
+  const row = dialog.locator(".settings-v2-mcp-row", { hasText: "discord" })
+  await row.getByLabel("Remove").click()
+
+  const confirm = page.getByText("Remove discord?")
+  await expect(confirm).toBeVisible()
+  // Keyboard activation, not a mouse click: a pre-existing, unrelated crash (General tab's
+  // shell-settings resource -- filed as feedback, not TKT-323's concern) fires on every
+  // settings-v2 dialog open in this mock environment, confirmed present immediately after
+  // openMcpTab, before any MCP interaction at all. It leaves a real, coordinate-hit-testable
+  // overlay remnant on top of this dialog's screen position (Add/Edit's larger forms happen not
+  // to overlap it) -- `click({ force: true })` was tried and silently hit that overlay instead
+  // (it dismissed the dialog without ever sending the remove patch, caught by the applied-patch
+  // assertion below). Focusing the real button and activating it via keyboard sidesteps
+  // coordinate hit-testing entirely, so it can't land on the wrong element.
+  await page.getByRole("button", { name: "Remove", exact: true }).focus()
+  await page.keyboard.press("Enter")
+
+  await expect(confirm).toHaveCount(0)
+  expect(config.applied()).toEqual([{ op: "mcp.server.remove", name: "discord" }])
+})

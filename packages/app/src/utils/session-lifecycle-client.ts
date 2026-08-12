@@ -8,8 +8,9 @@
  *
  * 🛑 This file is one of exactly FOUR bounded importers of `@opencode-ai/client-next` — the
  * others are `project-client.ts` (project surface), `goal-ledger-client.ts` (session goal and
- * working ledger, TKT-335), and `mcp-catalog-client.ts` (MCP catalog + live status, TKT-323 chunk
- * 3). Each owns its own verbs and none edit the others; nothing else may import the alias at all.
+ * working ledger, TKT-335), and `mcp-client.ts` (MCP catalog, live status, and config-document
+ * editing for the MCP tab, TKT-323 chunk 3). Each owns its own verbs and none edit the others;
+ * nothing else may import the alias at all.
  * Four client generations in one app is a wart we carry on purpose and for a bounded time, not a
  * pattern to spread. TKT-328 migrates every call site onto one client and deletes the alias and
  * all four modules. See FORK.md's ledger.
