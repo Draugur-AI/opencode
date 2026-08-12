@@ -34,6 +34,8 @@ import { LLM } from "@/session/llm"
 import { LSP } from "@/lsp/lsp"
 import { MCP } from "@/mcp"
 import { McpAuth } from "@/mcp/auth"
+import { McpRuntime } from "@opencode-ai/core/config/mcp-runtime"
+import { McpRuntimeLive } from "@/mcp/runtime"
 import { Command } from "@/command"
 import { Truncate } from "@/tool/truncate"
 import { ToolRegistry } from "@/tool/registry"
@@ -115,6 +117,7 @@ export const AppLayer = AppNodeBuilderV1.build(
     SessionGoal.node,
     SessionLedger.node,
   ]),
+  [[McpRuntime.node, McpRuntimeLive.node]],
 ).pipe(Layer.provideMerge(AppNodeBuilderV1.build(Ripgrep.node)), Layer.provideMerge(Observability.layer))
 
 const rt = ManagedRuntime.make(AppLayer, { memoMap })

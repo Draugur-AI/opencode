@@ -19,6 +19,8 @@ import { Installation } from "@/installation"
 import { LSP } from "@/lsp/lsp"
 import { MCP } from "@/mcp"
 import { McpAuth } from "@/mcp/auth"
+import { McpRuntime } from "@opencode-ai/core/config/mcp-runtime"
+import { McpRuntimeLive } from "@/mcp/runtime"
 import { Permission } from "@/permission"
 import { Plugin } from "@/plugin"
 import { PluginPtyEnvironment } from "@/plugin/pty-environment"
@@ -280,7 +282,7 @@ const app = LayerNode.group([
 export function createRoutes(
   corsOptions?: CorsOptions,
 ): Layer.Layer<never, EffectConfig.ConfigError, RouteRequirements> {
-  const locationServiceMapV2 = buildLocationServiceMap()
+  const locationServiceMapV2 = buildLocationServiceMap([[McpRuntime.node, McpRuntimeLive.node]])
 
   return Layer.mergeAll(
     rootApiRoutes,

@@ -821,6 +821,15 @@ const scenarios: Scenario[] = [
     }))
     .status(404, undefined, "status"),
   http.protected.get("/api/mcp", "v2.mcp.list").json(200, locationData(array)),
+  // McpRuntime IS wired at this assembly (httpapi/server.ts's `app`, TKT-323 chunk 2) -- a
+  // fixture with no MCP servers configured returns an empty status record, not
+  // ServiceUnavailableError. The unavailable path (packages/cli serve, packages/sdk-next, which
+  // never get the replacement) has no exerciser here since this harness itself is that same
+  // assembly; see packages/core/test/config/mcp-runtime.test.ts for the construction-level
+  // coverage of "unbound without a replacement" instead.
+  http.protected
+    .get("/api/mcp/status", "v2.mcp.status")
+    .json(200, locationData((value) => check(isRecord(value), "status should be a record"))),
   http.protected
     .get("/api/event", "v2.event.subscribe")
     .stream()

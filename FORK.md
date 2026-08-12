@@ -282,6 +282,74 @@ at the point the fresh map is created, which singletons it is knowingly duplicat
 A silent fresh map reads identically to a forgotten shared one; only the comment tells the next
 person which case they are looking at.
 
+### An unbound node in a shared group is fatal to every assembly that does not replace it (TKT-323)
+
+`packages/core/src/location-services.ts`'s `locationServices` is compiled by more than one
+assembly — `buildLocationServiceMap` (`LayerMap.make`, one merged layer per `Location.Ref`,
+`idleTimeToLive: 60 minutes`) is called from `httpapi/server.ts` directly and auto-discovered
+by `AppNodeBuilder.build` for `packages/server/routes.ts` (used by `packages/cli`'s `serve` and
+`packages/sdk-next`) whenever `LocationServiceMap.node` is reachable and unreplaced. **`unbound`
+does not mean "absent and skippable" — it means "fatal unless replaced."** `LayerNode.compile`
+throws on any unbound member of the group being compiled, and that throw takes down the **whole**
+per-location bundle for every route in that assembly, including routes that touch nothing related
+to the unbound member. The thrown message names the *unbound service*, never the *node whose deps
+reached it*, so the stack points at `location-services.ts` and gives no hint which member is at
+fault — read it as "a dependency this assembly cannot satisfy was pulled into a shared graph," not
+as "a binding is missing" from the file the stack trace names.
+
+Observed twice in one diff, TKT-323 chunk 2, building the `McpRuntime` port for live MCP status:
+
+1. **67 failures** — the adapter's `deps:` listed `InstanceStore.node`, which transitively reaches
+   `InstanceStore.bootstrapNode` (`project/instance-store.ts:205`), itself `LayerNode.unbound` with
+   its *only* replacement anywhere in the tree at `effect/app-node-builder-v1.ts:6`'s
+   `bootstrapReplacement`. **Any node depending on `InstanceStore` is assemblable only through the
+   V1 builder** — this is load-bearing, not incidental, and is currently what keeps V1 instance
+   addressing out of the V2 location pipeline. A `Unbound layer node: @opencode/InstanceBootstrap`
+   error means "a V1-only dependency has been pulled into a V2 graph."
+2. **12 failures** — even after removing that `deps:` entry, `McpRuntime.node` **itself** was
+   `LayerNode.unbound`, sitting in `locationServices` directly. Every assembly that does not
+   supply a replacement (i.e. everything except `httpapi/server.ts`) hit the same fatality on the
+   port's own tag.
+
+Both are `LayerNode.compile` throwing on an unbound node and taking the whole per-location bundle
+with it — the *same* mechanism, twice, at two different nodes. **Second bundle-poisoning incident
+overall, a different mechanism from the MemoMap split above** — that one silently duplicated
+construction; this one rejects the graph outright. **Before adding any node to a shared group,
+enumerate every assembly that compiles that group** — a replacement supplied at one call site does
+not cover the others.
+
+**The fix: bind the port to a truthful default, never leave it unbound in a shared group.**
+`McpRuntime.node` now ships **bound** to a default (`deps: []`) whose `status()` always fails a
+typed `McpRuntime.UnavailableError` — replacements substitute a bound node exactly as they would
+an unbound one, so `httpapi/server.ts` still supplies the live implementation the same way. The
+general form: **unavailability must be expressed in the value returned, never in the absence of a
+binding — because in a shared group, absence is fatal.** A no-op/disabled fallback layer was
+rejected earlier on this same ticket for fabricating a status a user could mistake for togglable;
+a bound default that *fails informatively* satisfies both constraints at once.
+
+**A closed adapter still must not rebuild what the app tree already built.** The live
+implementation (`packages/opencode/src/mcp/runtime.ts`'s `McpRuntimeLive`) reads `MCP.Service` /
+`InstanceStore.Service` via `Effect.serviceOption` **inside its `status()` method body**, `deps:
+[]` on the node itself — never a `deps:` graph edge (which is what caused the 67), and never a
+second, independent `AppNodeBuilder.build(...)` call to obtain a "resolved" instance (which would
+be the MemoMap-split defect above, moved into a closure where no graph analysis can see it — a
+real, considered, and rejected alternative on this ticket). `Effect.serviceOption` reads the
+ambient Context without adding a static requirement, so the layer stays `Layer.succeed` (`R =
+never`) and reuses whatever single instance the assembly's own `app`/`AppLayer` tree already
+constructed — proven in `packages/core/test/config/mcp-runtime.test.ts`'s construction-counter
+test, the same instrument that caught the SessionExecutionLocal split-brain above. **Before
+building an ambient-read adapter, probe first**: confirm the target service is actually present in
+the ambient context at the real call site (not assumed) — an adapter reading ambient context that
+is never populated there is permanently, silently unavailable, which is a design defect the same
+shape as fabricating a status, just quieter.
+
+**One piece of advice, two sites, opposite verdicts — name which site it's about.**
+`Effect.serviceOption` is exactly right for a **consumer** choosing unavailable-vs-status (the
+handler) and for an **adapter's own dependencies** (reading ambient context, no static
+requirement). It is **no defence at all** against a **compile-time** rejection of an unbound node
+in a shared group, because no effect ever runs — compilation rejects the graph first. Two
+different sites; both statements are true; conflating them costs real diagnosis time.
+
 ## Merge-blocking gates
 
 These gates are **merge-blocking conditions**, not aspirations. A PR that trips one does not
