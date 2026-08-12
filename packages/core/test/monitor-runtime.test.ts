@@ -70,6 +70,10 @@ describe("MonitorRuntime.layer construction", () => {
   // processes, so two builds reaching it must not construct it twice unless they deliberately
   // share a MemoMap -- two PID maps and two owners of the same children means cancel silently
   // misses and recovery marks the wrong monitors orphaned.
+  //
+  // Correctness-load-bearing, not just a regression guard: `Monitor.projectStatus` (monitor.ts)
+  // skips a compare-and-set specifically BECAUSE this guarantee holds -- weaken what this test
+  // asserts and that no-CAS decision silently stops being safe, with nothing left to catch it.
   test("two builds sharing one MemoMap construct MonitorRuntime exactly once; two builds without sharing construct it twice", async () => {
     // Unshared: each build gets its own fresh MemoMap -- the same-reference layer constructs
     // once PER BUILD, producing two independently-built Service instances. Without this arm,

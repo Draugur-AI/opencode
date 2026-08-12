@@ -132,6 +132,12 @@ export const projectOrphaned = Effect.fn("Monitor.projectOrphaned")(function* (
  * so there is no concurrent writer to race against within one process's lifetime. `recover()`
  * racing a live drain loop is structurally impossible -- recover() runs once at startup, before
  * any drain loop for a freshly-recovered monitor could exist.
+ *
+ * This omission is load-bearing on that guarantee, not just an optimization: if
+ * `MonitorRuntime.layer`'s exactly-once construction is ever weakened, two runtimes racing the
+ * same monitor would silently clobber each other's status writes with no CAS to catch it. Revisit
+ * this decision if `packages/core/test/monitor-runtime.test.ts`'s construction-counter test ever
+ * needs to change what it asserts.
  */
 const projectStatus = (
   db: DatabaseService,
