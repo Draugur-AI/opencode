@@ -1,26 +1,17 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { LOCALE_HEADER, localeFromCookieHeader, parseLocale, tag } from "~/lib/language"
 
-async function handler(evt: APIEvent) {
-  const req = evt.request.clone()
-  const url = new URL(req.url)
-  const targetUrl = `https://enterprise.opencode.ai/${url.pathname}${url.search}`
-
-  const headers = new Headers(req.headers)
-  const locale = parseLocale(req.headers.get(LOCALE_HEADER)) ?? localeFromCookieHeader(req.headers.get("cookie"))
-  if (locale) headers.set("accept-language", tag(locale))
-
-  const response = await fetch(targetUrl, {
-    method: req.method,
-    headers,
-    body: req.body,
-  })
-  return response
+// Disabled (TKT-396 item 6, Ethan's ruling -- item 4's exact subject, a genuine scope-miss in its
+// original naming of only docs/s/stats): this forwarded every method, header, and body verbatim to
+// https://enterprise.opencode.ai/*, an upstream service this fork has no relationship to. Not just
+// unattributed content like the docs/changelog cases -- a live proxy silently forwarding requests
+// (and their bodies) off this fork's own domain to a service upstream operates.
+function disabled(_evt: APIEvent) {
+  return new Response(null, { status: 404 })
 }
 
-export const GET = handler
-export const POST = handler
-export const PUT = handler
-export const DELETE = handler
-export const OPTIONS = handler
-export const PATCH = handler
+export const GET = disabled
+export const POST = disabled
+export const PUT = disabled
+export const DELETE = disabled
+export const OPTIONS = disabled
+export const PATCH = disabled
