@@ -6,6 +6,7 @@ import type { Monitor } from "@opencode-ai/schema/monitor"
 import { AppProcess } from "../process"
 import { LocationMutation } from "../location-mutation"
 import { PermissionV2 } from "../permission"
+import { BashTool } from "../tool/bash"
 
 export const MAX_CAPTURE_BYTES = 1024 * 1024
 export const CAPABILITY = "monitor"
@@ -49,8 +50,15 @@ export const check = Effect.fn("MonitorProcess.check")(function* (input: {
     sessionID: input.sessionID,
   })
 
+  // Reuses bash.ts's own platform default rather than re-deriving it (Copilot review, #38): without
+  // a shell, quotes/pipes/multi-word commands can silently parse differently, or not run at all,
+  // even though this asserts the identical `bash` permission. Config-configured shell overrides
+  // (bash.ts's own `entries().shell` lookup) are not threaded through here -- that would add
+  // Config.Service to check()'s ambient requirements, which run-coordinator.ts's drain must stay
+  // free of; out of scope for closing the "no shell at all" gap this fixes.
   const command = ChildProcess.make(input.source.command, [], {
     cwd: target.canonical,
+    shell: BashTool.defaultShell(),
     stdin: "ignore",
     detached: process.platform !== "win32",
     forceKillAfter: Duration.seconds(3),

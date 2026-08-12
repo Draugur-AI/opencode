@@ -229,8 +229,14 @@ export const layer = Layer.effect(
       start: (monitorID) => coordinator.run(monitorID).pipe(Effect.mapError(() => new UnavailableError())),
       cancel: (monitorID) =>
         Effect.gen(function* () {
-          const info = yield* monitor.get(monitorID)
+          // Interrupt BEFORE reading status (Copilot review, #38): coordinator.interrupt() blocks
+          // until the drain fiber is fully settled, so a read taken first can go stale if the
+          // drain reaches a terminal status (triggered/completed/failed) in the window between
+          // that read and the interrupt -- publishing Cancelled against the stale snapshot would
+          // then clobber the real terminal status projectStatus's unconditional update has no CAS
+          // to catch. Reading only after interrupt() returns means the status is never stale.
           yield* coordinator.interrupt(monitorID)
+          const info = yield* monitor.get(monitorID)
           if (!info || (info.status !== "starting" && info.status !== "running")) return
           const now = yield* DateTime.now
           yield* events.publish(MonitorEvent.Cancelled, { sessionID: info.sessionID, monitorID, timestamp: now })
