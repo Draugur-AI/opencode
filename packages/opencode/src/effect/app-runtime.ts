@@ -116,6 +116,8 @@ export const AppLayer = AppNodeBuilderV1.build(
     ProjectV2.node,
     SessionGoal.node,
     SessionLedger.node,
+    // Monitor.node: absent by decision -- PR1 (TKT-322) has no consumer on this runtime yet (no
+    // tool/monitor.ts, no startup recovery hook); the execution-phase PR adds it here.
   ]),
   [[McpRuntime.node, McpRuntimeLive.node]],
 ).pipe(Layer.provideMerge(AppNodeBuilderV1.build(Ripgrep.node)), Layer.provideMerge(Observability.layer))

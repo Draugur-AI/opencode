@@ -5,6 +5,8 @@ import { DateTime, Effect, Layer, Schema } from "effect"
 import { Database } from "../database/database"
 import { EventV2 } from "../event"
 import { makeGlobalNode } from "../effect/app-node"
+import { Monitor } from "../monitor"
+import { MonitorEvent } from "@opencode-ai/schema/monitor-event"
 import { SessionEvent } from "./event"
 import { SessionV1 } from "../v1/session"
 import { WorkspaceTable } from "../control-plane/workspace.sql"
@@ -294,6 +296,24 @@ const layer = Layer.effectDiscard(
           sessionID: event.data.sessionID,
           status: event.data.status,
           expectedVersion: event.data.expectedVersion,
+          aggregateSeq: event.durable.seq,
+          timestamp: event.data.timestamp,
+        })
+      }),
+    )
+    yield* events.project(MonitorEvent.Created, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectCreated(db, { info: event.data.info, aggregateSeq: event.durable.seq })
+      }),
+    )
+    yield* events.project(MonitorEvent.Orphaned, (event) =>
+      Effect.gen(function* () {
+        if (event.durable === undefined) return yield* Effect.die("Durable Monitor event is missing aggregate sequence")
+        yield* Monitor.projectOrphaned(db, {
+          sessionID: event.data.sessionID,
+          monitorID: event.data.monitorID,
+          previousStatus: event.data.previousStatus,
           aggregateSeq: event.durable.seq,
           timestamp: event.data.timestamp,
         })

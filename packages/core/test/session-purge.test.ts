@@ -28,6 +28,8 @@ import {
 } from "@opencode-ai/core/session/sql"
 import { SessionLedger } from "@opencode-ai/core/session/ledger"
 import { SessionProfile } from "@opencode-ai/core/session/profile"
+import { Monitor } from "@opencode-ai/core/monitor"
+import { MonitorTable } from "@opencode-ai/core/monitor/sql"
 import { testEffect } from "./lib/effect"
 
 const it = testEffect(AppNodeBuilder.build(LayerNode.group([Database.node, EventV2.node, SessionProjector.node])))
@@ -68,6 +70,9 @@ const SESSION_OWNED: Record<string, "purged" | "retained"> = {
   // TKT-321: a resolved profile snapshot is behavior the session ran under, same class of content
   // as a goal or ledger entry -- nothing worth keeping once the session itself is gone.
   session_profile_snapshot: "purged",
+  // TKT-322 diary 2437: a monitor declaration's `source` can carry a command string -- content by
+  // any reading (paths, hostnames, tokens as arguments). No tombstone; purge it entirely.
+  monitor: "purged",
   // The tombstone is what replaces the session. It carries identifiers only, never content.
   session_tombstone: "retained",
 }
@@ -160,6 +165,21 @@ const seedTrashed = (prefix: string) =>
         plugin_rules: {},
         hook_rules: {},
         monitor_rules: { allowUser: true, allowPlugin: true, autoStart: false },
+        time_created: 1,
+      })
+      .run()
+      .pipe(Effect.orDie)
+    yield* db
+      .insert(MonitorTable)
+      .values({
+        id: Monitor.ID.create(),
+        session_id: id,
+        title: "monitor",
+        source: { type: "command", command: "echo hi" },
+        interval_ms: 1000,
+        timeout_ms: 1000,
+        condition: { type: "exit-code", expect: 0 },
+        output_policy: {},
         time_created: 1,
       })
       .run()
