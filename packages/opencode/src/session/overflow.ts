@@ -11,10 +11,11 @@ export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outpu
   const context = input.model.limit.context
   if (context === 0) return 0
 
-  const reserved =
-    input.cfg.compaction?.reserved ??
-    Math.min(COMPACTION_BUFFER, ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax))
-  if (input.model.limit.input) return Math.max(0, input.model.limit.input - reserved)
+  const maxOutput = ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax)
+  if (input.model.limit.input) {
+    const reserved = input.cfg.compaction?.reserved ?? Math.min(COMPACTION_BUFFER, maxOutput)
+    return Math.max(0, input.model.limit.input - reserved)
+  }
   // TKT-377: isOverflow compares this against the PREVIOUS completed turn's real usage
   // (lastFinished.tokens, prompt.ts) -- by the time the NEXT request actually goes out, a new
   // user message and this turn's own tool results have grown the prompt past what was measured.
@@ -25,7 +26,9 @@ export function usable(input: { cfg: ConfigV1.Info; model: Provider.Model; outpu
   // Same max-with-floor shape as the V2 estimator's reserve (session/compaction.ts's
   // Math.max(output, config.buffer)): guarantee at least COMPACTION_BUFFER of headroom for
   // between-turn growth, not just whatever the model's own (possibly much smaller) output cap is.
-  return Math.max(0, context - Math.max(ProviderTransform.maxOutputTokens(input.model, input.outputTokenMax), COMPACTION_BUFFER))
+  // An explicit cfg.compaction.reserved still overrides the floor, same as the other branch.
+  const reserved = input.cfg.compaction?.reserved ?? Math.max(maxOutput, COMPACTION_BUFFER)
+  return Math.max(0, context - reserved)
 }
 
 export function isOverflow(input: {

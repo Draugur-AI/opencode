@@ -584,6 +584,23 @@ describe("session.compaction.isOverflow", () => {
       }),
     ),
   )
+
+  it.live(
+    "TKT-377/Copilot: an explicit cfg.compaction.reserved still overrides the floor in the no-limit.input branch",
+    provideTmpdirInstance(
+      () =>
+        Effect.gen(function* () {
+          const compact = yield* SessionCompaction.Service
+          const model = createModel({ context: 131_072, output: 8_192 })
+          // reserved=1000 explicitly configured, well below both maxOutputTokens (8192) and
+          // COMPACTION_BUFFER (20000) -- usable = 131072-1000 = 130072. 129_500 is below that
+          // (so isOverflow is false), even though it would exceed the 20000-floor default.
+          const tokens = { input: 129_500, output: 0, reasoning: 0, cache: { read: 0, write: 0 } }
+          expect(yield* compact.isOverflow({ tokens, model })).toBe(false)
+        }),
+      { config: { compaction: { reserved: 1_000 } } },
+    ),
+  )
 })
 
 describe("session.compaction.create", () => {
