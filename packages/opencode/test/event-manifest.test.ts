@@ -10,14 +10,21 @@ describe("public event manifest", () => {
     expect(EventManifest.Latest).toBe(SchemaEventManifest.Latest)
     expect(EventManifest.Durable).toBe(SchemaEventManifest.Durable)
     // 93 since session.next.lifecycle.changed joined the manifest (89), then the goal/ledger
-    // quartet (93). This assertion exists so that adding a public wire type is a deliberate
-    // act; update the count with the addition.
-    expect(EventManifest.Latest.size).toBe(93)
+    // quartet (93), then the Monitor septet -- TKT-322 (100). This assertion exists so that
+    // adding a public wire type is a deliberate act; update the count with the addition.
+    expect(EventManifest.Latest.size).toBe(100)
     expect(EventManifest.Latest.has("session.next.lifecycle.changed")).toBe(true)
     expect(EventManifest.Latest.has("session.next.goal.updated")).toBe(true)
     expect(EventManifest.Latest.has("session.next.goal.status_changed")).toBe(true)
     expect(EventManifest.Latest.has("session.next.ledger.added")).toBe(true)
     expect(EventManifest.Latest.has("session.next.ledger.superseded")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.created")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.started")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.checked")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.triggered")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.failed")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.cancelled")).toBe(true)
+    expect(EventManifest.Latest.has("session.next.monitor.orphaned")).toBe(true)
     expect(EventManifest.Latest.get("session.next.step.ended")).toBe(SessionEvent.Step.Ended)
     expect(EventManifest.Latest.get("todo.updated")).toBe(Todo.Event.Updated)
     expect(EventManifest.Latest.has("ide.installed")).toBe(false)
