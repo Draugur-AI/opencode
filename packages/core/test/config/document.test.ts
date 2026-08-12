@@ -113,6 +113,28 @@ describe("ConfigDocument", () => {
     ),
   )
 
+  // Regression for a suppressed Copilot review finding on PR #32: `redactParsed`'s
+  // typeof/null guard alone lets an array root through, and `Object.fromEntries(Object.entries(...))`
+  // silently reshapes it into a plain object with numeric string keys. An array root is invalid
+  // against the config schema (so this exercises the same fail-closed diagnostics path), but
+  // `parsed` must still mirror the real document's shape, not a redaction side effect of it.
+  it.live("readTarget's parsed value stays an array when the document root is an array", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        yield* Effect.promise(() => fs.writeFile(path.join(tmp.path, "opencode.json"), "[1, 2, 3]"))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          expect(Array.isArray(read.parsed)).toBe(true)
+          expect(read.parsed).toEqual([1, 2, 3])
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
   it.live("readTarget fails with TargetNotFoundError for an id from a different discovery", () =>
     withTmp((tmp) =>
       Effect.gen(function* () {

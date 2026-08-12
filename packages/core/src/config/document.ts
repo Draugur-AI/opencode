@@ -183,7 +183,12 @@ function redactField(key: string, value: unknown): unknown {
 // Applied to a WHOLE parsed document (readTarget's `parsed`), as opposed to `redactField`, which
 // `computeEffective` calls per top-level key while building its field-by-field provenance map.
 function redactParsed(parsed: unknown): unknown {
-  if (typeof parsed !== "object" || parsed === null) return parsed
+  // Array.isArray is required, not just the typeof/null guard: `typeof [] === "object"` and
+  // `[] !== null`, so an array-rooted document (e.g. a malformed config with an array at the top
+  // level) would otherwise pass through Object.fromEntries(Object.entries(...)) and come back as a
+  // plain object with numeric string keys -- silently reshaping the parsed value beyond the
+  // intended mcp redaction (Copilot review, PR #32).
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return parsed
   return Object.fromEntries(Object.entries(parsed as Record<string, unknown>).map(([k, v]) => [k, redactField(k, v)]))
 }
 
