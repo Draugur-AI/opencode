@@ -59,6 +59,15 @@ const layer = Layer.effect(
     return Service.of({
       environment: Effect.fn("SystemPrompt.environment")(function* (model: Provider.Model) {
         const ctx = yield* InstanceState.context
+        // TKT-397: this build serves its OWN docs at /docs (TKT-391) and the model has no other way
+        // to learn this instance's base URL -- nothing else in <env> carries it and the port is
+        // assigned at listen time. Without this line the prompts below can only name a URL they
+        // guessed. Dynamic import matches plugin/index.ts:160 and is required, not stylistic: a
+        // static one closes a real 4-node cycle, server/server.ts -> routes/instance/httpapi/
+        // server.ts -> session/prompt.ts -> session/system.ts. Read at call time, so `url` is
+        // whatever listen() set; undefined (no listener) omits the line rather than guessing.
+        const { Server } = yield* Effect.promise(() => import("../server/server"))
+        const docsURL = Server.url ? new URL("/docs", Server.url).toString() : undefined
         const references = yield* Effect.gen(function* () {
           return (yield* (yield* Reference.Service).list()).filter((reference) => reference.description !== undefined)
         }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
@@ -72,6 +81,7 @@ const layer = Layer.effect(
             `  Is directory a git repo: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
             `  Today's date: ${new Date().toDateString()}`,
+            ...(docsURL ? [`  Documentation for this build: ${docsURL}`] : []),
             `</env>`,
           ].join("\n"),
           references.length === 0
