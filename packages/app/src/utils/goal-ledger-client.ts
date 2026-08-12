@@ -7,26 +7,26 @@
  * because those routes did not exist when it was packed. `@opencode-ai/client-next` aliases the
  * workspace client, which is regenerated from the live protocol.
  *
- * 🛑 This file is one of exactly FOUR bounded importers of `@opencode-ai/client-next` — the
+ * 🛑 This file is one of a small, bounded set of importers of `@opencode-ai/client-next` — the
  * others are `session-lifecycle-client.ts` (session lifecycle), `project-client.ts` (project
- * data), and `mcp-client.ts` (MCP catalog, live status, and config-document editing for the MCP
- * tab, TKT-323 chunk 3). Each owns its own verbs and none edit the others; nothing else may
- * import the alias at all. Four client
+ * data), `mcp-client.ts` (MCP catalog, live status, and config-document editing for the MCP tab,
+ * TKT-323 chunk 3), and `skill-client.ts` (skill catalog for the Skills tab, TKT-323 chunk 3).
+ * Each owns its own verbs and none edit the others; nothing else may import the alias at all.
+ * FORK.md's ledger is the single count authority for how many importers exist and why — this
+ * header does not restate the number, so the two cannot drift apart (Henry's finding, PR #40
+ * review lineage: six hand-counted copies of a thrice-moved number is indefensible). Client
  * generations in one app is a wart we carry on purpose and for a bounded time, not a pattern to
- * spread. TKT-328 migrates every call site onto one client and deletes the alias and all four
- * modules. See FORK.md's ledger.
+ * spread. TKT-328 migrates every call site onto one client and deletes the alias and every module
+ * the ledger lists.
  *
- * This is the third importer, added by the lead's re-scope of TKT-328 (2026-08-11): the ticket
+ * This was the third importer, added by the lead's re-scope of TKT-328 (2026-08-11): the ticket
  * was mechanical-migration-shaped until a real attempt measured 534 semantic type errors, and was
  * re-scoped to a designed migration with an explicit interim state of three bounded importers
- * (session-lifecycle, project, goal-ledger) rather than two. A fourth (`mcp-client.ts`, named
- * `mcp-catalog-client.ts` at first) followed the next day, 2026-08-12, because the Integrations
- * page has no other client that can serve it -- then widened in place (same file, renamed) hours
- * later the same day to also cover config-document editing for the same tab, rather than opening
- * a fifth file for a verb family the MCP tab already needed. If you are adding a FIFTH importer,
- * that is a stronger signal still to finish TKT-328 instead.
+ * (session-lifecycle, project, goal-ledger) rather than two. More followed by the same discipline
+ * — each addition is its own ruling, recorded in the ledger, not a count restated here. If you are
+ * adding a new importer, that is a stronger signal still to finish TKT-328 instead.
  *
- * Six calls, nothing else: goal get/update/status, ledger list/add/supersede. Input/output shapes
+ * Calls, nothing else: goal get/update/status, ledger list/add/supersede. Input/output shapes
  * are the generated client's own wire types (ultimately produced from `@opencode-ai/schema`'s
  * session-goal/session-ledger modules via the protocol layer) — never hand-written here. Note
  * these are the WIRE shapes (e.g. `time.created` as a millis number), not the schema's own decoded

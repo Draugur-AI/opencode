@@ -13,26 +13,30 @@
  * `@opencode-ai/client-next` aliases the workspace client, regenerated from the live protocol, and
  * is the only one of the three with all of this at the current shape.
  *
- * 🛑 This file is one of exactly FOUR bounded importers of `@opencode-ai/client-next` — the others
- * are `session-lifecycle-client.ts` (session lifecycle), `project-client.ts` (project data), and
- * `goal-ledger-client.ts` (session goal + working ledger). Each owns its own verbs and neither
- * edits the others; nothing else may import the alias at all. Four client generations in one app is
- * a wart we carry on purpose and for a bounded time, not a pattern to spread. TKT-328 migrates
- * every call site onto one client and deletes the alias and all four modules. See FORK.md's ledger.
+ * 🛑 This file is one of a small, bounded set of importers of `@opencode-ai/client-next` — the
+ * others are `session-lifecycle-client.ts` (session lifecycle), `project-client.ts` (project data),
+ * `goal-ledger-client.ts` (session goal + working ledger), and `skill-client.ts` (skill catalog for
+ * the Skills tab, TKT-323 chunk 3). Each owns its own verbs and none edit the others; nothing else
+ * may import the alias at all. FORK.md's ledger is the single count authority for how many
+ * importers exist and why — this header does not restate the number, so the two cannot drift apart
+ * (Henry's finding, PR #40 review lineage: six hand-counted copies of a thrice-moved number is
+ * indefensible). Client generations in one app is a wart we carry on purpose and for a bounded
+ * time, not a pattern to spread. TKT-328 migrates every call site onto one client and deletes the
+ * alias and every module the ledger lists.
  *
- * This is the fourth importer, added by the lead's re-scope for TKT-323 chunk 3 (2026-08-12): the
+ * This was the fourth importer, added by the lead's re-scope for TKT-323 chunk 3 (2026-08-12): the
  * Integrations page cannot exist without it -- the other two clients are structurally missing the
  * surface (see above), so this page exists via client-next or not at all. Widened the SAME day
- * (still chunk 3) to add the three config-document verbs FOR THE MCP TAB specifically -- widening
- * an importer that already serves this exact feature adds zero to the bound (still four files),
- * where a fifth file for the identical purpose would not. Skills/plugins/profiles editing is NOT
- * this file's job: when a second real consumer of config-document read/validate/apply exists,
- * THAT is the moment to decide widen-this-file vs. new-file, not before -- speculative generality
- * for editors that do not exist yet is exactly the flexibility-nobody-requested this app avoids by
- * convention. If you are adding a FIFTH importer for something the MCP tab does not need, that is
- * a stronger signal still to finish TKT-328 instead.
+ * (still chunk 3) to add the config-document verbs FOR THE MCP TAB specifically -- widening an
+ * importer that already serves this exact feature adds nothing to the bound, where a new file for
+ * the identical purpose would not. Skills/plugins/profiles editing is NOT this file's job: when a
+ * second real consumer of config-document read/validate/apply exists, THAT is the moment to decide
+ * widen-this-file vs. new-file, not before -- speculative generality for editors that do not exist
+ * yet is exactly the flexibility-nobody-requested this app avoids by convention. If you are adding
+ * a new importer for something the MCP tab does not need, that is a stronger signal still to finish
+ * TKT-328 instead.
  *
- * Six calls: mcp.list (the static catalog), mcp.status (live connection status, per server name,
+ * Calls: mcp.list (the static catalog), mcp.status (live connection status, per server name,
  * 503 when no live McpRuntime exists in this assembly -- see `isServiceUnavailableError`), and
  * config-document's targetList/targetRead/targetValidate/targetApply (the typed Patch mechanism
  * editing goes through -- see `document.ts`'s own doc comment for why a client editing through

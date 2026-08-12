@@ -1,6 +1,6 @@
 import fs from "fs/promises"
 import path from "path"
-import { describe, expect } from "bun:test"
+import { describe, expect, test } from "bun:test"
 import { Effect, Layer } from "effect"
 import { AgentV2 } from "@opencode-ai/core/agent"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
@@ -122,4 +122,69 @@ describe("SkillV2", () => {
       ),
     ),
   )
+
+  test("mergeSkills marks the winner and every shadowed loser, in registration order", () => {
+    const first = SkillV2.Info.make({
+      name: "review",
+      description: "First",
+      location: AbsolutePath.make("/first/review/SKILL.md"),
+      content: "# review",
+    })
+    const second = SkillV2.Info.make({
+      name: "review",
+      description: "Second",
+      location: AbsolutePath.make("/second/review/SKILL.md"),
+      content: "# review",
+    })
+    const solo = SkillV2.Info.make({
+      name: "solo",
+      location: AbsolutePath.make("/first/solo/SKILL.md"),
+      content: "# solo",
+    })
+    const sourceA: SkillV2.Source = { type: "directory", path: AbsolutePath.make("/first") }
+    const sourceB: SkillV2.Source = { type: "directory", path: AbsolutePath.make("/second") }
+
+    const entries = SkillV2.mergeSkills([
+      { source: sourceA, skills: [first, solo] },
+      { source: sourceB, skills: [second] },
+    ])
+
+    expect(entries).toEqual([
+      { skill: first, source: sourceA, sourceIndex: 0, shadowedBy: { source: sourceB, sourceIndex: 1 } },
+      { skill: solo, source: sourceA, sourceIndex: 0 },
+      { skill: second, source: sourceB, sourceIndex: 1 },
+    ])
+  })
+
+  test("mergeSkills: perturbing registration order moves the winner -- proof it's the same ordering list() uses", () => {
+    const first = SkillV2.Info.make({
+      name: "review",
+      description: "First",
+      location: AbsolutePath.make("/first/review/SKILL.md"),
+      content: "# review",
+    })
+    const second = SkillV2.Info.make({
+      name: "review",
+      description: "Second",
+      location: AbsolutePath.make("/second/review/SKILL.md"),
+      content: "# review",
+    })
+    const sourceA: SkillV2.Source = { type: "directory", path: AbsolutePath.make("/first") }
+    const sourceB: SkillV2.Source = { type: "directory", path: AbsolutePath.make("/second") }
+
+    const normal = SkillV2.mergeSkills([
+      { source: sourceA, skills: [first] },
+      { source: sourceB, skills: [second] },
+    ])
+    expect(normal.find((entry) => !entry.shadowedBy)?.skill.description).toBe("Second")
+
+    // Same two sources, registration order reversed -- the winner must flip, exactly as it would
+    // if the sources array feeding list() were reordered. This is the "both surfaces move
+    // together" property: there is no second ordering to keep in sync, because there is only one.
+    const reversed = SkillV2.mergeSkills([
+      { source: sourceB, skills: [second] },
+      { source: sourceA, skills: [first] },
+    ])
+    expect(reversed.find((entry) => !entry.shadowedBy)?.skill.description).toBe("First")
+  })
 })

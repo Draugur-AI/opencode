@@ -3553,6 +3553,60 @@ export type SkillsListOutput = {
   }>
 }
 
+export type SkillsCatalogInput = {
+  readonly location?: {
+    readonly location?: { readonly directory?: string | undefined; readonly workspace?: string | undefined } | undefined
+  }["location"]
+}
+
+export type SkillsCatalogOutput = {
+  readonly location: {
+    readonly directory: string
+    readonly workspaceID?: string
+    readonly project: { readonly id: string; readonly directory: string }
+  }
+  readonly data: ReadonlyArray<{
+    readonly skill: {
+      readonly name: string
+      readonly description?: string
+      readonly slash?: boolean
+      readonly location: string
+      readonly content: string
+    }
+    readonly source:
+      | { readonly type: "directory"; readonly path: string }
+      | { readonly type: "url"; readonly url: string }
+      | {
+          readonly type: "embedded"
+          readonly skill: {
+            readonly name: string
+            readonly description?: string
+            readonly slash?: boolean
+            readonly location: string
+            readonly content: string
+          }
+        }
+    readonly sourceIndex: number
+    readonly shadowedBy?: {
+      readonly source:
+        | { readonly type: "directory"; readonly path: string }
+        | { readonly type: "url"; readonly url: string }
+        | {
+            readonly type: "embedded"
+            readonly skill: {
+              readonly name: string
+              readonly description?: string
+              readonly slash?: boolean
+              readonly location: string
+              readonly content: string
+            }
+          }
+      readonly sourceIndex: number
+    } | null
+    readonly target?: string | null
+  }>
+}
+
 export type EventsSubscribeOutput = OpenCodeEventEncoded
 
 export type PtysListInput = {
