@@ -103,10 +103,13 @@ test("MCP tab shows live status per server, distinct from the static catalog", a
   await expect(sentryRow).toContainText("connection refused")
 
   // The catalog's own static status ("disabled") is a Tag, and the live status agrees here --
-  // but they are two different fields, asserted separately so a future change can't silently
-  // collapse "the user disabled it" into "the live status happens to also say disabled".
+  // but they are two different fields. Asserted against each element independently (Copilot
+  // review, PR #36: a single toContainText("disabled") on the whole row would still pass if a
+  // regression collapsed the two into one element) so a future change can't silently collapse
+  // "the user disabled it" into "the live status happens to also say disabled".
   const parkedRow = list.locator(".settings-v2-mcp-row", { hasText: "parked" })
-  await expect(parkedRow).toContainText("disabled")
+  await expect(parkedRow.locator(".settings-v2-mcp-main")).toContainText("disabled")
+  await expect(parkedRow.locator(".settings-v2-mcp-status-label")).toHaveText("disabled")
 
   await expect(dialog.locator('[data-component="mcp-runtime-unavailable"]')).toHaveCount(0)
 })

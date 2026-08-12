@@ -65,4 +65,10 @@ export const createMcpCatalogClient = (conn: ServerConnection.Any) => {
 }
 
 export type McpCatalogClient = ReturnType<typeof createMcpCatalogClient>
+// Derived from the client's OWN return shape rather than re-exporting the client-next wire types
+// directly -- callers (use-mcp-catalog.ts) get the types they need without importing
+// `@opencode-ai/client-next` a second time, keeping the alias's surface bounded to this one file
+// (Copilot review, PR #36).
+export type McpListResult = Awaited<ReturnType<McpCatalogClient["mcp"]["list"]>>
+export type McpStatusResult = Awaited<ReturnType<McpCatalogClient["mcp"]["status"]>>
 export { isServiceUnavailableError }

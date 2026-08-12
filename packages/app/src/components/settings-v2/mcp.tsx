@@ -112,7 +112,7 @@ export const SettingsMcpV2: Component<{ directory: Accessor<string | undefined> 
                             </Show>
                           </div>
                           <Show when={statusLabel(entry)}>
-                            <span class="settings-v2-mcp-status-label">{statusLabel(entry)}</span>
+                            {(label) => <span class="settings-v2-mcp-status-label">{label()}</span>}
                           </Show>
                           <Show when={errorText(entry)}>
                             {(text) => <span class="settings-v2-mcp-error truncate">{text()}</span>}

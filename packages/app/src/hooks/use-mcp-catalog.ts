@@ -2,10 +2,10 @@ import { type Accessor, createEffect, onCleanup } from "solid-js"
 import { createStore, reconcile } from "solid-js/store"
 import { useServerSDK } from "@/context/server-sdk"
 import { createMcpCatalogClient, isServiceUnavailableError } from "@/utils/mcp-catalog-client"
-import type { McpListOutput, McpStatusOutput } from "@opencode-ai/client-next"
+import type { McpListResult, McpStatusResult } from "@/utils/mcp-catalog-client"
 
-export type McpCatalogEntry = McpListOutput["data"][number]
-export type McpLiveStatus = McpStatusOutput["data"][string]
+export type McpCatalogEntry = McpListResult["data"][number]
+export type McpLiveStatus = McpStatusResult["data"][string]
 
 /**
  * `status` is a three-state discriminated union, not a boolean loading flag: a caller must be
@@ -23,7 +23,6 @@ const statusPollMs = 10_000
 
 export function useMcpCatalog(directory: Accessor<string | undefined>) {
   const sdk = useServerSDK()
-  const client = () => createMcpCatalogClient(sdk().server)
 
   const [catalog, setCatalog] = createStore<{ entries: McpCatalogEntry[]; loading: boolean; error?: string }>({
     entries: [],
@@ -33,12 +32,16 @@ export function useMcpCatalog(directory: Accessor<string | undefined>) {
 
   createEffect(() => {
     const dir = directory()
+    // Created once per effect run (directory/server change), not once per call -- list and every
+    // status poll share the same server connection instead of each allocating its own client
+    // (Copilot review, PR #36).
+    const client = createMcpCatalogClient(sdk().server)
     let dead = false
     setCatalog("loading", true)
     setStatus("state", { tag: "loading" })
 
-    void client()
-      .mcp.list(dir ? { location: { directory: dir } } : undefined)
+    void client.mcp
+      .list(dir ? { location: { directory: dir } } : undefined)
       .then((result) => {
         if (dead) return
         setCatalog({ entries: [...result.data], loading: false, error: undefined })
@@ -50,7 +53,7 @@ export function useMcpCatalog(directory: Accessor<string | undefined>) {
 
     const refreshStatus = async () => {
       try {
-        const result = await client().mcp.status(dir ? { location: { directory: dir } } : undefined)
+        const result = await client.mcp.status(dir ? { location: { directory: dir } } : undefined)
         if (dead) return
         setStatus("state", reconcile({ tag: "ready", status: result.data }))
       } catch (cause) {
