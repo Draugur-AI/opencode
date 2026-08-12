@@ -259,6 +259,10 @@ function redactParsed(parsed: unknown): unknown {
 // field, so there is nothing on that op left for this check to catch. Direct string comparison,
 // not `mcpSecretPaths`: a credential patch's `value` already IS the secret value itself (never a
 // nested object to walk), so there is no allowlist to re-derive here.
+//
+// 🛑 This narrowing depends on `ConfigMCP.ServerNonSecret` (config-mcp.ts) staying unable to
+// express a secret field. If that type is ever widened to carry one, this function's coverage
+// silently goes stale in the same way -- see that type's own doc comment, which points back here.
 function patchWritesRedactedSentinel(patch: Patch): boolean {
   return patch.op === "mcp.server.credential.set" && patch.value === REDACTED
 }

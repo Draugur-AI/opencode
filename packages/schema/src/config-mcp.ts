@@ -59,6 +59,16 @@ export class Info extends Schema.Class<Info>("ConfigV2.MCP")({
 // property of the type, not a discipline someone has to remember. Credential writes go through
 // the separate `mcp.server.credential.set`/`.remove` field ops instead (config-document.ts),
 // which write (or delete) exactly one named secret slot and never read one back.
+//
+// 🛑 This narrowing is a load-bearing invariant for `document.ts`'s `patchWritesRedactedSentinel`,
+// not just for the merge logic above: that check shrank to covering ONLY `mcp.server.credential.
+// set` BECAUSE this type structurally cannot express a secret field on `mcp.server.set` at all --
+// there is nothing left on that op for the sentinel-rejection check to catch. Widening this type
+// to carry any secret-shaped field again would silently un-cover that op without either site
+// visibly failing -- no type error, no test failure until someone writes `[redacted]` back through
+// it. If you add a field here that can hold a secret, `patchWritesRedactedSentinel` needs the same
+// change in the same commit.
+
 export class LocalNonSecret extends Schema.Class<LocalNonSecret>("ConfigV2.MCP.LocalNonSecret")({
   type: Schema.Literal("local"),
   command: Schema.String.pipe(Schema.Array),
