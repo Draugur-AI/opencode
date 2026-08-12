@@ -45,17 +45,25 @@ function lookup(embeddedWebDocs: Record<string, string>, requestPath: string) {
   return undefined
 }
 
+export function serveEmbeddedDocsEffect(
+  requestPath: string,
+  fs: FSUtil.Interface,
+  embeddedWebDocs: Record<string, string>,
+) {
+  const found = lookup(embeddedWebDocs, requestPath)
+  if (!found) return Effect.succeed(notEmbedded())
+
+  return fs.readFile(found.file).pipe(
+    Effect.map((body) => docsResponse(found.file, body, found.status)),
+    Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(notEmbedded())),
+  )
+}
+
 export function serveDocsEffect(requestPath: string, fs: FSUtil.Interface, disableEmbeddedDocs: boolean) {
   return Effect.gen(function* () {
     const embeddedWebDocs = yield* Effect.promise(() => embeddedDocs(disableEmbeddedDocs))
     if (!embeddedWebDocs) return notEmbedded()
 
-    const found = lookup(embeddedWebDocs, requestPath)
-    if (!found) return notEmbedded()
-
-    return yield* fs.readFile(found.file).pipe(
-      Effect.map((body) => docsResponse(found.file, body, found.status)),
-      Effect.catchReason("PlatformError", "NotFound", () => Effect.succeed(notEmbedded())),
-    )
+    return yield* serveEmbeddedDocsEffect(requestPath, fs, embeddedWebDocs)
   })
 }
