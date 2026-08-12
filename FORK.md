@@ -336,8 +336,12 @@ be the MemoMap-split defect above, moved into a closure where no graph analysis 
 real, considered, and rejected alternative on this ticket). `Effect.serviceOption` reads the
 ambient Context without adding a static requirement, so the layer stays `Layer.succeed` (`R =
 never`) and reuses whatever single instance the assembly's own `app`/`AppLayer` tree already
-constructed — proven in `packages/core/test/config/mcp-runtime.test.ts`'s construction-counter
-test, the same instrument that caught the SessionExecutionLocal split-brain above. **Before
+constructed. The underlying mechanism this reuse depends on — a shared MemoMap dedupes a node
+reachable from two separate compiles — is proven directly by
+`packages/core/test/config/mcp-runtime.test.ts`'s construction-counter test, the same instrument
+that caught the SessionExecutionLocal split-brain above; the ambient `Effect.serviceOption` read
+itself has no graph edge to duplicate in the first place, which is the point, not something a
+counter needs to separately re-prove. **Before
 building an ambient-read adapter, probe first**: confirm the target service is actually present in
 the ambient context at the real call site (not assumed) — an adapter reading ambient context that
 is never populated there is permanently, silently unavailable, which is a design defect the same
@@ -349,6 +353,17 @@ handler) and for an **adapter's own dependencies** (reading ambient context, no 
 requirement). It is **no defence at all** against a **compile-time** rejection of an unbound node
 in a shared group, because no effect ever runs — compilation rejects the graph first. Two
 different sites; both statements are true; conflating them costs real diagnosis time.
+
+**A construction-counter test asserts the deduped count AND the split count, or it is not a
+guard.** This ticket's own first draft of the test above put the counted node reachable from only
+ONE compiled group and asserted `constructions === 1` — that assertion is true whether or not
+memoMap sharing works at all, because there was never a second construction site to duplicate it.
+A counter test with no reachable failure mode is not a regression guard, it is a tautology dressed
+as one. The correct shape (both this ticket's test and TKT-349's original) puts the SAME node
+reachable from two SEPARATE `compile()` calls and asserts both directions: `=== 1` under a shared
+MemoMap, `=== 2` under separate ones. Before trusting a construction-counter test, break the
+mechanism it claims to guard on purpose and confirm the assertion actually fails — a test that
+cannot go red is not evidence.
 
 ## Merge-blocking gates
 

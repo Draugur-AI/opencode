@@ -49,6 +49,16 @@ const layer = Layer.succeed(
         const mcp = yield* Effect.serviceOption(MCP.Service)
         const store = yield* Effect.serviceOption(InstanceStore.Service)
         const location = yield* Effect.serviceOption(Location.Service)
+        // A DEFECT (Effect.die), never McpRuntime.UnavailableError, when this adapter is
+        // wired -- Ethan and Henry's TKT-323 verdict, recorded here rather than left to be
+        // "fixed" back to a typed failure later. UnavailableError means "this assembly has no
+        // live MCP runtime," which is a legitimate, expected state the port's own bound default
+        // already answers correctly for packages/cli/sdk-next. None reaching HERE means the
+        // opposite: this assembly DOES have a runtime -- McpRuntimeLive was deliberately wired
+        // in, replacing the default -- and the adapter still could not reach it. That is a wiring
+        // regression, not an absence. Answering UnavailableError for it would be indistinguishable
+        // from the legitimate case to a client, inviting retries against a lie that will never
+        // resolve; a die surfaces loudly instead, which is what an internal wiring bug should do.
         if (Option.isNone(mcp) || Option.isNone(store) || Option.isNone(location))
           return yield* Effect.die(
             new Error(

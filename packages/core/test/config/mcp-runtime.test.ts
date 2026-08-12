@@ -1,5 +1,5 @@
 import { describe, expect } from "bun:test"
-import { Cause, Context, Effect, Exit, Layer, Option } from "effect"
+import { Cause, Context, Effect, Exit, Layer, Option, Scope } from "effect"
 import { McpRuntime } from "@opencode-ai/core/config/mcp-runtime"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -51,18 +51,19 @@ describe("McpRuntime", () => {
       expect(status).toEqual({ example: { status: "connected" } })
     }))
 
-  // TKT-323 chunk 2, Ethan's ruling: the same instrument that caught the SessionExecutionLocal
-  // split-brain (TKT-349), applied to this ticket's shape. McpRuntimeLive reads MCP.Service and
-  // InstanceStore.Service via `Effect.serviceOption` INSIDE its status() method body, never via a
-  // `deps:` graph edge -- the whole point being that it reuses whatever single instance the
-  // httpapi assembly's `app` build already constructed, rather than building its own. This proves
-  // that reuse actually holds: a global-analog service built once via one compile (standing in
-  // for `app`), and a second, SEPARATE compile (standing in for `locationServices`) whose only
-  // node reads that same service ambiently, share a memoMap and construct the underlying service
-  // exactly once when merged -- not twice, which would be a live, silently duplicated MCP.Service
-  // or InstanceStore.Service, invisible to every functional assertion (see FORK.md's
-  // "process singleton is a singleton per MemoMap" entry, TKT-349).
-  it.effect("an ambient serviceOption read reuses the sibling compile's instance, not a second one", () =>
+  // TKT-323 chunk 2, Ethan's ruling, corrected per Henry's review: the same instrument that
+  // caught the SessionExecutionLocal split-brain (TKT-349), applied to this ticket's shape.
+  //
+  // The FIRST version of this test asserted constructions === 1 with `globalNode` reachable from
+  // only ONE compiled group (appTree) and `locationTree` reading it purely via
+  // `Effect.serviceOption`, never as a graph member. That is not a guard: with no second
+  // construction site anywhere in the test, the assertion reads 1 whether or not memoMap sharing
+  // works at all -- it cannot go red. A construction-counter test asserts the DEDUPED count AND
+  // the SPLIT count, or it is not a guard (see FORK.md's canonical pattern line). Fixed by putting
+  // the SAME global node in BOTH compiled groups -- matching TKT-349's own Left/Right shape
+  // exactly -- and asserting both sides: constructions === 1 under a shared MemoMap, === 2 under
+  // separate ones.
+  it.effect("a node reachable from two separate compiles constructs once shared, twice split", () =>
     Effect.gen(function* () {
       let constructions = 0
       class Global extends Context.Service<Global, { value: string }>()("test/McpRuntime/Global") {}
@@ -73,41 +74,49 @@ describe("McpRuntime", () => {
           return Global.of({ value: "shared" })
         }),
       )
-
       const globalNode = LayerNode.make({ service: Global, layer: globalLayer, deps: [] })
-      // Stands in for `app`'s LayerNode.group([..., MCP.node, ..., InstanceStore.node, ...]):
-      // a direct, tracked consumer of the global service.
-      const appTree = LayerNode.compile(LayerNode.group([globalNode])) as Layer.Layer<Global>
 
-      // Stands in for locationServices' McpRuntime.node: reads the SAME tag via serviceOption,
-      // deps: [] -- no graph edge to globalNode at all, exactly McpRuntimeLive's own shape.
-      const ambientLayer = Layer.succeed(
-        McpRuntime.Service,
-        McpRuntime.Service.of({
-          status: () =>
-            Effect.gen(function* () {
-              const global = yield* Effect.serviceOption(Global)
-              return { seen: { status: Option.isSome(global) ? "connected" : "disabled" } }
-            }),
+      // Stands in for `app`'s LayerNode.group([..., MCP.node, ..., InstanceStore.node, ...]): a
+      // direct, tracked consumer of the global service.
+      const appNode = LayerNode.make({
+        service: McpRuntime.Service,
+        layer: Layer.succeed(McpRuntime.Service, McpRuntime.Service.of({ status: () => Effect.succeed({}) })),
+        deps: [globalNode],
+      })
+      const appLayer = LayerNode.compile(LayerNode.group([appNode])) as Layer.Layer<McpRuntime.Service>
+
+      // Stands in for `locationServices`' McpRuntime.node reaching the SAME global service via a
+      // second, independent compile -- the shape this test actually needs to distinguish deduped
+      // from split, not the ambient-serviceOption shape McpRuntimeLive itself uses (that shape has
+      // no graph edge to duplicate in the first place; this test is the standing guard for the
+      // mechanism the ambient read relies on, not a re-test of McpRuntimeLive's own code).
+      const locationNode = LayerNode.make({
+        service: McpRuntime.Service,
+        layer: Layer.succeed(McpRuntime.Service, McpRuntime.Service.of({ status: () => Effect.succeed({}) })),
+        deps: [globalNode],
+      })
+      const locationLayer = LayerNode.compile(LayerNode.group([locationNode])) as Layer.Layer<McpRuntime.Service>
+
+      constructions = 0
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope
+          // Each build gets its OWN fresh MemoMap -- the unshared case.
+          yield* Layer.buildWithMemoMap(appLayer, Layer.makeMemoMapUnsafe(), scope)
+          yield* Layer.buildWithMemoMap(locationLayer, Layer.makeMemoMapUnsafe(), scope)
         }),
       )
-      const locationTree = LayerNode.compile(
-        LayerNode.group([makeLocationNode({ service: McpRuntime.Service, layer: ambientLayer, deps: [] })]),
-      ) as Layer.Layer<McpRuntime.Service>
+      expect(constructions).toBe(2)
 
-      // Both "sides" of the real composition consume the global service in one execution --
-      // app's own direct dependent, and McpRuntime's status() via serviceOption -- exactly how
-      // createRoutes()'s own pipe merges locationServiceMapV2 and AppNodeBuilderV1.build(app)
-      // into ONE overall Layer, built once at server startup. No manual memoMap threading is
-      // needed here: a single Effect execution memoizes a layer's construction across everywhere
-      // it's provided within that one run, which is what this asserts.
       constructions = 0
-      yield* Effect.gen(function* () {
-        yield* Global
-        const runtime = yield* McpRuntime.Service
-        yield* runtime.status()
-      }).pipe(Effect.provide(locationTree), Effect.provide(appTree))
-
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const scope = yield* Scope.Scope
+          const sharedMemoMap = Layer.makeMemoMapUnsafe()
+          yield* Layer.buildWithMemoMap(appLayer, sharedMemoMap, scope)
+          yield* Layer.buildWithMemoMap(locationLayer, sharedMemoMap, scope)
+        }),
+      )
       expect(constructions).toBe(1)
     }))
 })
