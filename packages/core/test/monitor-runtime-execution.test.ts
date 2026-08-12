@@ -3,7 +3,8 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 import { eq } from "drizzle-orm"
-import { Deferred, Effect, Layer } from "effect"
+import { Deferred, Effect, Fiber, Layer } from "effect"
+import * as TestClock from "effect/testing/TestClock"
 import type { ChildProcess } from "effect/unstable/process"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
@@ -11,6 +12,7 @@ import { Database } from "@opencode-ai/core/database/database"
 import { EventV2 } from "@opencode-ai/core/event"
 import { Global } from "@opencode-ai/core/global"
 import { LocationMutation } from "@opencode-ai/core/location-mutation"
+import { buildLocationServiceMap, LocationServiceMap } from "@opencode-ai/core/location-services"
 import { Monitor } from "@opencode-ai/core/monitor"
 import { MonitorCheckTable } from "@opencode-ai/core/monitor/sql"
 import { MonitorOutput } from "@opencode-ai/core/monitor/output"
@@ -23,6 +25,7 @@ import { AbsolutePath } from "@opencode-ai/core/schema"
 import { SessionV2 } from "@opencode-ai/core/session"
 import { SessionExecution } from "@opencode-ai/core/session/execution"
 import { SessionProjector } from "@opencode-ai/core/session/projector"
+import { SessionStore } from "@opencode-ai/core/session/store"
 import { SessionMessageTable, SessionTable } from "@opencode-ai/core/session/sql"
 import { SessionMessage } from "@opencode-ai/schema/session-message"
 import { testEffect } from "./lib/effect"
@@ -39,6 +42,7 @@ let runImpl: (
 ) => Effect.Effect<AppProcess.RunResult, AppProcess.AppProcessError> = () => Effect.die("run() not scripted for this test")
 const runs: Array<{ readonly command: string }> = []
 let denyAction: string | undefined
+let askAction: string | undefined
 const assertions: PermissionV2.AssertInput[] = []
 const wakes: SessionV2.ID[] = []
 
@@ -47,6 +51,7 @@ const reset = () => {
   assertions.length = 0
   wakes.length = 0
   denyAction = undefined
+  askAction = undefined
   runImpl = () => Effect.die("run() not scripted for this test")
 }
 
@@ -62,13 +67,16 @@ const locationMutation = Layer.succeed(
 const permission = Layer.succeed(
   PermissionV2.Service,
   PermissionV2.Service.of({
-    assert: (input) =>
-      Effect.sync(() => assertions.push(input)).pipe(
-        Effect.andThen(
-          input.action === denyAction ? Effect.fail(new PermissionV2.BlockedError({ rules: [] })) : Effect.void,
-        ),
-      ),
-    ask: () => Effect.die("unused"),
+    // MonitorProcess.check calls ask(), never assert() (TKT-392 interim: an unattended monitor
+    // must not block on assert()'s own "ask" branch, which awaits a reply Deferred forever here).
+    ask: (input) =>
+      Effect.sync(() => {
+        assertions.push(input)
+        const effect =
+          input.action === denyAction ? ("deny" as const) : input.action === askAction ? ("ask" as const) : ("allow" as const)
+        return { id: PermissionV2.ID.create(), effect }
+      }),
+    assert: () => Effect.die("unused"),
     reply: () => Effect.die("unused"),
     get: () => Effect.die("unused"),
     forSession: () => Effect.die("unused"),
@@ -100,18 +108,38 @@ const sessionExecution = Layer.succeed(
 const outputData = fs.mkdtempSync(path.join(os.tmpdir(), "monitor-runtime-exec-test-"))
 afterAll(() => fs.rmSync(outputData, { recursive: true, force: true }))
 
-// Database/EventV2/SessionProjector/Monitor/MonitorOutput are the REAL services -- this is what
-// makes these tests prove the full loop (event publish -> projector -> table), not just
-// runtime.ts in isolation. Only the process boundary (AppProcess), authorization
+// A real directory: once MonitorRuntime resolves LocationMutation/PermissionV2 per check via
+// LocationServiceMap.Service.get(session.location) (TKT-322 diary 2669), that pulls in
+// locationServices' own real Location.boundNode(ref) -- a fictional path was fine when
+// LocationMutation.node itself was the only thing reached, no longer once the whole per-location
+// bundle is what gets built.
+const projectDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "monitor-runtime-exec-project-"))
+afterAll(() => fs.rmSync(projectDirectory, { recursive: true, force: true }))
+
+// Database/EventV2/SessionProjector/Monitor/MonitorOutput/SessionStore are the REAL services --
+// this is what makes these tests prove the full loop (event publish -> projector -> table), not
+// just runtime.ts in isolation. Only the process boundary (AppProcess), authorization
 // (PermissionV2), path resolution (LocationMutation) and the sibling session-execution wake
-// (SessionExecution) are faked, matching tool-bash.test.ts's own choice of fake boundary.
+// (SessionExecution) are faked, matching tool-bash.test.ts's own choice of fake boundary --
+// wired in as LocationMutation.node/PermissionV2.node replacements inside a real
+// buildLocationServiceMap so MonitorRuntime.liveNode's actual LocationServiceMap.Service
+// dependency is satisfied with the real type, not a narrower stand-in.
 const deps = Layer.mergeAll(
   AppNodeBuilder.build(
-    LayerNode.group([Database.node, EventV2.node, SessionProjector.node, Monitor.node, MonitorOutput.node]),
+    LayerNode.group([
+      Database.node,
+      EventV2.node,
+      SessionProjector.node,
+      Monitor.node,
+      MonitorOutput.node,
+      SessionStore.node,
+    ]),
     [[Global.node, Global.layerWith({ data: outputData })]],
   ),
-  locationMutation,
-  permission,
+  buildLocationServiceMap([
+    [LocationMutation.node, locationMutation],
+    [PermissionV2.node, permission],
+  ]),
   appProcess,
   sessionExecution,
 )
@@ -125,13 +153,13 @@ const seed = () =>
     const id = SessionV2.ID.make(`ses_monitor_runtime_${seq++}`)
     yield* db
       .insert(ProjectTable)
-      .values({ id: Project.ID.global, worktree: AbsolutePath.make("/project"), sandboxes: [] })
+      .values({ id: Project.ID.global, worktree: AbsolutePath.make(projectDirectory), sandboxes: [] })
       .onConflictDoNothing()
       .run()
       .pipe(Effect.orDie)
     yield* db
       .insert(SessionTable)
-      .values({ id, project_id: Project.ID.global, slug: id, directory: "/project", title: id, version: "test" })
+      .values({ id, project_id: Project.ID.global, slug: id, directory: projectDirectory, title: id, version: "test" })
       .run()
       .pipe(Effect.orDie)
     return id
@@ -194,6 +222,9 @@ describe("MonitorRuntime execution loop", () => {
       expect(after?.status).toBe("failed")
       const checks = yield* db.select().from(MonitorCheckTable).where(eq(MonitorCheckTable.monitor_id, created.id)).all().pipe(Effect.orDie)
       expect(checks).toHaveLength(0)
+      // TKT-392 interim requirement: a failure wakes and notifies like a trigger does -- a
+      // silent failure is exactly the gap this closes.
+      expect(wakes).toEqual([sessionID])
     }),
   )
 
@@ -319,5 +350,84 @@ describe("MonitorRuntime execution loop", () => {
       const written = yield* Effect.promise(() => fs.promises.readFile(row.object_ref!, "utf-8"))
       expect(written).toBe(big)
     }),
+  )
+
+  it.effect(
+    "authorization is checked per check, not cached from an earlier check: revoking mid-loop denies the very next check",
+    () =>
+      Effect.gen(function* () {
+        reset()
+        const firstRun = yield* Deferred.make<void>()
+        // Check 1 succeeds (exitCode 1 does not match expect:0, so it does not trigger and the
+        // loop continues to check 2). denyAction is set only once run() for check 1 is reached --
+        // by then check 1's own permission.assert already passed, so this can only affect check 2.
+        runImpl = () => Deferred.succeed(firstRun, undefined).pipe(Effect.andThen(succeed({ exitCode: 1 })))
+        const runtime = yield* MonitorRuntime.Service
+        const monitorObj = yield* Monitor.Service
+        const sessionID = yield* seed()
+        const created = yield* declare(sessionID, { maxAttempts: 5, intervalMs: 1000 })
+
+        const fiber = yield* Effect.forkScoped(runtime.start(created.id))
+        yield* Deferred.await(firstRun)
+        denyAction = "bash" // revoked -- must take effect at the NEXT check, per diary 2669's ruling
+        yield* TestClock.adjust("1000 millis") // release the sleep between check 1 and check 2
+        yield* Fiber.join(fiber) // check 2's assert() denies -> runOne fails -> start() resolves
+
+        expect(runs).toHaveLength(1) // check 2 never reached AppProcess.run -- denied first
+        const bashAsserts = assertions.filter((a) => a.action === "bash")
+        expect(bashAsserts.length).toBeGreaterThanOrEqual(2) // asserted again for check 2, not skipped
+        const after = yield* monitorObj.get(created.id)
+        expect(after?.status).toBe("failed")
+      }),
+  )
+
+  it.effect(
+    "reactive start: MonitorEvent.Created alone starts the check loop, with no explicit start() call anywhere in this test",
+    () =>
+      Effect.gen(function* () {
+        reset()
+        const ran = yield* Deferred.make<void>()
+        runImpl = () => Deferred.succeed(ran, undefined).pipe(Effect.andThen(succeed({ exitCode: 0 })))
+        // Forces MonitorRuntime.layer (and its Created-event subscription, forkScoped with
+        // startImmediately) to construct before declaring -- diary 2669's ruling: this
+        // subscription, not a tool-called start(), is the one path that starts a declared
+        // monitor, so THIS is what the demo (declare -> trigger -> wake) actually depends on.
+        yield* MonitorRuntime.Service
+        const sessionID = yield* seed()
+        yield* declare(sessionID) // Monitor.Service.create publishes MonitorEvent.Created
+
+        // Deferred.await hangs (and this test times out) if the subscription never reacted --
+        // AppProcess.run is only ever called from inside a running check.
+        yield* Deferred.await(ran)
+        expect(runs).toHaveLength(1)
+      }),
+  )
+
+  it.effect(
+    "TKT-392 interim: a tool permission set to \"ask\" is refused (fail-closed), and the refusal names the remedy",
+    () =>
+      Effect.gen(function* () {
+        reset()
+        askAction = "bash"
+        const runtime = yield* MonitorRuntime.Service
+        const monitorObj = yield* Monitor.Service
+        const { db } = yield* Database.Service
+        const sessionID = yield* seed()
+        const created = yield* declare(sessionID)
+
+        yield* runtime.start(created.id)
+
+        expect(runs).toHaveLength(0) // never ran -- an unattended monitor must not prompt
+        const after = yield* monitorObj.get(created.id)
+        expect(after?.status).toBe("failed")
+        expect(wakes).toEqual([sessionID])
+        const messageID = SessionMessage.ID.make(`msg_monitor_${created.id}_failed`)
+        const messages = yield* db.select().from(SessionMessageTable).where(eq(SessionMessageTable.id, messageID)).all().pipe(Effect.orDie)
+        expect(messages).toHaveLength(1)
+        const text = (messages[0]!.data as unknown as { readonly text: string }).text
+        expect(text).toContain("ask")
+        expect(text).toContain("allow")
+        expect(text).toContain("TKT-392")
+      }),
   )
 })

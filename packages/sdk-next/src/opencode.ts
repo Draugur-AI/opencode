@@ -3,6 +3,7 @@ import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
 import { EventV2 } from "@opencode-ai/core/event"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 import { Database } from "@opencode-ai/core/database/database"
+import { Monitor } from "@opencode-ai/core/monitor"
 import { PermissionSaved } from "@opencode-ai/core/permission/saved"
 import { ProjectV2 } from "@opencode-ai/core/project"
 import { SessionGoal } from "@opencode-ai/core/session/goal"
@@ -24,10 +25,12 @@ export const create = Effect.fn("OpenCode.create")(function* () {
         ProjectV2.node,
         SessionGoal.node,
         SessionLedger.node,
-        // Monitor.node / MonitorRuntime.node: absent by decision -- the TKT-322 execution phase
-        // ships MonitorRuntime.layer but wires it into no assembly site (still no
-        // tool/monitor.ts, no startup recovery hook on this runtime). The tool-wiring PR adds
-        // both here.
+        // Monitor.recoverNode (declare + startup recovery) is present. MonitorRuntime.node stays
+        // at its bound default HERE deliberately -- this SDK's actual HTTP surface is
+        // createEmbeddedRoutes() from packages/server, which wires the real
+        // MonitorRuntime.liveNode itself; this separate top-level graph (ApplicationTools/
+        // EventV2/etc, this SDK's own direct service needs) never reaches a running session.
+        Monitor.recoverNode,
         Database.node,
       ]),
     ),

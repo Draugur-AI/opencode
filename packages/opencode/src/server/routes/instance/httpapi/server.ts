@@ -19,6 +19,8 @@ import { Installation } from "@/installation"
 import { LSP } from "@/lsp/lsp"
 import { MCP } from "@/mcp"
 import { McpAuth } from "@/mcp/auth"
+import { Monitor } from "@opencode-ai/core/monitor"
+import { MonitorRuntime } from "@opencode-ai/core/monitor/runtime"
 import { McpRuntime } from "@opencode-ai/core/config/mcp-runtime"
 import { McpRuntimeLive } from "@/mcp/runtime"
 import { Permission } from "@/permission"
@@ -277,10 +279,15 @@ const app = LayerNode.group([
   // place a new global .node needs the same explicit entry.
   SessionGoal.node,
   SessionLedger.node,
-  // Monitor.node / MonitorRuntime.node: absent by decision -- the TKT-322 execution phase ships
-  // MonitorRuntime.layer but wires it into no assembly site (still no tool/monitor.ts, no
-  // startup recovery hook consuming Monitor.Service or MonitorRuntime.Service on this runtime).
-  // The tool-wiring PR adds both here.
+  // Monitor.recoverNode (declare + startup recovery) is present -- reached by tool/monitor.ts's
+  // monitor_create/monitor_list, registered via BuiltInTools.node inside locationServices.
+  // MonitorRuntime.node is replaced with the real liveNode below (diary 2669): the tool itself
+  // depends on Monitor.Service only, never MonitorRuntime -- the cycle that would have risked is
+  // avoided by resolving LocationMutation/PermissionV2 PER CHECK (LocationServiceMap.Service.get,
+  // same pattern SessionExecutionLocal uses) rather than at MonitorRuntime construction, so
+  // MonitorRuntime.liveNode sits at this top level, never inside locationServices' own tree.
+  Monitor.recoverNode,
+  MonitorRuntime.node,
 ])
 
 export function createRoutes(
@@ -318,7 +325,13 @@ export function createRoutes(
     ),
     Layer.provide(locationServiceMapV2),
 
-    Layer.provide(AppNodeBuilderV1.build(app)),
+    Layer.provide(
+      AppNodeBuilderV1.build(app, [
+        [LocationServiceMap.node, locationServiceMapV2],
+        [SessionExecution.node, SessionExecutionLocal.node],
+        [MonitorRuntime.node, MonitorRuntime.liveNode],
+      ]),
+    ),
     // Must stay last: layers provided later in this pipe build beneath earlier ones,
     // so Observability must come after every service graph. Otherwise eagerly forked
     // fibers (e.g. the ModelsDev background refresh) capture Effect's default stdout

@@ -328,3 +328,22 @@ const layer = Layer.effect(
 )
 
 export const node = makeGlobalNode({ service: Service, layer, deps: [EventV2.node, Database.node] })
+
+/**
+ * Startup reconciliation, wired at boot rather than left for a caller to remember: every monitor
+ * still `starting`/`running` when THIS process starts belonged to a process that no longer exists
+ * (diary 2435 §1's PID-is-diagnostic rule -- recover() never reads a PID, only the row's own
+ * stored status). Assembly sites swap this in for `node` (same pattern as
+ * `ToolOutputStore.cleanupNode`, `ProjectCopy.refreshNode`) rather than wiring both.
+ */
+const recoverAfterBoot = Effect.gen(function* () {
+  const monitor = yield* Service
+  const orphaned = yield* monitor.recover()
+  if (orphaned.length > 0) yield* Effect.logInfo(`monitor recovery: marked ${orphaned.length} orphaned after restart`)
+})
+
+export const recoverNode = makeGlobalNode({
+  name: "monitor-recover",
+  layer: Layer.effectDiscard(recoverAfterBoot),
+  deps: [node],
+})

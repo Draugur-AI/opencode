@@ -10,6 +10,7 @@ import { GoalTool } from "./goal"
 import { GrepTool } from "./grep"
 import { HistoryTool } from "./history"
 import { LedgerTool } from "./ledger"
+import { MonitorTool } from "./monitor"
 import { QuestionTool } from "./question"
 import { ReadTool } from "./read"
 import { SkillTool } from "./skill"
@@ -43,6 +44,7 @@ export const node = makeLocationNode({
     GrepTool.node,
     HistoryTool.node,
     LedgerTool.node,
+    MonitorTool.node,
     QuestionTool.node,
     ReadTool.node,
     SkillTool.node,
