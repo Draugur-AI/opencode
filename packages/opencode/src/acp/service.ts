@@ -31,6 +31,7 @@ import {
 } from "@agentclientprotocol/sdk"
 import { InstallationVersion } from "@opencode-ai/core/installation/version"
 import { AppNodeBuilder } from "@opencode-ai/core/effect/app-node-builder"
+import { memoMap } from "@opencode-ai/core/effect/memo-map"
 import type { AssistantMessage, Message, OpencodeClient, SessionMessageResponse } from "@opencode-ai/sdk/v2"
 import { Context, Effect, Layer, ManagedRuntime } from "effect"
 import * as ACPError from "./error"
@@ -78,10 +79,30 @@ export function make(input: {
   directory?: Directory.Interface
   session?: ACPSession.Interface
   usage?: UsageService.Interface
+  /**
+   * 🛑 TEST-ISOLATION ESCAPE HATCH ONLY. Overrides the process-global memo map
+   * `makeSessionService`/`makeDirectoryService` share by default. Production callers must always
+   * use the default — passing a fresh map here in production silently reintroduces the exact
+   * split-brain singleton defect this parameter exists to let tests route around
+   * (Provider/Agent/Command/InstanceStore constructing once per connection instead of once per
+   * process, TKT-349). Getting this wrong is invisible to every functional test; the guard is
+   * `packages/core/test/effect/layer-node/layer-node.test.ts`'s construction-counter test, not
+   * this comment — read that test before assuming a call site "just needs its own map."
+   *
+   * Tests that construct more than one `make(...)` against real (non-overridden)
+   * `directory`/`session` services in the SAME process must pass a fresh
+   * `Layer.makeMemoMapUnsafe()` per call, or they observe each other's cached construction — the
+   * shared singleton is correct isolation for a process, not for a test file simulating several.
+   */
+  memoMap?: Layer.MemoMap
   eventSubscription?: (subscription: ACPEvent.Subscription) => void
 }): Interface {
-  const session = input.session ?? makeSessionService()
-  const directoryService = input.directory ?? makeDirectoryService(input.sdk)
+  const session = input.session ?? makeSessionService(input.memoMap)
+  const directoryService = input.directory ?? makeDirectoryService(input.sdk, input.memoMap)
+  // Defaulted here, at construction, alongside its two siblings above -- not at the use site
+  // (as it was). `makeUsageService`'s whole job is its `limits` cache keyed across calls; built
+  // fresh per usage update instead, the cache never once hit in production.
+  const usageService = input.usage ?? makeUsageService(input.sdk)
   const registeredMcp = new Map<string, Set<string>>()
   const sessionSnapshots = new Map<string, Directory.Snapshot>()
   const events = input.connection
@@ -524,7 +545,7 @@ export function make(input: {
             ),
           "session",
         )
-        yield* sendUsageUpdate(input.usage, input.sdk, input.connection, current.id, current.cwd)
+        yield* sendUsageUpdate(usageService, input.sdk, input.connection, current.id, current.cwd)
         return yield* promptResponse(response.info, params.messageId)
       }
 
@@ -548,7 +569,7 @@ export function make(input: {
             ),
           "session",
         )
-        yield* sendUsageUpdate(input.usage, input.sdk, input.connection, current.id, current.cwd)
+        yield* sendUsageUpdate(usageService, input.sdk, input.connection, current.id, current.cwd)
         return yield* promptResponse(response.info, params.messageId)
       }
 
@@ -570,20 +591,31 @@ export function make(input: {
         )
       }
 
-      yield* sendUsageUpdate(input.usage, input.sdk, input.connection, current.id, current.cwd)
+      yield* sendUsageUpdate(usageService, input.sdk, input.connection, current.id, current.cwd)
       return yield* promptResponse(undefined, params.messageId)
     }),
     cancel,
   }
 }
 
-function makeSessionService() {
-  return ManagedRuntime.make(AppNodeBuilder.build(ACPSession.node)).runSync(
+function makeSessionService(memoMapOverride?: Layer.MemoMap) {
+  // `{ memoMap }`: ACPSession.node has deps: [], so this is fixed for uniformity with the site
+  // below rather than for behaviour -- duplicating it costs one trivial object with nothing
+  // shared underneath.
+  return ManagedRuntime.make(AppNodeBuilder.build(ACPSession.node), { memoMap: memoMapOverride ?? memoMap }).runSync(
     ACPSession.Service.use((service) => Effect.succeed(service)),
   )
 }
 
-function makeDirectoryService(sdk: OpencodeClient) {
+function makeDirectoryService(sdk: OpencodeClient, memoMapOverride?: Layer.MemoMap) {
+  // `{ memoMap }`: without it, this bare ManagedRuntime carried its own fresh MemoMap, so
+  // Directory.node's process-global deps (Provider.node, Agent.node, Command.node,
+  // InstanceStore.node, via loaderNode -- see acp/directory.ts) constructed once PER SDK
+  // instead of once per process -- a live duplication, confirmed by a construction-counter
+  // probe before this change. Directory itself stays correctly per-sdk despite the shared map:
+  // Directory.loaderNode's Layer.succeed(...) below is a fresh object closing over `sdk` on
+  // every call, and the same probe confirmed a shared MemoMap does not dedupe two distinct
+  // Layer.succeed objects, only two calls that pass the identical object reference.
   return ManagedRuntime.make(
     AppNodeBuilder.build(Directory.node, [
       [
@@ -596,6 +628,7 @@ function makeDirectoryService(sdk: OpencodeClient) {
         ),
       ],
     ]),
+    { memoMap: memoMapOverride ?? memoMap },
   ).runSync(Directory.Service.use((service) => Effect.succeed(service)))
 }
 

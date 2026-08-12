@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { Context, Effect, Layer, Scope } from "effect"
+import { Context, Effect, Layer, ManagedRuntime, Scope } from "effect"
 import { LayerNode } from "@opencode-ai/core/effect/layer-node"
 
 class Value extends Context.Service<Value, { readonly value: string }>()("test/LayerNodeValue") {}
@@ -327,5 +327,66 @@ describe("layer node", () => {
       ),
     )
     expect(constructions).toBe(1)
+  })
+
+  // TKT-349, ACP half: sharing one MemoMap dedupes a process-global node's construction across
+  // two "connections" (like acp/service.ts's Provider/Agent/Command/InstanceStore, reached
+  // through Directory.node), but must NOT dedupe a value that is legitimately different per
+  // connection -- Directory.loaderNode is a fresh `Layer.succeed(Directory.Loader, ...)` built
+  // inside `makeDirectoryService(sdk)` on every call, closing over that call's own `sdk`, and has
+  // to stay distinct per sdk even though it shares the same MemoMap as the process-global deps
+  // beside it. Probed by hand before the fix with exactly this shape; this is that probe made
+  // permanent.
+  //
+  // 🛑 This test proves the underlying Effect SEMANTICS (ManagedRuntime + MemoMap sharing behave
+  // this way in general) -- it does not touch `makeSessionService`/`makeDirectoryService`, so
+  // deleting `{ memoMap }` from those two acp/service.ts sites would NOT turn this test red. It
+  // is a correctness proof for the mechanism the fix relies on, not a regression guard for the
+  // fix itself. The guard that DOES fail if the fix is reverted is
+  // `test/acp/service-session.test.ts`'s "shares the process-global directory deps across
+  // connections when the memo map is shared, and does not when it isn't" -- that one calls the
+  // real `ACPService.make()` twice and counts real provider-loader invocations.
+  test("a shared MemoMap dedupes a same-reference global layer but never a fresh per-call Layer.succeed", async () => {
+    let constructions = 0
+    // One module-level-style layer reference, reused across every call below -- mirrors
+    // Provider.node et al. being the SAME `Layer.effect(...)` object no matter how many times
+    // AppNodeBuilder.build() is invoked.
+    const globalLayer = Layer.effect(
+      Value,
+      Effect.sync(() => {
+        constructions++
+        return Value.of({ value: `build#${constructions}` })
+      }),
+    )
+    const buildGlobal = (memoMap: Layer.MemoMap) =>
+      ManagedRuntime.make(globalLayer, { memoMap }).runSync(Effect.andThen(Value, (s) => Effect.succeed(s)))
+
+    // WITHOUT sharing: each call gets its own fresh MemoMap -- the same-reference layer
+    // constructs once PER CALL. This is the arm the original version of this test skipped
+    // straight past -- without it, "constructions === 1" only shows sharing CAN dedupe, not that
+    // dedup is CAUSED by sharing rather than by something else about the layer itself.
+    constructions = 0
+    buildGlobal(Layer.makeMemoMapUnsafe())
+    buildGlobal(Layer.makeMemoMapUnsafe())
+    expect(constructions).toBe(2)
+
+    // WITH sharing: same layer reference, one MemoMap across both calls -- constructs once.
+    constructions = 0
+    const sharedMemoMap = Layer.makeMemoMapUnsafe()
+    buildGlobal(sharedMemoMap)
+    buildGlobal(sharedMemoMap)
+    expect(constructions).toBe(1)
+
+    // Same shared MemoMap, but each call passes its OWN Layer.succeed object -- exactly what
+    // makeDirectoryService(sdk) does with Directory.Loader on every invocation. Must stay
+    // distinct even though the map is shared.
+    const buildPerCall = (v: string) =>
+      ManagedRuntime.make(Layer.succeed(Value, Value.of({ value: v })), { memoMap: sharedMemoMap }).runSync(
+        Effect.andThen(Value, (s) => Effect.succeed(s)),
+      )
+    const a = buildPerCall("sdk-A")
+    const b = buildPerCall("sdk-B")
+    expect(a.value).toBe("sdk-A")
+    expect(b.value).toBe("sdk-B")
   })
 })
