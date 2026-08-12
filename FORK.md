@@ -482,6 +482,23 @@ hides (that was the whole reason for abolishing it), so each observational check
   it — no judgment required. Scattered single-spec flakes across different specs, run to run, are
   not.** This is checkable by anyone reading the last 3 runs' failure lists side by side; it does
   not require characterising *why* a test is flaky, only whether the *same* one keeps failing.
+- **`unit (linux)`** (the actual merge gate, unlike observational `e2e` above) **can show the
+  same scattered-flake shape, load-correlated:** first seen on TKT-349's PR #24 — 3 back-to-back
+  reruns of one unchanged commit each failed a different, unrelated, timer-shaped spec
+  (`observe-element-offset`'s `setTimeout(0)` assertion, `plugin.openai.ws-pool`'s idle-connection
+  pruning timer, `ModelsDev Service`'s cache-fetch hitting its 30000ms timeout at 30000.20ms),
+  none touching the PR's own diff, none repeating across attempts. The discriminator: host load
+  average was ~9.4 across the failing window and had settled to ~4 by the time a clean rerun
+  passed. **N reruns inside one loaded window are ONE sample of the window, not N independent
+  samples — back-to-back reruns cannot distinguish flake from regression while the load stays
+  high.** Check `uptime` before burning a rerun, same rule as above but gated on load instead of
+  spec identity: one rerun in a quiet window (1-minute load average below ~6) is a real second
+  sample; three reruns inside a loaded window are not three chances to see through a regression,
+  they are three chances to see three different timers miss under contention. Same-spec-3-
+  consecutive-in-a-quiet-window still means real regression, unchanged from the e2e rule above.
+  Load-sensitive deflake candidates (the 3 specs above) filed as feedback for whoever picks up
+  hardening them — fake-clock (`bun:test`'s `setSystemTime`/a controlled timer, rather than a
+  real `setTimeout`/timeout race) is the fix shape that removes the host-load dependency entirely.
 - **`nix-eval`:** disabled (auto-trigger removed, see "Blacksmith runner sweep" below) rather
   than gated or merely observational — Nix packaging validity is not this fork's concern at all,
   so there is nothing to read a rule against.
