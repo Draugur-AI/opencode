@@ -1015,6 +1015,45 @@ noLLMServer.instance("prompt tools replace previous prompt tool rules", () =>
   }),
 )
 
+// TKT-391's sibling gap (feedback #205): SessionTools.resolve() -- the exact function this
+// loop calls to build the tools sent to the model -- was wired to the legacy registry
+// (packages/opencode/src/tool/registry.ts) missing monitor/goal/ledger/history entirely.
+// httpapi-experimental.test.ts's endpoint checks prove the registry OFFERS them, but neither
+// endpoint drives a real agent+session permission ruleset through resolve() the way a live
+// prompt does. This test does: a genuinely fresh session (no permission override -- the actual
+// default a live session gets), the real default "build" agent (user() below hardcodes it,
+// matching what the live instance itself resolved), through the real prompt.loop(), asserting
+// on the literal wire-format tools array the fake provider received -- not a registry listing,
+// the artifact a model would actually see.
+it.instance("gives a fresh session's default agent the V2 tools on the wire, not just in a registry listing", () =>
+  Effect.gen(function* () {
+    const { llm } = yield* useServerConfig(providerCfg)
+    const prompt = yield* SessionPrompt.Service
+    const sessions = yield* Session.Service
+    const chat = yield* sessions.create({ title: "V2 tools on the wire" })
+    yield* llm.text("done")
+    yield* user(chat.id, "hello")
+
+    yield* prompt.loop({ sessionID: chat.id })
+
+    const hits = yield* llm.hits
+    expect(hits).toHaveLength(1)
+    const tools = hits[0]!.body.tools as Array<{ function?: { name?: string } }> | undefined
+    const names = new Set(tools?.map((item) => item.function?.name))
+    for (const id of [
+      "monitor_create",
+      "monitor_list",
+      "goal_get",
+      "goal_update_progress",
+      "ledger_add",
+      "history_search",
+      "history_get",
+    ]) {
+      expect(names.has(id)).toBe(true)
+    }
+  }),
+)
+
 it.instance(
   "running subtask preserves metadata after tool-call transition",
   () =>
