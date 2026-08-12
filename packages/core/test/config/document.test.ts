@@ -416,6 +416,85 @@ describe("ConfigDocument", () => {
     ),
   )
 
+  // Same delete-the-fix shape as the command/environment test above, for the field that shipped
+  // WITH a gap (Copilot review, PR #40): `mergeNonSecretPatch`'s oauth carry-forward only fired
+  // when the incoming patch value ALREADY had a truthy `oauth` object -- which the current UI
+  // never sends (oauth editing is out of scope for this cut), so every remote-server `set`
+  // silently wiped the whole existing oauth block, including `client_secret`. Red before the
+  // `else if (existingOAuth !== undefined)` branch existed, green after.
+  it.live("applyPatch: editing a remote server's url preserves its existing oauth block, including client_secret", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              remote: {
+                type: "remote",
+                url: "https://old.example.test/mcp",
+                oauth: { client_id: "public-id", client_secret: "sk-real-secret" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          // Only `url` changes -- the patch value doesn't mention `oauth` at all, matching
+          // exactly what the current dialog sends (it has no oauth-editing fields).
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.set",
+            name: "remote",
+            value: { type: "remote", url: "https://new.example.test/mcp" },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.remote.url).toBe("https://new.example.test/mcp")
+          expect(written.mcp.servers.remote.oauth).toEqual({ client_id: "public-id", client_secret: "sk-real-secret" })
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
+  it.live("applyPatch: an explicit oauth: false on a remote server deliberately wipes the existing oauth block", () =>
+    withTmp((tmp) =>
+      Effect.gen(function* () {
+        const filepath = path.join(tmp.path, "opencode.json")
+        const text = JSON.stringify({
+          mcp: {
+            servers: {
+              remote: {
+                type: "remote",
+                url: "https://example.test/mcp",
+                oauth: { client_id: "public-id", client_secret: "sk-real-secret" },
+              },
+            },
+          },
+        })
+        yield* Effect.promise(() => fs.writeFile(filepath, text))
+
+        return yield* Effect.gen(function* () {
+          const doc = yield* ConfigDocument.Service
+          const project = (yield* doc.listTargets()).find((t) => t.kind === "project")!
+          const read = yield* doc.readTarget(project.id)
+
+          yield* doc.applyPatch(project.id, read.hash, {
+            op: "mcp.server.set",
+            name: "remote",
+            value: { type: "remote", url: "https://example.test/mcp", oauth: false },
+          })
+
+          const written = JSON.parse(yield* Effect.promise(() => fs.readFile(filepath, "utf8")))
+          expect(written.mcp.servers.remote.oauth).toBe(false)
+        }).pipe(Effect.provide(testLayer(tmp.path))).pipe(Effect.orDie)
+      }),
+    ),
+  )
+
   it.live("applyPatch: changing a server's type does not carry over the old type's secret shape", () =>
     withTmp((tmp) =>
       Effect.gen(function* () {

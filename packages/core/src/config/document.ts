@@ -114,14 +114,25 @@ function mergeNonSecretPatch(value: ConfigMCP.ServerNonSecret, existingRaw: unkn
   if (value.type === "remote") {
     if (existing.headers !== undefined) merged.headers = existing.headers
     const existingOAuth = existing.oauth
-    if (
-      merged.oauth &&
-      typeof merged.oauth === "object" &&
-      existingOAuth &&
-      typeof existingOAuth === "object" &&
-      "client_secret" in existingOAuth
-    ) {
-      merged.oauth = { ...(merged.oauth as object), client_secret: (existingOAuth as Record<string, unknown>).client_secret }
+    if (value.oauth === false) {
+      // Explicit disable -- the incoming patch deliberately says "no oauth", which wipes the
+      // existing block (including its secret) on purpose. Not a gap: this is the one case where
+      // destroying the secret IS the ask.
+    } else if (value.oauth && typeof value.oauth === "object") {
+      // The incoming patch specifies a real oauth object (a future oauth-editing UI --
+      // `ServerNonSecret`'s `OAuthNonSecret` structurally cannot carry `client_secret`, so carry
+      // the existing one forward onto the new shape).
+      if (existingOAuth && typeof existingOAuth === "object" && "client_secret" in existingOAuth) {
+        merged.oauth = { ...value.oauth, client_secret: (existingOAuth as Record<string, unknown>).client_secret }
+      }
+    } else if (existingOAuth !== undefined) {
+      // The incoming patch doesn't mention oauth at all -- the current UI never edits it, so
+      // every `mcp.server.set` this cut sends omits the field. Without this branch, the whole
+      // existing oauth block (client_id, scope, callback_port, redirect_uri, AND client_secret)
+      // silently disappears on any edit -- url, disabled, timeout -- exactly the secret-loss
+      // shape this PR exists to make inexpressible, just missed for this one field (Copilot
+      // review, PR #40). Carried forward whole, same treatment as headers/environment above.
+      merged.oauth = existingOAuth
     }
   }
   return merged

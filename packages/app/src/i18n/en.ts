@@ -1143,6 +1143,8 @@ export const dict = {
   "settings.mcp.dialog.credentialUnchanged": "Leave blank to keep unchanged",
   "settings.mcp.dialog.remove.title": "Remove {{name}}?",
   "settings.mcp.dialog.remove.description": "This removes the server from your configuration. This cannot be undone from here.",
+  "settings.mcp.error.unavailable": "No live server to write through.",
+  "settings.mcp.error.nameRequired": "A server name is required.",
 
   "settings.permissions.title": "Permissions",
   "settings.permissions.description": "Control what tools the server can use by default.",

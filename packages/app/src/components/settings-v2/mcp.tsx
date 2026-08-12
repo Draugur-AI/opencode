@@ -74,7 +74,7 @@ const DialogConfirmRemoveMcpServer: Component<{
       dialog.close()
     } catch (cause) {
       const message = isServiceUnavailableError(cause)
-        ? "No live server to write through."
+        ? language.t("settings.mcp.error.unavailable")
         : cause instanceof Error
           ? cause.message
           : String(cause)

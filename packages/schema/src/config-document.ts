@@ -63,7 +63,9 @@ export class EffectiveResult extends Schema.Class<EffectiveResult>("Config.Docum
 // never touch a field outside what this module has explicitly reviewed for safety (e.g. never a
 // raw filesystem path, never an arbitrary nested key). Each catalog that becomes editable through
 // this module adds its own variants here as that chunk lands (TKT-323 chunk 2: skills/plugins,
-// chunk 3: profiles/data) -- chunk 1 only needs MCP server set/remove.
+// chunk 3: profiles/data) -- chunk 1 needs MCP server set/remove plus the credential-specific
+// set/remove ops below (split out from a single whole-value set once that shape was found to make
+// secret loss on an unrelated edit inexpressible rather than merely avoided).
 //
 // 🛑 `mcp.server.set`'s value is `ConfigMCP.ServerNonSecret`, NOT `ConfigMCP.Server` -- deliberately
 // (TKT-323 MCP config editing, caught before this op had a real consumer). The full `Server` type

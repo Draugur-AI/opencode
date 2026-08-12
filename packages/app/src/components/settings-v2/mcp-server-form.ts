@@ -1,4 +1,5 @@
 import { createSignal, type Accessor } from "solid-js"
+import { useLanguage } from "@/context/language"
 import { useServerSDK } from "@/context/server-sdk"
 import { createMcpClient, isServiceUnavailableError } from "@/utils/mcp-client"
 import type { McpConfigTargetReadResult } from "@/utils/mcp-client"
@@ -63,6 +64,7 @@ export function createMcpServerFormController(opts: {
   onSaved: () => void
 }): McpServerFormState {
   const sdk = useServerSDK()
+  const language = useLanguage()
   const client = () => createMcpClient(sdk().server)
 
   const [name, setName] = createSignal(opts.serverName ?? "")
@@ -143,7 +145,7 @@ export function createMcpServerFormController(opts: {
     const targetID = opts.target()
     const trimmedName = name().trim()
     if (!targetID || !trimmedName) {
-      setError("A server name is required.")
+      setError(language.t("settings.mcp.error.nameRequired"))
       return false
     }
     setBusy(true)
@@ -215,7 +217,7 @@ export function createMcpServerFormController(opts: {
       return true
     } catch (cause) {
       if (isServiceUnavailableError(cause)) {
-        setError("No live server to write through.")
+        setError(language.t("settings.mcp.error.unavailable"))
         return false
       }
       setError(cause instanceof Error ? cause.message : String(cause))
