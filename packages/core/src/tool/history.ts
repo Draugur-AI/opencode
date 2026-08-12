@@ -19,7 +19,7 @@ export const SearchInput = Schema.Struct({
   query: Schema.String,
   limit: Schema.Int.pipe(Schema.optional),
 }).annotate({
-  description: "Search this session's full history, including content a compaction already summarized away. Returns bounded snippets with the source message ID -- call history_get on a result to read the full message.",
+  description: "Search this session's full history, including content a compaction already summarized away. Returns bounded snippets with the source message ID -- call history_get on a result to read the full message. Use this whenever the user references something specific you don't currently see in context -- it may have been summarized away rather than never discussed.",
 })
 export const SearchOutput = Schema.Struct({
   results: Schema.Array(
@@ -58,7 +58,7 @@ const layer = Layer.effectDiscard(
       .register({
         [searchName]: Tool.make({
           description:
-            "Search this session's full history for a term, including content a compaction already summarized away. Returns bounded snippets, not full messages -- call history_get on a result's messageID to read the surrounding context in full.",
+            "Search this session's full history for a term, including content a compaction already summarized away. Returns bounded snippets, not full messages -- call history_get on a result's messageID to read the surrounding context in full. Use this whenever the user references something specific you don't currently see in context -- it may have been summarized away rather than never discussed.",
           input: SearchInput,
           output: SearchOutput,
           toModelOutput: ({ output }) => [{ type: "text", text: JSON.stringify(output, null, 2) }],

@@ -12,6 +12,17 @@ import { BaselineCounters } from "../observability/baseline-counters"
 
 const DEFAULT_BUFFER = 20_000
 const DEFAULT_KEEP_TOKENS = 8_000
+// TKT-377, diary 2584/2594: Token.estimate's char/4 heuristic under-counts structured tool output
+// (measured ratios against live usage.prompt_tokens: git log 0.69, JSON tool output 0.73, file
+// listings 0.86; realistic agent request 0.88) -- the exact content mix a long agentic session is
+// dominated by. At the fleet's real qwen3-6 limits (context 131072, reserve max(8192,20000)=20000)
+// the margin at average mix is ~3.7% of the context window, and PROD-CONFIRMED overflow occurred
+// at that content mix (diary 2600: litellm ContextWindowExceededError at exactly the estimated
+// trigger + 1). Interim fix pending a proper anchor-on-real-usage redesign (diary 2584 §5): inflate
+// the trigger estimate by this factor, which covers the measured 0.88 aggregate with margin and
+// most of the 0.69 worst case. Pushes the average case into earlier compaction rather than
+// overflow -- the safe direction. Do not remove this without re-measuring against a live model.
+const ESTIMATOR_SAFETY_FACTOR = 1.2
 const TOOL_OUTPUT_MAX_CHARS = 2_000
 const SUMMARY_OUTPUT_TOKENS = 4_096
 const SUMMARY_TEMPLATE = `Output exactly the Markdown structure shown inside <template> and keep the section order unchanged. Do not include the <template> tags in your response.
@@ -44,7 +55,13 @@ Rules:
 - Keep every section, even when empty.
 - Use terse bullets, not prose paragraphs.
 - Preserve exact file paths, symbols, commands, error strings, URLs, and identifiers when known.
-- Do not mention the summary process or that context was compacted.`
+- Write the sections themselves as plain facts and state, not as narration about how this summary
+  was produced -- do not write things like "this session was summarized" inside the sections above.
+  This is about the summary's own prose only: the surrounding transcript already marks this as a
+  compaction checkpoint and names how to retrieve anything not included here (to-llm-message.ts's
+  "compaction" case), and that marker must stay -- TKT-379, diary 2610: hiding it drops
+  history_search's call rate from 100% to 20% because the model receives no cue that older detail
+  might exist at all.`
 
 type Entry = {
   readonly seq: number
@@ -73,6 +90,14 @@ type Input = {
 }
 
 const estimate = (value: unknown) => Token.estimate(JSON.stringify(value))
+
+// Pure so the safety-factor boundary is testable without a live model or LLM request -- TKT-377.
+export const exceedsCapacity = (input: {
+  readonly rawEstimate: number
+  readonly context: number
+  readonly output: number
+  readonly buffer: number
+}) => input.rawEstimate * ESTIMATOR_SAFETY_FACTOR > input.context - Math.max(input.output, input.buffer)
 
 const truncate = (value: string) =>
   value.length <= TOOL_OUTPUT_MAX_CHARS ? value : `${value.slice(0, TOOL_OUTPUT_MAX_CHARS)}\n[truncated]`
@@ -255,11 +280,12 @@ export const make = (dependencies: Dependencies) => {
     const context = input.model.route.defaults.limits?.context
     if (context === undefined || context <= 0) return false
     const output = input.request.generation?.maxTokens ?? input.model.route.defaults.limits?.output ?? 0
-    if (
-      estimate({ system: input.request.system, messages: input.request.messages, tools: input.request.tools }) <=
-      context - Math.max(output, config.buffer)
-    )
-      return false
+    const rawEstimate = estimate({
+      system: input.request.system,
+      messages: input.request.messages,
+      tools: input.request.tools,
+    })
+    if (!exceedsCapacity({ rawEstimate, context, output, buffer: config.buffer })) return false
     return yield* compactAfterOverflow(input)
   })
   return {
