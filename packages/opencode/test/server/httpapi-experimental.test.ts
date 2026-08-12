@@ -197,6 +197,57 @@ describe("experimental HttpApi", () => {
     },
   )
 
+  // The V2 tools (Monitor/Goal/Ledger/History) were registered into the core ToolRegistry
+  // (packages/core/src/tool/builtins.ts) but never wired into THIS registry, the one a real
+  // session actually gets its toolset from (packages/opencode/src/session/tools.ts calls
+  // registry.tools() against this exact service) -- a fresh live session had no monitor tool
+  // even though "registration exists in code" one layer up. Sean's own live gate walk found
+  // this; this test is the missing gate evidence, at the real serving-path artifact rather
+  // than the unreachable V2 registry.
+  const v2ToolIDs = [
+    "monitor_create",
+    "monitor_list",
+    "goal_get",
+    "goal_update_progress",
+    "ledger_add",
+    "history_search",
+    "history_get",
+  ]
+
+  it.instance(
+    "gives a fresh session on the real serving path the V2 tools (monitor, goal, ledger, history)",
+    () =>
+      Effect.gen(function* () {
+        const tmp = yield* TestInstance
+        const directory = tmp.directory
+        yield* createSession()
+
+        const [toolIDs, toolList] = yield* Effect.all(
+          [
+            request(ExperimentalPaths.toolIDs, directory),
+            request(`${ExperimentalPaths.tool}?provider=opencode&model=gpt-5`, directory),
+          ],
+          { concurrency: "unbounded" },
+        )
+
+        expect(toolIDs.status).toBe(200)
+        const ids = yield* json<string[]>(toolIDs)
+        for (const id of v2ToolIDs) expect(ids).toContain(id)
+
+        expect(toolList.status).toBe(200)
+        const list = yield* json<Array<{ id: string; description: string }>>(toolList)
+        for (const id of v2ToolIDs) {
+          expect(list).toContainEqual(expect.objectContaining({ id, description: expect.any(String) }))
+        }
+      }),
+    {
+      config: {
+        formatter: false,
+        lsp: false,
+      },
+    },
+  )
+
   it.instance("returns declared worktree errors", () =>
     Effect.gen(function* () {
       const tmp = yield* TestInstance

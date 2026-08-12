@@ -1,4 +1,4 @@
-import { A, createAsync, query, useSearchParams } from "@solidjs/router"
+import { createAsync, query, useSearchParams } from "@solidjs/router"
 import { Title } from "@solidjs/meta"
 import { createMemo, createSignal, For, Match, onMount, Show, Switch } from "solid-js"
 import { PlanIcon, plans } from "./common"
@@ -112,12 +112,6 @@ export default function Black() {
               )}
             </Match>
           </Switch>
-        </Show>
-        <Show when={!paused()}>
-          <p data-slot="fine-print" style={{ "view-transition-name": "fine-print" }}>
-            {i18n.t("black.finePrint.beforeTerms")} ·{" "}
-            <A href={language.route("/legal/terms-of-service")}>{i18n.t("black.finePrint.terms")}</A>
-          </p>
         </Show>
       </section>
     </>

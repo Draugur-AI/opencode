@@ -1,4 +1,4 @@
-import { A, createAsync, query, redirect, useParams } from "@solidjs/router"
+import { createAsync, query, redirect, useParams } from "@solidjs/router"
 import { Title } from "@solidjs/meta"
 import { createEffect, createSignal, For, Match, Show, Switch } from "solid-js"
 import { type Stripe, type PaymentMethod, loadStripe } from "@stripe/stripe-js"
@@ -479,10 +479,6 @@ export default function BlackSubscribe() {
             </ul>
           </div>
         </Modal>
-        <p data-slot="fine-print">
-          {i18n.t("black.finePrint.beforeTerms")} ·{" "}
-          <A href={language.route("/legal/terms-of-service")}>{i18n.t("black.finePrint.terms")}</A>
-        </p>
       </section>
     </Show>
   )

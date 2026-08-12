@@ -1,25 +1,9 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { Resource } from "@opencode-ai/console-resource"
-import { cookie, docs, localeFromRequest, tag } from "~/lib/language"
 
-async function handler(evt: APIEvent) {
-  const req = evt.request.clone()
-  const url = new URL(req.url)
-  const locale = localeFromRequest(req)
-  const host = Resource.App.stage === "production" ? "docs.opencode.ai" : "docs.dev.opencode.ai"
-  const targetUrl = `https://${host}${docs(locale, `/docs${url.pathname}`)}${url.search}`
-
-  const headers = new Headers(req.headers)
-  headers.set("accept-language", tag(locale))
-
-  const response = await fetch(targetUrl, {
-    method: req.method,
-    headers,
-    body: req.body,
-  })
-  const next = new Response(response.body, response)
-  next.headers.append("set-cookie", cookie(locale))
-  return next
+// Disabled (TKT-396): previously proxied to docs.opencode.ai, an upstream service. No route in
+// this console links here (share-link-style short URLs, reached only by direct/external URL).
+async function handler(_evt: APIEvent) {
+  return new Response(null, { status: 404 })
 }
 
 export const GET = handler
