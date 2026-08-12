@@ -3952,7 +3952,7 @@ export type ConfigDocumentTargetReadOutput = {
       readonly path: string
       readonly exists: boolean
     }
-    readonly text: string
+    readonly text: string | { readonly reason: "could-not-parse" }
     readonly hash: string
     readonly parsed: JsonValue
     readonly diagnostics: ReadonlyArray<{

@@ -23,9 +23,21 @@ export class Diagnostic extends Schema.Class<Diagnostic>("Config.Document.Diagno
   length: Schema.optional(Schema.Int),
 }) {}
 
+// A named citizen for the fail-closed state (same rule as McpRuntime's truthful unavailable
+// default, TKT-323 chunk 2): a document that does not parse cleanly cannot be redacted with any
+// guarantee -- a lenient best-effort parse can recover a tree that silently DROPS the
+// secret-bearing branch when a malformed region swallows it, so the redactor would see no secrets
+// while the raw text still carries them byte-for-byte. `text` is withheld rather than returning a
+// best-effort redaction that is only a guarantee in the common case. `diagnostics` on the
+// surrounding ReadResult carries the parse errors -- the fix-it information for the escape hatch,
+// which is editing the file on disk directly.
+export class RedactionWithheld extends Schema.Class<RedactionWithheld>("Config.Document.RedactionWithheld")({
+  reason: Schema.Literal("could-not-parse"),
+}) {}
+
 export class ReadResult extends Schema.Class<ReadResult>("Config.Document.ReadResult")({
   target: TargetSummary,
-  text: Schema.String,
+  text: Schema.Union([Schema.String, RedactionWithheld]),
   hash: Schema.String,
   parsed: Schema.Unknown,
   diagnostics: Schema.Array(Diagnostic),
