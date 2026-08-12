@@ -130,6 +130,21 @@ describe("session.system", () => {
     }),
   )
 
+  // TKT-397: the three prompts tell the model to fetch docs from the URL <env> names. A silently
+  // absent line degrades that instruction to naming a URL nobody supplied -- the upstream-docs
+  // failure in a new costume -- so both branches are pinned, not just the happy one.
+  test("docs env line carries this instance's own /docs URL", () => {
+    expect(SystemPrompt.docsEnvLines(new URL("http://127.0.0.1:4633"))).toEqual([
+      "  Documentation for this build: http://127.0.0.1:4633/docs",
+    ])
+  })
+
+  // `opencode run` never calls Server.listen, so nothing is serving /docs: omitting beats naming a
+  // URL that would refuse the connection.
+  test("docs env line is omitted, not guessed, when no server is listening", () => {
+    expect(SystemPrompt.docsEnvLines(undefined)).toEqual([])
+  })
+
   it.effect("MCP output omits servers when all advertised tools are denied", () =>
     Effect.gen(function* () {
       const prompt = yield* SystemPrompt.Service
