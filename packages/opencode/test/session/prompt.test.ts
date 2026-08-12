@@ -1015,7 +1015,7 @@ noLLMServer.instance("prompt tools replace previous prompt tool rules", () =>
   }),
 )
 
-// TKT-391's sibling gap (feedback #205): SessionTools.resolve() -- the exact function this
+// TKT-391's sibling gap (relayed live via Ethan, not filed as feedback): SessionTools.resolve() -- the exact function this
 // loop calls to build the tools sent to the model -- was wired to the legacy registry
 // (packages/opencode/src/tool/registry.ts) missing monitor/goal/ledger/history entirely.
 // httpapi-experimental.test.ts's endpoint checks prove the registry OFFERS them, but neither
