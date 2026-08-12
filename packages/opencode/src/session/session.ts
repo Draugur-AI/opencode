@@ -13,6 +13,8 @@ import { EventV2Bridge } from "@/event-v2-bridge"
 import { SessionV2 } from "@opencode-ai/core/session"
 import * as SessionExecutionLocal from "@opencode-ai/core/session/execution/local"
 import { locationServiceMapLayer } from "@opencode-ai/core/location-services"
+import { SessionPurge } from "@opencode-ai/core/session/purge"
+import { FSUtil } from "@opencode-ai/core/fs-util"
 
 import { NotFoundError } from "@/storage/storage"
 import { eq } from "drizzle-orm"
@@ -488,7 +490,7 @@ export type Patch = Omit<Partial<Info>, "time" | "share" | "summary" | "revert" 
 const layer: Layer.Layer<
   Service,
   never,
-  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service
+  BackgroundJob.Service | RuntimeFlags.Service | Database.Service | EventV2Bridge.Service | FSUtil.Service
 > = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -497,6 +499,7 @@ const layer: Layer.Layer<
     const background = yield* BackgroundJob.Service
     const events = yield* EventV2Bridge.Service
     const flags = yield* RuntimeFlags.Service
+    const fs = yield* FSUtil.Service
 
     const createNext = Effect.fn("Session.createNext")(function* (input: {
       id?: SessionID
@@ -615,14 +618,42 @@ const layer: Layer.Layer<
           Effect.catchCause(() => Effect.succeed(false)),
         )
 
-        if (hasInstance) yield* cancelBackgroundJobs(background, sessionID)
-        const kids = yield* children(sessionID)
-        for (const child of kids) {
-          yield* remove(child.id)
+        // Gather the whole subtree's full Info before `SessionPurge.claim` below deletes it —
+        // `SessionV1.Event.Deleted` needs the full Info, not just an id, and claim's own
+        // descendants() walk (core-side, not exported) does not carry this shape. This replaces
+        // the old recursive `remove(child.id)` cascade: two cascade implementations over one
+        // tree is a double- or half-delete, not a merge, and claim's is the one that also writes
+        // the tombstones a later `GET` on a purged id relies on.
+        const subtree = [session]
+        const queue = [sessionID]
+        while (queue.length > 0) {
+          const parentID = queue.shift()!
+          for (const kid of yield* children(parentID)) {
+            subtree.push(kid)
+            queue.push(kid.id)
+          }
         }
 
-        yield* events.publish(SessionV1.Event.Deleted, { sessionID, info: session })
-        yield* events.remove(sessionID)
+        if (hasInstance) for (const info of subtree) yield* cancelBackgroundJobs(background, info.id)
+
+        // `claim`'s own WHERE clause only requires the row to still exist — it is not gated on
+        // lifecycle state, unlike V2 `purge`'s caller-side check, so this works whether the
+        // session was ever trashed or not. `requireExpired: false` is the explicit-delete path,
+        // the same one V2 `purge` uses for a confirmed user action rather than the background
+        // sweep. Verb is `purge`, not `trash`: V1 `remove` has always been a hard delete for its
+        // two remaining callers (workspace teardown, the legacy DELETE route), and giving it a
+        // grace period here would change what those callers already depend on.
+        const claimed = yield* SessionPurge.claim(db, { sessionID, now: Date.now(), requireExpired: false })
+        if (claimed) yield* SessionPurge.removeObjects(fs, claimed.objects)
+
+        // Still published per session even though the row is already gone by the time this
+        // fires: share-next.ts and any other live V1 `Event.Deleted` listener still need to
+        // hear about every session in the subtree, not just the root. The projector's own
+        // `SessionTable` delete for this event is a harmless no-op on an already-purged row.
+        for (const info of subtree) {
+          yield* events.publish(SessionV1.Event.Deleted, { sessionID: info.id, info })
+          yield* events.remove(info.id)
+        }
       } catch (error) {
         yield* Effect.logError("failed to remove session", { sessionID, error })
       }
@@ -1012,7 +1043,7 @@ function listByProject(
 export const node = LayerNode.make({
   service: Service,
   layer: layer,
-  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node],
+  deps: [BackgroundJob.node, RuntimeFlags.node, Database.node, EventV2Bridge.node, FSUtil.node],
 })
 
 export * as Session from "./session"

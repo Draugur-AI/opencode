@@ -13,7 +13,7 @@ import type {
 import type { AssistantMessage, Event, OpencodeClient } from "@opencode-ai/sdk/v2"
 import { ProviderV2 } from "@opencode-ai/core/provider"
 import { ModelV2 } from "@opencode-ai/core/model"
-import { Effect } from "effect"
+import { Effect, Layer } from "effect"
 import * as ACPService from "@/acp/service"
 import * as ACPError from "@/acp/error"
 import { UsageService } from "@/acp/usage"
@@ -320,7 +320,7 @@ describe("ACP service sessions", () => {
     })
 
     return {
-      service: ACPService.make({ sdk, connection, usage }),
+      service: ACPService.make({ sdk, connection, usage, memoMap: Layer.makeMemoMapUnsafe() }),
       updates,
       mcpAdds,
       aborts,
@@ -601,6 +601,7 @@ describe("ACP service sessions", () => {
           list: () => Promise.resolve({ data: [] }),
         },
       } as unknown as OpencodeClient,
+      memoMap: Layer.makeMemoMapUnsafe(),
     })
     const error = await Effect.runPromise(
       service
@@ -639,7 +640,7 @@ describe("ACP service sessions", () => {
         add: () => Promise.resolve({ data: {} }),
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
 
     const first = await Effect.runPromise(
       service
@@ -682,7 +683,7 @@ describe("ACP service sessions", () => {
         },
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
 
     await Effect.runPromise(
       service.newSession({
@@ -723,7 +724,7 @@ describe("ACP service sessions", () => {
         add: () => Promise.resolve({ data: {} }),
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
 
     const result = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
 
@@ -762,7 +763,7 @@ describe("ACP service sessions", () => {
         add: () => Promise.resolve({ data: {} }),
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
 
     const result = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
 
@@ -879,7 +880,7 @@ describe("ACP service sessions", () => {
         },
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
     const session = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
 
     expect(calls).toEqual({ providers: 1, agents: 1, commands: 1, skills: 1, mcpAdds: 0 })
@@ -934,7 +935,7 @@ describe("ACP service sessions", () => {
         add: () => Promise.resolve({ data: {} }),
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
     const session = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
     const updated = await Effect.runPromise(
       service.setSessionConfigOption({
@@ -1004,7 +1005,7 @@ describe("ACP service sessions", () => {
         add: () => Promise.resolve({ data: {} }),
       },
     } as unknown as OpencodeClient
-    const service = ACPService.make({ sdk })
+    const service = ACPService.make({ sdk, memoMap: Layer.makeMemoMapUnsafe() })
 
     const first = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
     const second = await Effect.runPromise(service.newSession({ cwd: "/workspace", mcpServers: [] }))
@@ -1329,6 +1330,7 @@ describe("ACP service sessions", () => {
         contextLimit: () => Effect.succeed(128000),
         sendUpdate: () => Effect.void,
       }),
+      memoMap: Layer.makeMemoMapUnsafe(),
     })
     await Effect.runPromise(failing.newSession({ cwd: "/workspace", mcpServers: [] }))
     const error = await Effect.runPromise(
