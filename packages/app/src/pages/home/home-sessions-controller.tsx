@@ -25,6 +25,7 @@ import { showToast } from "@/utils/toast"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { useSessionEntities } from "@/context/session-entities-provider"
 import type { HomeController } from "./home-controller"
+import { sessionEntityIsListed } from "./session-entity-listed"
 
 const HOME_SESSION_LIMIT = 64
 export type HomeSessionRecord = {
@@ -96,17 +97,7 @@ export function createHomeSessionsController(home: HomeController) {
       projectDirectories,
       projects: home.project.list,
       projectByID,
-      isListed: (session) => {
-        const entity = entities.get(home.selection.value().server, session.id)
-        // Unknown to the store means the store has not heard about it yet, not that it is gone —
-        // keep showing it rather than blanking the list before the first snapshot lands.
-        if (!entity?.value) return true
-        // archive_pending/trash_pending are optimistic (see the archive/delete mutations below) —
-        // the row must leave the list on the click, not on the authoritative snapshot that
-        // confirms it later, or the optimism the entity store exists for never reaches the UI.
-        if (entity.status === "archive_pending" || entity.status === "trash_pending") return false
-        return entity.value.lifecycle.state === "active"
-      },
+      isListed: (session) => sessionEntityIsListed(entities.get(home.selection.value().server, session.id)),
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
@@ -156,8 +147,13 @@ export function createHomeSessionsController(home: HomeController) {
     if (!conn) return
     try {
       await createSessionLifecycleClient(conn).trash({ sessionID: session.id, requestID: lifecycleRequestID() })
-      // Same optimistic-pending pattern as archive: the row leaves the list because the entity
-      // store says so, and a failure rolls it back in one place.
+      // Dispatched only after trash() resolves: the row leaves the list on this 200, via
+      // sessionEntityIsListed reading the resulting trash_pending status -- not eagerly on click.
+      // There is no rollback dispatcher for a failed call (no production code sends
+      // "pendingFailed" for this path): a failure below shows a toast and stops here, so the row
+      // was never removed in the first place. Do not move this dispatch above the await for
+      // snappier UX without also wiring a real rollback, or a failed call permanently vanishes
+      // a still-active row.
       entities.dispatch({
         type: "pending",
         serverKey: home.selection.value().server,
@@ -257,10 +253,15 @@ export function createHomeSessionsController(home: HomeController) {
             directory: session.directory,
             time: { archived: Date.now() },
           })
-          // The row leaves the list because the entity store says so, not because this call
-          // returned 200. `archive_pending` is an OPTIMISTIC status, deliberately not a
-          // fabricated `archived` lifecycle: the authoritative state arrives from the server and
-          // replaces it, and a failure rolls the pending back in one place.
+          // Dispatched only after the update above resolves: the row leaves the list on this
+          // 200, via sessionEntityIsListed reading the resulting archive_pending status.
+          // `archive_pending` is OPTIMISTIC in the sense that it is not a fabricated `archived`
+          // lifecycle -- the authoritative state still arrives from the server and replaces it --
+          // but it is not eager: there is no rollback dispatcher for a failed call (no production
+          // code sends "pendingFailed" for this path), so a failure below shows a toast and stops
+          // here, with the row never having left. Do not move this dispatch above the await for
+          // snappier UX without also wiring a real rollback, or a failed call permanently
+          // vanishes a still-active row.
           entities.dispatch({
             type: "pending",
             serverKey: home.selection.value().server,
