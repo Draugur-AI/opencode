@@ -193,6 +193,9 @@ export const githubInstall = Effect.fn("Cli.github.install")(function* () {
           ].join("\n")
         }
 
+        // TKT-414: `github install` is a standalone setup wizard, no live server instance --
+        // opencode.ai/docs describes a different program. Absence over wrongness: drop the
+        // URL, keep the prose, per TKT-397/TKT-414.
         prompts.outro(
           [
             "Next steps:",
@@ -201,8 +204,6 @@ export const githubInstall = Effect.fn("Cli.github.install")(function* () {
             step2,
             "",
             "    3. Go to a GitHub issue and comment `/oc summarize` to see the agent in action",
-            "",
-            "   Learn more about the GitHub agent - https://opencode.ai/docs/github/#usage-examples",
           ].join("\n"),
         )
       }

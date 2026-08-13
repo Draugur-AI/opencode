@@ -20,6 +20,8 @@ export const dict = {
   "command.category.workspace": "Workspace",
   "command.category.settings": "Settings",
   "command.logs.export": "Export logs",
+  "command.docs.open": "Open documentation",
+  "command.docs.unavailable": "Documentation is served by a running instance. Connect to a server to open it.",
 
   "theme.scheme.system": "System",
   "theme.scheme.light": "Light",
