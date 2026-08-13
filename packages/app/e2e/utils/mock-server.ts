@@ -215,7 +215,15 @@ export async function mockOpenCodeServer(page: Page, config: MockServerConfig) {
       return json(route, { location: location(config), data: { branch: "main", defaultBranch: "main" } })
     if (path === "/api/vcs/status") return json(route, { location: location(config), data: [] })
     if (path === "/api/vcs/diff") return json(route, { location: location(config), data: config.vcsDiff ?? [] })
-    if (path === "/api/pty/shells") return json(route, { location: location(config), data: [] })
+    // `sdk.client.pty.shells()` is the V1 (bare, no `/api` prefix) endpoint -- there is no
+    // `/api/pty/shells` in the API at all (checked packages/sdk/openapi.json). An unmatched
+    // path here used to fall through to the generic port-based fallback below, which returns a
+    // bare `{}` -- a real object, not an array, and not caught by `?? []` guards downstream
+    // (TKT-411): every spec that opens the settings-v2 General tab got a malformed response for
+    // this endpoint, not a slow or racy one. The body itself is a bare array too, unlike most
+    // endpoints here -- checked against packages/sdk/openapi.json's own response schema for
+    // `pty.shells`, which is `{type: "array", items: {...}}`, no `{location, data}` envelope.
+    if (path === "/pty/shells") return json(route, [])
     if (/^\/api\/pty\/[^/]+\/connect-token$/.test(path))
       return json(route, { location: location(config), data: { ticket: "e2e-ticket", expires_in: 60 } })
     if (emptyObject.has(path)) return json(route, {})

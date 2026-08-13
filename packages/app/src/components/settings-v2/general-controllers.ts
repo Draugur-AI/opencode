@@ -55,15 +55,19 @@ export function createShellSettingsController() {
   const [shells] = createResource(
     async () => {
       const sdk = serverSdk()
-      if ((await sdk.protocol) === "v1") return (await sdk.client.pty.shells()).data ?? []
-      return [] as ShellOption[]
+      if ((await sdk.protocol) !== "v1") return [] as ShellOption[]
+      const data = (await sdk.client.pty.shells()).data
+      // Guards against more than a missing field: a malformed response (an object where an
+      // array was expected, e.g. a mock or a degraded server response) is not "no data", it's
+      // wrong-shaped data -- `?? []` alone lets that through unchanged (TKT-411).
+      return Array.isArray(data) ? data : []
     },
     { initialValue: [] as ShellOption[] },
   )
   const current = createMemo(() => serverSync().data.config.shell ?? "")
 
   return {
-    shells: () => shells.latest,
+    shells: () => shells.latest ?? [],
     current,
     select: (value: string) => {
       if (value === current()) return
