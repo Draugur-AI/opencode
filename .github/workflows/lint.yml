@@ -1,0 +1,35 @@
+name: lint
+
+on:
+  push:
+    branches: [dev]
+  pull_request:
+    branches: [dev]
+  workflow_dispatch:
+
+jobs:
+  lint:
+    # Fork note (TKT-374, feedback 137): `bun run lint` was red on dev and outside the CI
+    # baseline, so nothing stopped it drifting further. Its own job rather than a step on
+    # typecheck's, so a lint failure reports as "lint" instead of surfacing under a check
+    # named for something else.
+    #
+    # The bar this gates is ERRORS, which is what oxlint exits non-zero on. dev currently
+    # also carries ~4980 warnings; they are not gated here and green does NOT mean the tree
+    # is warning-clean. Tightening that (per-rule promotion, or --deny-warnings once the
+    # backlog is worked off) is a separate decision from having a gate at all.
+    #
+    # Fork-PR guard, mandatory on every self-hosted job (see FORK.md's CI section): a
+    # self-hosted runner executes whatever a triggering workflow says, and on a public repo
+    # a pull_request event can come from a fork whose head repo differs from this one.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, opencode-fork, linux, arm64]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run lint
+        run: bun run lint

@@ -47,5 +47,24 @@
   "options": {
     "typeAware": true
   },
-  "ignorePatterns": ["**/node_modules", "**/dist", "**/.build", "**/.sst", "**/*.d.ts", "**/sdk.gen.ts"]
+  "ignorePatterns": [
+    "**/node_modules",
+    "**/dist",
+    "**/.build",
+    "**/.sst",
+    "**/*.d.ts",
+    "**/sdk.gen.ts",
+    // Upstream oxc parser bug, not a defect in this file. Its Tailwind class carries the CSS
+    // escape for U+200B (`empty:before:content-['\200B']`) inside a JSX attribute, where JSX
+    // does NOT process backslash escapes -- the transpiler emits the backslash verbatim, which
+    // is what the CSS needs. oxlint parses that attribute as a JS string literal and reports a
+    // deprecated octal escape at ERROR severity. It is a parser diagnostic with a null ruleId,
+    // so no rule setting or oxlint-disable comment can silence it, and the source cannot be
+    // respelled: Tailwind v4 scans raw source TEXT, so `\\200B` compiles to
+    // `--tw-content: '\\200B'` (a literal backslash) instead of `'\200B'` (the zero-width
+    // space) -- verified by compiling both spellings with tailwindcss 4.1.11. Still reported by
+    // oxlint 1.60.0 and by @latest. Drop this entry once oxc stops applying string-escape rules
+    // to JSX attribute values; the file loses lint coverage until then.
+    "packages/session-ui/src/v2/components/prompt-input/index.tsx"
+  ]
 }
