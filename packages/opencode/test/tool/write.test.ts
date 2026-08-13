@@ -173,15 +173,21 @@ describe("tool.write", () => {
   })
 
   describe("file permissions", () => {
-    it.instance("sets file permissions when writing sensitive data", () =>
+    it.instance("leaves the file mode to the process umask", () =>
       Effect.gen(function* () {
         const test = yield* TestInstance
-        const filepath = path.join(test.directory, "sensitive.json")
-        yield* run({ filePath: filepath, content: JSON.stringify({ secret: "data" }) })
+        const filepath = path.join(test.directory, "written.json")
+        yield* run({ filePath: filepath, content: JSON.stringify({ key: "value" }) })
 
         if (process.platform !== "win32") {
           const stats = yield* Effect.promise(() => fs.stat(filepath))
-          expect(stats.mode & 0o777).toBe(0o644)
+          // write.ts writes through FileMutation.writeTextPreservingBom, which passes no mode,
+          // so the file lands at the platform default 0o666 masked by the process umask. The
+          // previous assertion was a literal 0o644, which asserts the umask of whoever ran it:
+          // green on a 0022 host, red on a 0002 one (TKT-415, feedback #210). Deriving the
+          // expectation keeps this honest on any host and still fails loudly if the write path
+          // ever starts forcing a mode -- at which point this is the test that says so.
+          expect(stats.mode & 0o777).toBe(0o666 & ~process.umask())
         }
       }),
     )
