@@ -20,6 +20,7 @@ export const dict = {
   "command.category.workspace": "Workspace",
   "command.category.settings": "Settings",
   "command.logs.export": "Export logs",
+  "command.docs.open": "Open documentation",
 
   "theme.scheme.system": "System",
   "theme.scheme.light": "Light",

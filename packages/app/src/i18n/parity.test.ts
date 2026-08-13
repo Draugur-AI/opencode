@@ -2363,6 +2363,71 @@ const KNOWN_MISSING: readonly (
   { kind: "pending-first-attempt", domain: "app", locale: "tg", key: "settings.skills.shadowed", reason: "new key, no translation attempted yet -- folded into TKT-373's i18n completion pass", ticket: "TKT-373" },
   { kind: "pending-first-attempt", domain: "app", locale: "tk", key: "settings.skills.shadowed", reason: "new key, no translation attempted yet -- folded into TKT-373's i18n completion pass", ticket: "TKT-373" },
   { kind: "pending-first-attempt", domain: "app", locale: "uz", key: "settings.skills.shadowed", reason: "new key, no translation attempted yet -- folded into TKT-373's i18n completion pass", ticket: "TKT-373" },
+
+  // TKT-414: 1 new key x 61 app locales, `command.docs.open` for the desktop command-palette
+  // entry backing desktop-menu.ts's Documentation item (now derived from the connected server,
+  // see app.tsx's DesktopCommands). Same TKT-373 folding, no new reasoning needed.
+  { kind: "pending-first-attempt", domain: "app", locale: "ar", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "br", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "bs", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "da", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "de", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "es", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "fr", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ja", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ko", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "no", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "pl", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ru", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "uk", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "th", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "tr", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "zh", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "zht", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "hi", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "nl", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "id", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "vi", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "it", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ur", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "pa", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "az", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "fi", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "sv", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "am", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "bg", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "bn", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ca", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "cs", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "dv", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "dz", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "el", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "et", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "fa", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "fo", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "hr", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "hu", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "hy", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "is", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ka", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "km", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "lo", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "lt", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "lv", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "mk", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "mn", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ms", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "my", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ne", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "ro", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "si", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "sk", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "sl", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "sq", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "sr", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "tg", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "tk", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
+  { kind: "pending-first-attempt", domain: "app", locale: "uz", key: "command.docs.open", reason: "new key, no translation attempted yet -- TKT-414 desktop docs-link fix", ticket: "TKT-414" },
 ]
 
 describe("i18n parity", () => {
@@ -2388,15 +2453,16 @@ describe("i18n parity", () => {
    * (+122 = 2 more keys x 61 app locales, `settings.mcp.error.unavailable`/`.nameRequired`, two
    * error strings caught hard-coded in English by Copilot review on the same PR), then -> 1891
    * (+244 = 4 more keys x 61 app locales, `settings.skills.title`/`.empty`/`.slash`/`.shadowed`
-   * for TKT-323's SkillCatalog settings tab), same-commit, same TKT-373 folding, no new reasoning
-   * needed -- the pin doing exactly what it's for.
+   * for TKT-323's SkillCatalog settings tab), then -> 1952 (+61 = 1 new key x 61 app locales,
+   * `command.docs.open` for TKT-414's desktop docs-menu fix), same-commit, same TKT-373 folding,
+   * no new reasoning needed -- the pin doing exactly what it's for.
    */
   test("KNOWN_MISSING's verified-failed count is a deliberate, same-commit bump, never ambient drift", () => {
     expect(KNOWN_MISSING.filter((entry) => entry.kind === "verified-failed").length).toBe(319)
   })
 
   test("KNOWN_MISSING's pending-first-attempt count is a deliberate, same-commit bump, never ambient drift", () => {
-    expect(KNOWN_MISSING.filter((entry) => entry.kind === "pending-first-attempt").length).toBe(1891)
+    expect(KNOWN_MISSING.filter((entry) => entry.kind === "pending-first-attempt").length).toBe(1952)
   })
 
   test("non-English locales have every English key and required plural variants", async () => {

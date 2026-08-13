@@ -59,6 +59,7 @@ import { SessionEntitiesProvider } from "@/context/session-entities-provider"
 import { SessionEntitiesSync } from "@/context/session-entities-sync"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { WslServersProvider } from "@/wsl/context"
+import { desktopDocsUrl } from "@/desktop-docs"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
 import LegacyLayout from "@/pages/layout"
 import NewLayout from "@/pages/layout-new"
@@ -331,6 +332,7 @@ function DesktopCommands() {
   const command = useCommand()
   const language = useLanguage()
   const platform = usePlatform()
+  const server = useServer()
 
   command.register("desktop", () => {
     const commands: CommandOption[] = []
@@ -341,6 +343,17 @@ function DesktopCommands() {
         category: language.t("command.category.settings"),
         onSelect: () => {
           void platform.exportDebugLogs?.()
+        },
+      })
+    }
+    const docsUrl = desktopDocsUrl(server.current?.http.url)
+    if (platform.platform === "desktop" && docsUrl) {
+      commands.push({
+        id: "docs.open",
+        title: language.t("command.docs.open"),
+        category: language.t("command.category.settings"),
+        onSelect: () => {
+          platform.openExternal(docsUrl)
         },
       })
     }
