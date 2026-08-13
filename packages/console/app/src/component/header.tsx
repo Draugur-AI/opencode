@@ -35,7 +35,7 @@ const fetchSvgContent = async (svgPath: string): Promise<string> => {
   }
 }
 
-export function Header(props: { zen?: boolean; go?: boolean }) {
+export function Header(props: { zen?: boolean }) {
   const navigate = useNavigate()
   const i18n = useI18n()
   const language = useLanguage()
@@ -150,13 +150,7 @@ export function Header(props: { zen?: boolean; go?: boolean }) {
           <li>
             <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
           </li>
-          <li>
-            <A href={language.route("/go")}>{i18n.t("nav.go")}</A>
-          </li>
-          <li>
-            <A href={language.route("/enterprise")}>{i18n.t("nav.enterprise")}</A>
-          </li>
-          <Show when={props.zen || props.go}>
+          <Show when={props.zen}>
             <li>
               <a href="/auth">{i18n.t("nav.login")}</a>
             </li>
@@ -222,15 +216,7 @@ export function Header(props: { zen?: boolean; go?: boolean }) {
                 <li>
                   <a href={language.route("/docs")}>{i18n.t("nav.docs")}</a>
                 </li>
-                <Show when={!props.go}>
-                  <li>
-                    <A href={language.route("/go")}>{i18n.t("nav.go")}</A>
-                  </li>
-                </Show>
-                <li>
-                  <A href={language.route("/enterprise")}>{i18n.t("nav.enterprise")}</A>
-                </li>
-                <Show when={props.zen || props.go}>
+                <Show when={props.zen}>
                   <li>
                     <a href="/auth">{i18n.t("nav.login")}</a>
                   </li>

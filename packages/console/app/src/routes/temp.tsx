@@ -85,7 +85,7 @@ export default function Home() {
             </li>
             <li>
               <strong>{i18n.t("temp.zen")}</strong> {i18n.t("temp.feature.zen.beforeLink")}{" "}
-              <a href={language.route("/docs/zen")}>{i18n.t("temp.feature.zen.link")}</a>{" "}
+              <a href={language.route("/docs")}>{i18n.t("temp.feature.zen.link")}</a>{" "}
               {i18n.t("temp.feature.zen.afterLink")} <label>{i18n.t("home.banner.badge")}</label>
             </li>
             <li>
@@ -158,21 +158,17 @@ export default function Home() {
 
         <footer data-component="footer">
           <div data-slot="cell">
-            <a href="https://x.com/opencode">{i18n.t("footer.x")}</a>
-          </div>
-          <div data-slot="cell">
-            <a href="https://github.com/anomalyco/opencode">{i18n.t("footer.github")}</a>
-          </div>
-          <div data-slot="cell">
-            <a href="https://opencode.ai/discord">{i18n.t("footer.discord")}</a>
+            <a href="https://github.com/Draugur-AI/opencode">{i18n.t("footer.github")}</a>
           </div>
         </footer>
       </div>
 
+      {/* Copyright line removed (TKT-396 item 6, Ethan's ruling), same as component/legal.tsx --
+          this page has its own independent inline footer, not the shared component, so needed the
+          same fix separately. x.com and upstream-discord cells removed above for the same reason
+          (no fork equivalent, and #48's discord.ts/config.ts changes already retired both). */}
       <div data-component="legal">
-        <span>
-          ©2025 <a href="https://anoma.ly">Anomaly</a>
-        </span>
+        <span>©2025</span>
       </div>
     </main>
   )

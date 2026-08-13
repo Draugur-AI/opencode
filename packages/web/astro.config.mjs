@@ -174,7 +174,6 @@ export default defineConfig({
         "config",
         "providers",
         "network",
-        "enterprise",
         "troubleshooting",
         {
           label: "Windows",
@@ -222,7 +221,7 @@ export default defineConfig({
             "zh-CN": "使用",
             "zh-TW": "使用",
           },
-          items: ["go", "tui", "cli", "web", "ide", "zen", "share", "github", "gitlab"],
+          items: ["tui", "cli", "web", "ide", "share", "github", "gitlab"],
         },
 
         {

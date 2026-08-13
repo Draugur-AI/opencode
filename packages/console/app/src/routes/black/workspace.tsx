@@ -20,7 +20,7 @@ export default function BlackWorkspace() {
           notation: "compact",
           compactDisplay: "short",
         }).format(githubData()!.stars!)
-      : config.github.starsFormatted.compact,
+      : undefined, // config.github.starsFormatted removed (TKT-396 item 6); unreachable route, compile-only fix
   )
 
   // TODO: Frank, replace with real workspaces

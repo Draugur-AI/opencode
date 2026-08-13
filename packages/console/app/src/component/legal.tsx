@@ -8,9 +8,9 @@ export function Legal() {
   const language = useLanguage()
   return (
     <div data-component="legal">
-      <span>
-        ©{new Date().getFullYear()} <a href="https://anoma.ly">Anomaly</a>
-      </span>
+      {/* Copyright line removed (TKT-396 item 6, Ethan's ruling): it named "Anomaly" as the
+          copyright holder, site-wide (homepage, every workspace page, /brand) -- a false
+          attribution, worse than none. Authoring the replacement is Sean's, not this PR's. */}
       <span>
         <A href={language.route("/brand")}>{i18n.t("legal.brand")}</A>
       </span>

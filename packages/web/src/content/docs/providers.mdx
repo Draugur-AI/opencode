@@ -3,9 +3,6 @@ title: Providers
 description: Using any LLM provider in OpenCode.
 ---
 
-import config from "../../../config.mjs"
-export const console = config.console
-
 OpenCode uses the [AI SDK](https://ai-sdk.dev/) and [Models.dev](https://models.dev) to support **75+ LLM providers** and it supports running local models.
 
 To add a provider you need to:
@@ -81,74 +78,6 @@ Both options take an array of model IDs — the same IDs shown in the `/models` 
 - `blacklist` removes the listed models from the picker.
 - `whitelist` keeps only the listed models and hides the rest.
 - You can combine them: `whitelist` narrows the set, then `blacklist` removes entries from it.
-
----
-
-## OpenCode Zen
-
-OpenCode Zen is a list of models provided by the OpenCode team that have been
-tested and verified to work well with OpenCode. [Learn more](/docs/zen).
-
-:::tip
-If you are new, we recommend starting with OpenCode Zen.
-:::
-
-1. Run the `/connect` command in the TUI, select `OpenCode Zen`, and head to [opencode.ai/auth](https://opencode.ai/zen).
-
-   ```txt
-   /connect
-   ```
-
-2. Sign in, add your billing details, and copy your API key.
-
-3. Paste your API key.
-
-   ```txt
-   ┌ API key
-   │
-   │
-   └ enter
-   ```
-
-4. Run `/models` in the TUI to see the list of models we recommend.
-
-   ```txt
-   /models
-   ```
-
-It works like any other provider in OpenCode and is completely optional to use.
-
----
-
-## OpenCode Go
-
-OpenCode Go is a low cost subscription plan that provides reliable access to popular open coding models provided by the OpenCode team that have been
-tested and verified to work well with OpenCode.
-
-1. Run the `/connect` command in the TUI, select `OpenCode Go`, and head to [opencode.ai/auth](https://opencode.ai/zen).
-
-   ```txt
-   /connect
-   ```
-
-2. Sign in, add your billing details, and copy your API key.
-
-3. Paste your API key.
-
-   ```txt
-   ┌ API key
-   │
-   │
-   └ enter
-   ```
-
-4. Run `/models` in the TUI to see the list of models we recommend.
-
-   ```txt
-   /models
-   ```
-
-It works like any other provider in OpenCode and is completely optional to use.
 
 ---
 
@@ -1721,35 +1650,6 @@ We recommend signing up for [ChatGPT Plus or Pro](https://chatgpt.com/pricing).
 ##### Using API keys
 
 If you already have an API key, you can select **Manually enter API Key** and paste it in your terminal.
-
----
-
-### OpenCode Zen
-
-OpenCode Zen is a list of tested and verified models provided by the OpenCode team. [Learn more](/docs/zen).
-
-1. Sign in to **<a href={console}>OpenCode Zen</a>** and click **Create API Key**.
-
-2. Run the `/connect` command and search for **OpenCode Zen**.
-
-   ```txt
-   /connect
-   ```
-
-3. Enter your OpenCode API key.
-
-   ```txt
-   ┌ API key
-   │
-   │
-   └ enter
-   ```
-
-4. Run the `/models` command to select a model like _Qwen 3 Coder 480B_.
-
-   ```txt
-   /models
-   ```
 
 ---
 
