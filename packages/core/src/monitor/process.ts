@@ -99,26 +99,16 @@ export const check = Effect.fn("MonitorProcess.check")(function* (input: {
     detached: process.platform !== "win32",
     forceKillAfter: Duration.seconds(3),
   })
-  const result = yield* appProcess
-    .run(command, {
-      combineOutput: true,
-      timeout: Duration.millis(input.timeoutMs),
-      maxOutputBytes: MAX_CAPTURE_BYTES,
-    })
-    .pipe(
-      Effect.catchTag("AppProcessError", (error) =>
-        error.cause instanceof Error && error.cause.message === "Timed out"
-          ? Effect.succeed(undefined)
-          : Effect.fail(error),
-      ),
-    )
-  // KNOWN GAP, inherited from bash.ts (same shape there: appProcess.run() on timeout returns
-  // nothing, not partial output) rather than Monitor-specific: the containment matrix (diary 2435
-  // §3) wants "partial output bounded and retained" on timeout; this returns none. Fixing it means
-  // switching to appProcess.runStream() with a caller-side accumulator, a change to shared
-  // AppProcess behavior that bash.ts would benefit from too -- out of scope for reusing its
-  // existing run() path in this slice. Filed as feedback #199, not silently accepted as done.
-  if (!result) return { type: "timeout", output: "" } satisfies CheckResult
+  const result = yield* appProcess.run(command, {
+    combineOutput: true,
+    timeout: Duration.millis(input.timeoutMs),
+    maxOutputBytes: MAX_CAPTURE_BYTES,
+  })
+  // TKT-409 (feedback #199): appProcess.run() now returns whatever bytes it captured before
+  // the timeout fired (timedOut: true), not nothing -- the containment matrix (diary 2435 §3)
+  // wants a timed-out check's partial output bounded and retained, which this satisfies:
+  // MAX_CAPTURE_BYTES already bounds it via run()'s own maxOutputBytes.
+  if (result.timedOut) return { type: "timeout", output: result.output?.toString("utf8") ?? "" } satisfies CheckResult
   return {
     type: "completed",
     exitCode: result.exitCode,

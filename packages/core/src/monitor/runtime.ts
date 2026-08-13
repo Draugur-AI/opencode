@@ -215,7 +215,11 @@ export const layer = Layer.effect(
           return
         }
         const result = outcome.success
-        const rawOutput = result.type === "completed" ? result.output : ""
+        // TKT-409: both CheckResult variants carry output -- a timed-out check's captured
+        // bytes (process.ts's own new timedOut:true contract) must reach output.bound() the
+        // same as a completed check's, or the containment design's "partial output bounded
+        // and retained" (diary 2435 §3) never actually happens past MonitorProcess.check.
+        const rawOutput = result.output
         const evaluation =
           result.type === "completed"
             ? MonitorCondition.evaluate(info.condition, { exitCode: result.exitCode, output: result.output })

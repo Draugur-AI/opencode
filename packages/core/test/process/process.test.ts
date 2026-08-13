@@ -153,7 +153,7 @@ describe("AppProcess", () => {
 
     if (process.platform !== "win32") {
       it.live(
-        "timeout cleans up the scoped child process",
+        "timeout cleans up the scoped child process and reports timedOut",
         Effect.acquireUseRelease(
           Effect.promise(() => fs.mkdtemp(path.join(tmpdir(), "opencode-process-timeout-"))),
           (directory) => {
@@ -163,13 +163,49 @@ describe("AppProcess", () => {
             return Effect.gen(function* () {
               const svc = yield* AppProcess.Service
               const exit = yield* Effect.exit(svc.run(cmd("-e", script), { timeout: "250 millis" }))
-              expect(Exit.isFailure(exit)).toBe(true)
+              // TKT-409: a timeout is a bounded, successful RunResult (timedOut: true), not a
+              // failure -- the process may have written useful partial output before the clock
+              // ran out, and callers (MonitorProcess.check, tool/bash.ts) need that data, not
+              // just a signal that something happened.
+              expect(Exit.isSuccess(exit)).toBe(true)
+              if (Exit.isSuccess(exit)) {
+                expect(exit.value.timedOut).toBe(true)
+                expect(exit.value.exitCode).toBe(-1)
+              }
               expect(yield* waitForFile(ready)).toMatch(/^\d+$/)
               expect(yield* waitForFile(settled)).toBe("settled")
             })
           },
           (directory) => Effect.promise(() => fs.rm(directory, { recursive: true, force: true })),
         ),
+        5_000,
+      )
+
+      it.live(
+        "timeout preserves output captured before the clock ran out",
+        Effect.gen(function* () {
+          const svc = yield* AppProcess.Service
+          // Writes immediately, then hangs well past the timeout -- the process never exits on
+          // its own, so a passing test proves the partial write survived the timeout's
+          // interruption rather than merely arriving before it (which a race could fake).
+          const script = "process.stdout.write('partial output before timeout\\n');setInterval(()=>{},60000)"
+          const result = yield* svc.run(cmd("-e", script), { timeout: "250 millis" })
+          expect(result.timedOut).toBe(true)
+          expect(result.stdout.toString("utf8")).toBe("partial output before timeout\n")
+        }),
+        5_000,
+      )
+
+      it.live(
+        "timeout preserves combined output captured before the clock ran out",
+        Effect.gen(function* () {
+          const svc = yield* AppProcess.Service
+          const script =
+            "process.stdout.write('out before timeout\\n');process.stderr.write('err before timeout\\n');setInterval(()=>{},60000)"
+          const result = yield* svc.run(cmd("-e", script), { timeout: "250 millis", combineOutput: true })
+          expect(result.timedOut).toBe(true)
+          expect(result.output?.toString("utf8")).toBe("out before timeout\nerr before timeout\n")
+        }),
         5_000,
       )
 
