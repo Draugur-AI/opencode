@@ -629,7 +629,16 @@ under the interim ruling below.
 **The interim ruling (Ethan, in effect for the duration):** a head that lost its Copilot run gets a
 **peer review from a non-author** before merge, and the PR body records
 `copilot quota outage — peer-reviewed by <name>` naming the affected shas, so the period is
-auditable from the PRs themselves rather than from memory. Peer passes were posted as **issue
+auditable from the PRs themselves rather than from memory.
+
+In practice that notation landed **contemporaneously on 4 of the 10** affected PRs (#46, #49, #51,
+#52), each in its author's own wording; the other **6** (#44, #47, #48, #50, #53, #54) were patched
+in retroactively from the lead's reviewer map and are stamped as such. The record is complete but
+**not uniform**, and that matters for how you query it: grepping for the ruling's exact phrase
+returns only the 6 retroactive ones and reads as if the other 4 were undocumented. This document's
+own author made exactly that mistake while verifying this paragraph — searched for the literal
+string `quota outage`, got 3 apparent gaps, and only found the notation by reading the bodies. Match
+on `quota` **or** `peer-review`, then read the line. Peer passes were posted as **issue
 comments**, not review objects — so `/pulls/N/reviews` during this window is close to 100% noise and
 `/issues/N/comments` holds the actual review record.
 
