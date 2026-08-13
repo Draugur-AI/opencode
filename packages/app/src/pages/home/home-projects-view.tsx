@@ -1,5 +1,6 @@
 import { type Accessor, createMemo, For, type JSX, onCleanup, Show, splitProps } from "solid-js"
 import { createStore } from "solid-js/store"
+import { useNavigate } from "@solidjs/router"
 import { DateTime } from "luxon"
 import { DragDropProvider, PointerSensor } from "@dnd-kit/solid"
 import { isSortable, useSortable } from "@dnd-kit/solid/sortable"
@@ -313,8 +314,30 @@ export function HomeUtilityNav(props: {
   onOpenHelp: () => void
   language: ReturnType<typeof useLanguage>
 }) {
+  const navigate = useNavigate()
   return (
     <div class={`${props.class ?? ""} min-w-0 flex-col gap-1 pr-3`}>
+      {/* /archived and /trash were reachable only by typing the URL (feedback 173). These reuse
+          the views' own title keys, which every locale already carries, rather than adding
+          nav-specific keys that would need 65 translations to say the same word. */}
+      <HomeProjectNavButton
+        type="button"
+        data-nav="archived"
+        class="text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+        onClick={() => navigate("/archived")}
+      >
+        <IconV2 name="archive" size="small" />
+        <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("archived.title")}</span>
+      </HomeProjectNavButton>
+      <HomeProjectNavButton
+        type="button"
+        data-nav="trash"
+        class="text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted"
+        onClick={() => navigate("/trash")}
+      >
+        <IconV2 name="trash" size="small" />
+        <span class={HOME_PROJECT_NAV_LABEL}>{props.language.t("trash.title")}</span>
+      </HomeProjectNavButton>
       <HomeProjectNavButton
         type="button"
         class="text-v2-text-text-faint [&>[data-slot=icon-svg]]:text-v2-icon-icon-muted"
