@@ -60,6 +60,7 @@ import { SessionEntitiesSync } from "@/context/session-entities-sync"
 import { SDKProvider, useSDK } from "@/context/sdk"
 import { WslServersProvider } from "@/wsl/context"
 import { desktopDocsUrl } from "@/desktop-docs"
+import { showToast } from "@/utils/toast"
 import DirectoryLayout, { DirectoryDataProvider } from "@/pages/directory-layout"
 import LegacyLayout from "@/pages/layout"
 import NewLayout from "@/pages/layout-new"
@@ -346,14 +347,23 @@ function DesktopCommands() {
         },
       })
     }
-    const docsUrl = desktopDocsUrl(server.current?.http.url)
-    if (platform.platform === "desktop" && docsUrl) {
+    // TKT-414 review (Henry): registered unconditionally, not gated on a connected server --
+    // the macOS native menu (packages/desktop/src/main/menu.ts) has no per-command
+    // enabled/disabled plumbing, so gating the registration left the item always clickable
+    // there but silently doing nothing when disconnected. Always-registered + an honest
+    // no-server message is the "absence over wrongness" shape without adding that plumbing.
+    if (platform.platform === "desktop") {
       commands.push({
         id: "docs.open",
         title: language.t("command.docs.open"),
         category: language.t("command.category.settings"),
         onSelect: () => {
-          platform.openExternal(docsUrl)
+          const docsUrl = desktopDocsUrl(server.current?.http.url)
+          if (docsUrl) {
+            platform.openExternal(docsUrl)
+            return
+          }
+          showToast({ title: language.t("command.docs.open"), description: language.t("command.docs.unavailable") })
         },
       })
     }
