@@ -397,10 +397,28 @@ describe("BashTool", () => {
       Effect.promise(() => tmpdir()),
       (tmp) => {
         reset()
-        runFailure = new AppProcess.AppProcessError({ command: "sleep", cause: new Error("Timed out") })
+        // TKT-409: appProcess.run() no longer fails on timeout -- it succeeds with
+        // timedOut: true and whatever bytes it captured. No more output before the timeout
+        // fired here (empty), the case bash.ts's "(no output captured before timeout)"
+        // fallback exists for.
+        result = {
+          command: "sleep",
+          exitCode: -1,
+          output: Buffer.alloc(0),
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.alloc(0),
+          outputTruncated: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          timedOut: true,
+        }
         return withTool(tmp.path, (registry) => settleTool(registry, call({ command: "sleep 60", timeout: 10 }))).pipe(
           Effect.andThen((settled) =>
             Effect.sync(() => {
+              expect(settled.output?.content[0]).toMatchObject({
+                type: "text",
+                text: expect.stringContaining("no output captured before timeout"),
+              })
               expect(settled.output?.content[1]).toMatchObject({
                 type: "text",
                 text: expect.stringContaining("Command timed out"),
@@ -409,6 +427,38 @@ describe("BashTool", () => {
                 timeout: true,
                 truncated: false,
               })
+            }),
+          ),
+        )
+      },
+      (tmp) => Effect.promise(() => tmp[Symbol.asyncDispose]()),
+    ),
+  )
+
+  it.live("surfaces output captured before a timeout, not an empty result", () =>
+    Effect.acquireUseRelease(
+      Effect.promise(() => tmpdir()),
+      (tmp) => {
+        reset()
+        result = {
+          command: "sleep",
+          exitCode: -1,
+          output: Buffer.from("partial output before the timeout\n"),
+          stdout: Buffer.alloc(0),
+          stderr: Buffer.alloc(0),
+          outputTruncated: false,
+          stdoutTruncated: false,
+          stderrTruncated: false,
+          timedOut: true,
+        }
+        return withTool(tmp.path, (registry) => settleTool(registry, call({ command: "sleep 60", timeout: 10 }))).pipe(
+          Effect.andThen((settled) =>
+            Effect.sync(() => {
+              expect(settled.output?.content[0]).toMatchObject({
+                type: "text",
+                text: expect.stringContaining("partial output before the timeout"),
+              })
+              expect(settled.output?.structured).toMatchObject({ timeout: true })
             }),
           ),
         )

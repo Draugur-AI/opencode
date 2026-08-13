@@ -201,8 +201,20 @@ const succeed = (input: { readonly exitCode?: number; readonly output?: string }
     stderrTruncated: false,
   } satisfies AppProcess.RunResult)
 
-const timedOut = () =>
-  Effect.fail(new AppProcess.AppProcessError({ command: "mock", cause: new Error("Timed out") }))
+// TKT-409: appProcess.run() succeeds on timeout (timedOut: true, whatever bytes it captured)
+// rather than failing -- matches process.ts's own new contract.
+const timedOut = (input: { readonly output?: string } = {}) =>
+  Effect.succeed({
+    command: "mock",
+    exitCode: -1,
+    output: Buffer.from(input.output ?? ""),
+    stdout: Buffer.alloc(0),
+    stderr: Buffer.alloc(0),
+    outputTruncated: false,
+    stdoutTruncated: false,
+    stderrTruncated: false,
+    timedOut: true,
+  } satisfies AppProcess.RunResult)
 
 describe("MonitorRuntime execution loop", () => {
   it.effect("permission-denied-before-start: no process is spawned, no check row is written, the monitor fails", () =>
@@ -231,7 +243,7 @@ describe("MonitorRuntime execution loop", () => {
   it.effect("timeout: the check is recorded as not-triggered with no exit code, and the loop completes at maxAttempts", () =>
     Effect.gen(function* () {
       reset()
-      runImpl = timedOut
+      runImpl = () => timedOut()
       const runtime = yield* MonitorRuntime.Service
       const monitorObj = yield* Monitor.Service
       const { db } = yield* Database.Service
@@ -248,6 +260,28 @@ describe("MonitorRuntime execution loop", () => {
       expect(checks[0]?.exit_code).toBeNull()
       expect(checks[0]?.triggered).toBe(false)
       expect(checks[0]?.detail).toBe("timed out before completion")
+    }),
+  )
+
+  it.effect("timeout: output captured before the timeout is bounded and retained, not dropped", () =>
+    Effect.gen(function* () {
+      reset()
+      // TKT-409, diary 2435 §3's containment requirement: a timed-out check's partial output
+      // must be bounded and RETAINED, not discarded -- this is the row-level assertion that
+      // closes the loop process.ts (captures it) and runtime.ts (used to discard it at
+      // `result.type === "completed" ? result.output : ""`) both had to get right together.
+      runImpl = () => timedOut({ output: "partial output before the timeout fired" })
+      const runtime = yield* MonitorRuntime.Service
+      const { db } = yield* Database.Service
+      const sessionID = yield* seed()
+      const created = yield* declare(sessionID, { maxAttempts: 1 })
+
+      yield* runtime.start(created.id)
+
+      const checks = yield* db.select().from(MonitorCheckTable).where(eq(MonitorCheckTable.monitor_id, created.id)).all().pipe(Effect.orDie)
+      expect(checks).toHaveLength(1)
+      expect(checks[0]?.tail_preview).toContain("partial output before the timeout fired")
+      expect(checks[0]?.bytes).toBeGreaterThan(0)
     }),
   )
 

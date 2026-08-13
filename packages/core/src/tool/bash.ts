@@ -56,9 +56,6 @@ const modelOutput = (output: Output) => {
   return `${warnings.trimStart()}${warnings ? "\n\n" : ""}Command exited with code ${output.exit}.`
 }
 
-const isTimeout = (error: AppProcess.AppProcessError) =>
-  error.cause instanceof Error && error.cause.message === "Timed out"
-
 /**
  * Minimal V2 core shell boundary. Keep parity debt visible without pulling the
  * legacy shell runtime into core.
@@ -163,30 +160,27 @@ const layer = Layer.effectDiscard(
                 forceKillAfter: Duration.seconds(3),
               })
               const timeout = input.timeout ?? DEFAULT_TIMEOUT_MS
-              const result = yield* appProcess
-                .run(command, {
-                  combineOutput: true,
-                  timeout: Duration.millis(timeout),
-                  maxOutputBytes: MAX_CAPTURE_BYTES,
-                })
-                .pipe(
-                  Effect.catchTag("AppProcessError", (error) =>
-                    isTimeout(error) ? Effect.succeed(undefined) : Effect.fail(error),
-                  ),
-                )
-              if (!result) {
+              const result = yield* appProcess.run(command, {
+                combineOutput: true,
+                timeout: Duration.millis(timeout),
+                maxOutputBytes: MAX_CAPTURE_BYTES,
+              })
+              const notice = result.outputTruncated
+                ? "[output capture truncated at the in-memory safety limit]"
+                : undefined
+              if (result.timedOut) {
+                // TKT-409: appProcess.run() now returns whatever bytes it captured before the
+                // timeout fired, not nothing -- surface them instead of the command's input.
+                const captured = result.output?.toString("utf8") || "(no output captured before timeout)"
                 return {
-                  output: `Command exceeded timeout of ${timeout} ms. Retry with a larger timeout if the command is expected to take longer.`,
-                  truncated: false,
+                  output: notice ? `${captured}\n\n${notice}` : captured,
+                  truncated: result.outputTruncated === true,
                   timeout: true,
                   ...(warnings.length ? { warnings } : {}),
                 }
               }
 
               const output = result.output?.toString("utf8") || "(no output)"
-              const notice = result.outputTruncated
-                ? "[output capture truncated at the in-memory safety limit]"
-                : undefined
               return {
                 exit: result.exitCode,
                 output: notice ? `${output}\n\n${notice}` : output,

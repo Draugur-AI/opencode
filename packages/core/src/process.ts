@@ -44,6 +44,10 @@ export interface RunResult {
   readonly outputTruncated?: boolean
   readonly stdoutTruncated: boolean
   readonly stderrTruncated: boolean
+  /** Set when `timeout` fired before the process exited. `exitCode` is -1 (never a real POSIX
+   * exit code) rather than the process's own, which was never observed -- `output`/`stdout`/
+   * `stderr` carry whatever bytes were captured up to the timeout, not empty. */
+  readonly timedOut?: boolean
 }
 
 export type Interface = ChildProcessSpawner["Service"] & {
@@ -118,10 +122,23 @@ const normalizeStdin = (
       ? Stream.make(input)
       : input
 
-export const collectStream = (stream: Stream.Stream<Uint8Array, PlatformError>, maxOutputBytes: number | undefined) =>
+/** Mutated in place by `collectStream` as chunks arrive -- unlike `Stream.runFold`'s return
+ * value, a caller-held reference to this object stays readable after the fold's own fiber is
+ * interrupted (e.g. by `Effect.timeoutOrElse`), since interruption stops further execution but
+ * does not undo synchronous mutations already applied. This is what lets a timeout preserve
+ * partial output instead of discarding it (TKT-409). */
+export type StreamAccumulator = { chunks: Uint8Array[]; bytes: number; truncated: boolean }
+
+export const makeStreamAccumulator = (): StreamAccumulator => ({ chunks: [], bytes: 0, truncated: false })
+
+export const collectStream = (
+  stream: Stream.Stream<Uint8Array, PlatformError>,
+  maxOutputBytes: number | undefined,
+  accumulator: StreamAccumulator = makeStreamAccumulator(),
+) =>
   Stream.runFold(
     stream,
-    () => ({ chunks: [] as Uint8Array[], bytes: 0, truncated: false }),
+    () => accumulator,
     (acc, chunk) => {
       if (maxOutputBytes === undefined) {
         acc.chunks.push(chunk)
@@ -136,6 +153,11 @@ export const collectStream = (stream: Stream.Stream<Uint8Array, PlatformError>, 
     },
   ).pipe(Effect.map((x) => ({ buffer: Buffer.concat(x.chunks), truncated: x.truncated })))
 
+const snapshotAccumulator = (accumulator: StreamAccumulator) => ({
+  buffer: Buffer.concat(accumulator.chunks),
+  truncated: accumulator.truncated,
+})
+
 const layer = Layer.effect(
   Service,
   Effect.gen(function* () {
@@ -143,12 +165,17 @@ const layer = Layer.effect(
 
     const runCommand = (command: ChildProcess.Command, options?: RunOptions) => {
       const description = describeCommand(command)
+      // Created here, outside `collect`, so a timeout's `orElse` can still read them after
+      // `collect`'s own fiber is interrupted -- see StreamAccumulator's doc comment.
+      const outputAcc = makeStreamAccumulator()
+      const stdoutAcc = makeStreamAccumulator()
+      const stderrAcc = makeStreamAccumulator()
       const collect = Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* spawner.spawn(command)
           if (options?.combineOutput) {
             const [output, exitCode] = yield* Effect.all(
-              [collectStream(handle.all, options.maxOutputBytes), handle.exitCode],
+              [collectStream(handle.all, options.maxOutputBytes, outputAcc), handle.exitCode],
               { concurrency: "unbounded" },
             )
             return {
@@ -164,8 +191,8 @@ const layer = Layer.effect(
           }
           const [stdout, stderr, exitCode] = yield* Effect.all(
             [
-              collectStream(handle.stdout, options?.maxOutputBytes),
-              collectStream(handle.stderr, options?.maxErrorBytes),
+              collectStream(handle.stdout, options?.maxOutputBytes, stdoutAcc),
+              collectStream(handle.stderr, options?.maxErrorBytes, stderrAcc),
               handle.exitCode,
             ],
             { concurrency: "unbounded" },
@@ -180,10 +207,43 @@ const layer = Layer.effect(
           } satisfies RunResult
         }),
       )
+      // On timeout, `collect`'s fiber (and the child process with it, via the scope's own
+      // teardown) is interrupted -- but outputAcc/stdoutAcc/stderrAcc already hold whatever
+      // bytes arrived before that, so the timeout path returns them instead of nothing
+      // (TKT-409, feedback #199; MonitorProcess.check and tool/bash.ts both inherit this).
+      // `exitCode: -1` is never a real POSIX exit code -- `timedOut: true` is the field to
+      // branch on, not exitCode.
       const timed = options?.timeout
         ? Effect.timeoutOrElse(collect, {
             duration: options.timeout,
-            orElse: () => Effect.fail(new AppProcessError({ command: description, cause: new Error("Timed out") })),
+            orElse: () =>
+              Effect.sync(() => {
+                if (options.combineOutput) {
+                  const output = snapshotAccumulator(outputAcc)
+                  return {
+                    command: description,
+                    exitCode: -1,
+                    output: output.buffer,
+                    stdout: Buffer.alloc(0),
+                    stderr: Buffer.alloc(0),
+                    outputTruncated: output.truncated,
+                    stdoutTruncated: false,
+                    stderrTruncated: false,
+                    timedOut: true,
+                  } satisfies RunResult
+                }
+                const stdout = snapshotAccumulator(stdoutAcc)
+                const stderr = snapshotAccumulator(stderrAcc)
+                return {
+                  command: description,
+                  exitCode: -1,
+                  stdout: stdout.buffer,
+                  stderr: stderr.buffer,
+                  stdoutTruncated: stdout.truncated,
+                  stderrTruncated: stderr.truncated,
+                  timedOut: true,
+                } satisfies RunResult
+              }),
           })
         : collect
       const aborted = options?.signal
