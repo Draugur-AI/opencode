@@ -229,6 +229,16 @@ export type Synthetic = typeof Synthetic.Type
 // that is the whole idempotency mechanism (diary 2435 §2): a duplicate publish for the same pair
 // collides on SessionMessageTable's primary key when projected and is rejected, never delivered
 // twice, without a second table or a separate uniqueness check.
+//
+// TKT-410: storing `messageID` alongside the `monitorID`+`checkSeq` it's derived from is the same
+// SHAPE as the redundancy PR #33 correctly removed from MonitorEvent.Created (a top-level
+// `monitorID` duplicating `info.id`) -- do not "consistency"-fix this one the same way. There, the
+// duplicate carried no independent value and only risked monitorID !== info.id. Here it does:
+// derivation is a formula (see triggerMessageID in monitor/runtime.ts), and a durable event is
+// permanent. If that formula's shape ever changes, a re-derived id would stop matching the
+// SessionMessage row an old event actually created -- replay would silently point at the wrong
+// message, or a nonexistent one. Storing the id makes replay independent of the current formula;
+// dropping it would couple every already-published event to a formula that must then never change.
 export const ExternalSignal = Event.define({
   type: "session.next.external-signal",
   ...options,

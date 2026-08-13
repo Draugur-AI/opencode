@@ -62,6 +62,9 @@ const defaultLayer = Layer.succeed(
 
 export const node = makeGlobalNode({ service: Service, layer: defaultLayer, deps: [] })
 
+// TKT-410: this formula, not this function's identity, is what SessionEvent.ExternalSignal.messageID
+// pins for a published event -- see the schema comment there for why storing the id (not just
+// monitorID+checkSeq) is a deliberate replay-independence property, not the redundancy PR #33 removed.
 const triggerMessageID = (monitorID: MonitorSchema.ID, checkSeq: number) =>
   SessionMessage.ID.make(`msg_monitor_${monitorID}_${checkSeq}`)
 
