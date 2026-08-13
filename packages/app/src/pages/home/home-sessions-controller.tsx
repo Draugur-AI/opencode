@@ -5,6 +5,7 @@ import { useQuery } from "@tanstack/solid-query"
 import { DateTime } from "luxon"
 import { type Accessor, createEffect, createMemo, createRoot, type JSX, startTransition } from "solid-js"
 import { produce } from "solid-js/store"
+import { DialogConfirmDeleteSession } from "@/components/dialog-confirm-delete-session"
 import { useCommand } from "@/context/command"
 import {
   loadHomeSessionIndex,
@@ -18,10 +19,13 @@ import { sessionHasOpenTab, useTabs } from "@/context/tabs"
 import { compareSessionTime, displayName, errorMessage, projectForSession } from "@/pages/layout/helpers"
 import { useSessionTabAvatarState } from "@/pages/layout/project-avatar-state"
 import { pathKey } from "@/utils/path-key"
+import { createSessionLifecycleClient, lifecycleRequestID } from "@/utils/session-lifecycle-client"
+import { sessionTitle } from "@/utils/session-title"
 import { showToast } from "@/utils/toast"
 import { Binary } from "@opencode-ai/core/util/binary"
 import { useSessionEntities } from "@/context/session-entities-provider"
 import type { HomeController } from "./home-controller"
+import { sessionEntityIsListed } from "./session-entity-listed"
 
 const HOME_SESSION_LIMIT = 64
 export type HomeSessionRecord = {
@@ -93,13 +97,7 @@ export function createHomeSessionsController(home: HomeController) {
       projectDirectories,
       projects: home.project.list,
       projectByID,
-      isListed: (session) => {
-        const entity = entities.get(home.selection.value().server, session.id)
-        // Unknown to the store means the store has not heard about it yet, not that it is gone —
-        // keep showing it rather than blanking the list before the first snapshot lands.
-        if (!entity?.value) return true
-        return entity.value.lifecycle.state === "active"
-      },
+      isListed: (session) => sessionEntityIsListed(entities.get(home.selection.value().server, session.id)),
     }),
   )
   const records = createMemo(() => allRecords().slice(0, HOME_SESSION_LIMIT))
@@ -138,6 +136,37 @@ export function createHomeSessionsController(home: HomeController) {
         })
       })
   })
+
+  // Same lifecycle transition as the in-session "Delete..." action (see
+  // message-timeline.tsx's deleteSession/DialogDeleteSession): moves the session to trash,
+  // recoverable until its purge deadline, not the CLI/ACP permanent "remove". A local function
+  // rather than an inline object method so confirmDelete (below) can call it without forward-
+  // referencing the object literal it will end up attached to.
+  const deleteSession = async (session: Session) => {
+    const conn = home.server.focused()
+    if (!conn) return
+    try {
+      await createSessionLifecycleClient(conn).trash({ sessionID: session.id, requestID: lifecycleRequestID() })
+      // Dispatched only after trash() resolves: the row leaves the list on this 200, via
+      // sessionEntityIsListed reading the resulting trash_pending status -- not eagerly on click.
+      // There is no rollback dispatcher for a failed call (no production code sends
+      // "pendingFailed" for this path): a failure below shows a toast and stops here, so the row
+      // was never removed in the first place. Do not move this dispatch above the await for
+      // snappier UX without also wiring a real rollback, or a failed call permanently vanishes
+      // a still-active row.
+      entities.dispatch({
+        type: "pending",
+        serverKey: home.selection.value().server,
+        sessionID: session.id,
+        intent: "trash",
+      })
+    } catch (cause) {
+      showToast({
+        title: language.t("session.delete.failed.title"),
+        description: errorMessage(cause, language.t("session.delete.failed.title")),
+      })
+    }
+  }
 
   command.register("home.palette", () => [
     {
@@ -224,10 +253,15 @@ export function createHomeSessionsController(home: HomeController) {
             directory: session.directory,
             time: { archived: Date.now() },
           })
-          // The row leaves the list because the entity store says so, not because this call
-          // returned 200. `archive_pending` is an OPTIMISTIC status, deliberately not a
-          // fabricated `archived` lifecycle: the authoritative state arrives from the server and
-          // replaces it, and a failure rolls the pending back in one place.
+          // Dispatched only after the update above resolves: the row leaves the list on this
+          // 200, via sessionEntityIsListed reading the resulting archive_pending status.
+          // `archive_pending` is OPTIMISTIC in the sense that it is not a fabricated `archived`
+          // lifecycle -- the authoritative state still arrives from the server and replaces it --
+          // but it is not eager: there is no rollback dispatcher for a failed call (no production
+          // code sends "pendingFailed" for this path), so a failure below shows a toast and stops
+          // here, with the row never having left. Do not move this dispatch above the await for
+          // snappier UX without also wiring a real rollback, or a failed call permanently
+          // vanishes a still-active row.
           entities.dispatch({
             type: "pending",
             serverKey: home.selection.value().server,
@@ -240,6 +274,12 @@ export function createHomeSessionsController(home: HomeController) {
             description: errorMessage(cause, language.t("common.requestFailed")),
           })
         }
+      },
+      // The confirmation itself, same copy as the in-session flow (DialogConfirmDeleteSession
+      // reuses the session.delete.* keys) -- this is what the row's delete button calls.
+      confirmDelete: (session: Session) => {
+        const title = sessionTitle(session.title) ?? language.t("command.session.new")
+        dialog.show(() => <DialogConfirmDeleteSession title={title} onConfirm={() => void deleteSession(session)} />)
       },
     },
     tab: {

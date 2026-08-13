@@ -11,6 +11,15 @@ describe("desktop menu", () => {
     expect(items.every((item) => item.type === "item" && item.command === "logs.export" && !item.action)).toBe(true)
   })
 
+  test("opens documentation through the desktop command registry, not a hardcoded upstream URL", () => {
+    const items = DESKTOP_MENU.flatMap((menu) => menu.items ?? []).filter(
+      (item) => item.type === "item" && item.labelKey === "desktop.menu.documentation",
+    )
+
+    expect(items).toHaveLength(1)
+    expect(items.every((item) => item.type === "item" && item.command === "docs.open" && !item.href)).toBe(true)
+  })
+
   test("provides translated labels for role-backed entries", () => {
     const windowMenu = DESKTOP_MENU.find((menu) => menu.role === "windowMenu")
     const roleItems = DESKTOP_MENU.flatMap((menu) => menu.items ?? []).filter(

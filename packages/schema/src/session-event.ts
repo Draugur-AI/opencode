@@ -225,10 +225,24 @@ export type Synthetic = typeof Synthetic.Type
 // call SessionExecution.wake." Structured fields (monitorID/checkSeq) distinguish this from a
 // generic Synthetic event for anything that wants to observe "a monitor fired" specifically,
 // while still projecting into the same SessionMessage.Synthetic shape the runner already renders.
-// `messageID` MUST be derived deterministically from (monitorID, checkSeq) by the publisher --
-// that is the whole idempotency mechanism (diary 2435 §2): a duplicate publish for the same pair
-// collides on SessionMessageTable's primary key when projected and is rejected, never delivered
-// twice, without a second table or a separate uniqueness check.
+// `messageID` MUST be derived deterministically by the publisher -- from (monitorID, checkSeq) for
+// a trigger (`triggerMessageID`), or from monitorID alone for a failure (`failureMessageID`, one
+// message per monitor's failure state, not per check) -- that is the whole idempotency mechanism
+// (diary 2435 §2): a duplicate publish for the same id collides on SessionMessageTable's primary
+// key when projected and is rejected, never delivered twice, without a second table or a separate
+// uniqueness check.
+//
+// TKT-410: storing `messageID` alongside monitorID/checkSeq is the same SHAPE as the redundancy
+// PR #33 correctly removed from MonitorEvent.Created (a top-level `monitorID` duplicating
+// `info.id`) -- do not "consistency"-fix this one the same way. There, the duplicate carried no
+// independent value and only risked monitorID !== info.id. Here it does, and not just
+// hypothetically: the two publishers above already use different formulas over the SAME schema
+// fields -- a failure event carries checkSeq (info.attempt) but its messageID ignores it entirely.
+// A "just re-derive it from (monitorID, checkSeq)" fix would already be wrong for every failure
+// event TODAY, not only after some future formula edit: reconstructing the id from the event's own
+// visible fields requires also knowing which publisher wrote it, information the stored id makes
+// irrelevant. Dropping the field would couple replay to getting that distinction right forever,
+// for every event already durable.
 export const ExternalSignal = Event.define({
   type: "session.next.external-signal",
   ...options,

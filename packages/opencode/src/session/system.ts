@@ -24,6 +24,16 @@ import { Reference } from "@opencode-ai/core/reference"
 import { MCP } from "@/mcp"
 import { PermissionV1 } from "@opencode-ai/core/v1/permission"
 
+// TKT-397: kept as a pure function so both branches are testable without touching the server
+// module. Mocking that module to control `url` is what a first cut did, and bun's mock.module is
+// process-wide -- it replaced Server for every other test file in the run and took out 61 tests
+// with "Server.listen is not a function". The wiring (Server.url feeding this) is covered by the
+// end-to-end demo on the PR instead.
+export function docsEnvLines(url: URL | undefined) {
+  if (!url) return []
+  return [`  Documentation for this build: ${new URL("/docs", url).toString()}`]
+}
+
 export function provider(model: Provider.Model) {
   if (model.api.id.includes("muse-spark")) return [PROMPT_META]
   if (model.api.id.includes("gpt-4") || model.api.id.includes("o1") || model.api.id.includes("o3"))
@@ -59,6 +69,14 @@ const layer = Layer.effect(
     return Service.of({
       environment: Effect.fn("SystemPrompt.environment")(function* (model: Provider.Model) {
         const ctx = yield* InstanceState.context
+        // TKT-397: this build serves its OWN docs at /docs (TKT-391) and the model has no other way
+        // to learn this instance's base URL -- nothing else in <env> carries it and the port is
+        // assigned at listen time. Without this line the prompts below can only name a URL they
+        // guessed. Dynamic import matches plugin/index.ts:160 and is required, not stylistic: a
+        // static one closes a real 4-node cycle, server/server.ts -> routes/instance/httpapi/
+        // server.ts -> session/prompt.ts -> session/system.ts. Read at call time, so `url` is
+        // whatever listen() set; undefined (no listener) omits the line rather than guessing.
+        const { Server } = yield* Effect.promise(() => import("../server/server"))
         const references = yield* Effect.gen(function* () {
           return (yield* (yield* Reference.Service).list()).filter((reference) => reference.description !== undefined)
         }).pipe(Effect.provide(locations.get(Location.Ref.make({ directory: AbsolutePath.make(ctx.directory) }))))
@@ -72,6 +90,7 @@ const layer = Layer.effect(
             `  Is directory a git repo: ${ctx.project.vcs === "git" ? "yes" : "no"}`,
             `  Platform: ${process.platform}`,
             `  Today's date: ${new Date().toDateString()}`,
+            ...docsEnvLines(Server.url),
             `</env>`,
           ].join("\n"),
           references.length === 0

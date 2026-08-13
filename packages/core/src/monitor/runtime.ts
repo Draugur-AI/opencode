@@ -62,6 +62,9 @@ const defaultLayer = Layer.succeed(
 
 export const node = makeGlobalNode({ service: Service, layer: defaultLayer, deps: [] })
 
+// TKT-410: this formula, not this function's identity, is what SessionEvent.ExternalSignal.messageID
+// pins for a published event -- see the schema comment there for why storing the id (not just
+// monitorID+checkSeq) is a deliberate replay-independence property, not the redundancy PR #33 removed.
 const triggerMessageID = (monitorID: MonitorSchema.ID, checkSeq: number) =>
   SessionMessage.ID.make(`msg_monitor_${monitorID}_${checkSeq}`)
 
@@ -215,7 +218,11 @@ export const layer = Layer.effect(
           return
         }
         const result = outcome.success
-        const rawOutput = result.type === "completed" ? result.output : ""
+        // TKT-409: both CheckResult variants carry output -- a timed-out check's captured
+        // bytes (process.ts's own new timedOut:true contract) must reach output.bound() the
+        // same as a completed check's, or the containment design's "partial output bounded
+        // and retained" (diary 2435 §3) never actually happens past MonitorProcess.check.
+        const rawOutput = result.output
         const evaluation =
           result.type === "completed"
             ? MonitorCondition.evaluate(info.condition, { exitCode: result.exitCode, output: result.output })

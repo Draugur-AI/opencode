@@ -472,8 +472,11 @@ export const ProvidersLoginCommand = effectCmd({
     }
 
     if (["cloudflare", "cloudflare-ai-gateway"].includes(provider)) {
+      // TKT-414: this is a disconnected-CLI hint (auth login runs standalone, no live
+      // server instance) -- opencode.ai/docs describes a different program. Absence over
+      // wrongness: drop the URL, keep the prose, per TKT-397/TKT-414.
       yield* Prompt.log.info(
-        "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables. Read more: https://opencode.ai/docs/providers/#cloudflare-ai-gateway",
+        "Cloudflare AI Gateway can be configured with CLOUDFLARE_GATEWAY_ID, CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_API_TOKEN environment variables.",
       )
     }
 
