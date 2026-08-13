@@ -1,6 +1,7 @@
 import { base64Encode } from "@opencode-ai/core/util/encode"
 import { expect, test } from "@playwright/test"
 import { mockOpenCodeServer } from "../utils/mock-server"
+import { expectAppVisible } from "../utils/waits"
 
 const directory = "C:/OpenCode/ShellSlowResource"
 
@@ -52,8 +53,7 @@ test("opening settings does not crash the whole window on a malformed shells res
   })
 
   await page.goto(`/${base64Encode(directory)}/session/${session.id}`)
-  // No expectAppVisible wait: opening as early as possible is the most reliable way to reach
-  // ShellSetting's first read of the resource, regardless of which cause is under test.
+  await expectAppVisible(page.locator('[data-component="prompt-input-v2"]'))
   await page.keyboard.press("Control+,")
   await page.waitForTimeout(1500)
 
