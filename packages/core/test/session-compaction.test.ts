@@ -35,10 +35,43 @@ function assistant(
 test("compaction prompt preserves detailed work state and relevant files", () => {
   const prompt = SessionCompaction.buildPrompt({ context: ["conversation history"] })
 
+  expect(prompt).toStartWith(
+    "Here is the conversation so far:\n\n<conversation>\nconversation history\n</conversation>",
+  )
+  expect(prompt.indexOf("</conversation>")).toBeLessThan(prompt.indexOf("Create a new anchored summary"))
+  expect(prompt).toContain("conversation history in the <conversation> tags above")
   expect(prompt).toContain("## Work State\n### Completed")
   expect(prompt).toContain("### Active")
   expect(prompt).toContain("### Blocked")
   expect(prompt).toContain("## Relevant Files")
+})
+
+test("compaction prompt gives update instructions for a prior summary", () => {
+  const prompt = SessionCompaction.buildPrompt({
+    context: ["new conversation"],
+    previousSummary: "existing summary",
+  })
+
+  expect(prompt.indexOf("<conversation>")).toBeLessThan(prompt.indexOf("<prior-summary>"))
+  expect(prompt.indexOf("</prior-summary>")).toBeLessThan(prompt.indexOf("The <prior-summary> summarizes"))
+  expect(prompt).toContain(
+    "Carry forward objectives, constraints, user directives, decisions, and parallel workstreams from the <prior-summary>",
+  )
+  expect(prompt).toContain('Move completed work from "Active" to "Completed".')
+  expect(prompt).toContain('Update "Objective" and "Next Move" to reflect the current work state.')
+})
+
+// TKT-379, diary 2610: hiding that context was compacted drops history_search's call rate from
+// 100% to 20% -- the model needs the cue that older detail might exist. Upstream's own version of
+// this prompt instructs the OPPOSITE ("do not mention...that context was compacted"); this pins
+// that we deliberately do not take that instruction when porting their prompt-clarity
+// improvements (anomalyco/opencode@dab2637, "fix(compaction): adjust instructions and structure
+// to be more clear to smaller models").
+test("compaction prompt still requires the compaction marker to stay visible (TKT-379 -- do not adopt upstream's opposite instruction)", () => {
+  const prompt = SessionCompaction.buildPrompt({ context: ["conversation history"] })
+
+  expect(prompt).toContain("that marker must stay -- TKT-379")
+  expect(prompt).not.toContain("Do not mention the summary process or that context was compacted.")
 })
 
 test("exceedsCapacity applies the estimator safety factor to the estimated portion -- a request the raw estimate clears still exceeds capacity once inflated by 1.2x (TKT-377, diary 2584/2594: char/4 under-counts structured tool output by up to 31%)", () => {
