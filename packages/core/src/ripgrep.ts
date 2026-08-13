@@ -86,6 +86,9 @@ export class Service extends Context.Service<Service, Interface>()("@opencode/v2
 
 const failure = (message: string, cause?: unknown) => new Error({ message, cause })
 
+const describe = (cause: unknown) =>
+  cause instanceof globalThis.Error ? cause.message : typeof cause === "string" ? cause : JSON.stringify(cause)
+
 const isInvalidPattern = (stderr: string) =>
   stderr.includes("regex parse error") || stderr.includes("error parsing regex")
 
@@ -94,6 +97,17 @@ const layer = Layer.effect(
   Effect.gen(function* () {
     const process = yield* AppProcess.Service
     const binary = yield* RipgrepBinary.Service
+
+    /**
+     * Acquiring the binary (download, extract, install) and running it are
+     * distinct stages that fail for unrelated reasons. Labelling acquisition
+     * here keeps the catch-all below from reporting a failed download as
+     * "ripgrep execution failed" -- the collapse that left the Windows failure
+     * (FORK.md, TKT-378) uncaused through a whole investigation.
+     */
+    const filepath = binary.filepath.pipe(
+      Effect.mapError((cause) => failure(`ripgrep acquisition failed: ${describe(cause)}`, cause)),
+    )
 
     const run = <A>(input: {
       readonly cwd: string
@@ -107,7 +121,7 @@ const layer = Layer.effect(
       const program = Effect.scoped(
         Effect.gen(function* () {
           const handle = yield* process.spawn(
-            ChildProcess.make(yield* binary.filepath, input.args, { cwd: input.cwd, extendEnv: true, stdin: "ignore" }),
+            ChildProcess.make(yield* filepath, input.args, { cwd: input.cwd, extendEnv: true, stdin: "ignore" }),
           )
           const stderrFiber = yield* collectStream(handle.stderr, ERROR_BYTES).pipe(
             Effect.map((output) => output.buffer.toString("utf8")),
@@ -146,7 +160,7 @@ const layer = Layer.effect(
         Effect.mapError((cause) =>
           cause instanceof Error || cause instanceof InvalidPatternError
             ? cause
-            : failure("ripgrep execution failed", cause),
+            : failure(`ripgrep execution failed: ${describe(cause)}`, cause),
         ),
       )
     }

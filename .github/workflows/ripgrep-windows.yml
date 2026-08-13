@@ -1,0 +1,46 @@
+name: ripgrep (windows diagnostic)
+
+# Fork-only workflow (TKT-378).
+#
+# This fork publishes a signed Windows CLI (see publish.yml's sign-cli-windows job
+# and its win-arm64 leg) whose core search fails on first use, and test.yml carries
+# no Windows leg at all -- TKT-338 removed it rather than keep burning GitHub-hosted
+# minutes. The consequence is that a shipping platform has zero automated signal on
+# search, which is not a peripheral feature there any more than it is on Linux.
+#
+# Dispatch-only, and it runs the four ripgrep suites and nothing else, so asking for
+# a Windows answer costs one short run instead of a full matrix on every push.
+#
+# Reading a failure: RipgrepBinary bounds the download and extraction stages
+# separately, each with its own timeout, and Ripgrep labels acquisition apart from
+# execution. A failure here therefore names the stage that broke. It no longer
+# collapses to a bare "ripgrep execution failed", which is what left this uncaused
+# through an entire prior investigation.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+jobs:
+  ripgrep:
+    name: ripgrep (windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+
+      - name: Setup Bun
+        uses: ./.github/actions/setup-bun
+
+      - name: Run ripgrep suites
+        working-directory: packages/core
+        timeout-minutes: 15
+        run: bun test --timeout 30000 test/ripgrep.test.ts test/filesystem/search.test.ts
