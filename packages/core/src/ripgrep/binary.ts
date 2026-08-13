@@ -12,6 +12,20 @@ import { which } from "../util/which"
 
 export namespace RipgrepBinary {
   const VERSION = "15.1.0"
+
+  /**
+   * Acquisition stages are bounded separately so a hang names the step it hung
+   * in. Without these a stalled download and a shell that never exits are
+   * indistinguishable from each other -- both surface only as the caller's
+   * generic timeout. Budgets are generous enough for a slow link; they exist to
+   * turn a hang into a diagnosis, not to police throughput.
+   */
+  const DOWNLOAD_TIMEOUT = "60 seconds"
+  const EXTRACT_TIMEOUT = "30 seconds"
+
+  const describe = (cause: unknown) =>
+    cause instanceof globalThis.Error ? cause.message : typeof cause === "string" ? cause : JSON.stringify(cause)
+
   const PLATFORM = {
     "arm64-darwin": { platform: "aarch64-apple-darwin", extension: "tar.gz" },
     "arm64-linux": { platform: "aarch64-unknown-linux-gnu", extension: "tar.gz" },
@@ -55,9 +69,20 @@ export namespace RipgrepBinary {
       ) {
         const dir = yield* fs.makeTempDirectoryScoped({ directory: Global.Path.bin, prefix: "ripgrep-" })
 
+        const bounded = (command: string, args: string[]) =>
+          run(command, args).pipe(
+            Effect.timeoutOrElse({
+              duration: EXTRACT_TIMEOUT,
+              orElse: () =>
+                Effect.die(
+                  new Error(`ripgrep extraction timed out after ${EXTRACT_TIMEOUT} running ${command} on ${archive}`),
+                ),
+            }),
+          )
+
         if (config.extension === "zip") {
           const shell = (yield* Effect.sync(() => which("powershell.exe") ?? which("pwsh.exe"))) ?? "powershell.exe"
-          const result = yield* run(shell, [
+          const result = yield* bounded(shell, [
             "-NoProfile",
             "-NonInteractive",
             "-Command",
@@ -65,15 +90,15 @@ export namespace RipgrepBinary {
           ])
           if (result.code !== 0)
             throw new Error(
-              result.stderr.trim() || result.stdout.trim() || `ripgrep extraction failed with code ${result.code}`,
+              `ripgrep extraction failed (${shell}, code ${result.code}): ${result.stderr.trim() || result.stdout.trim() || "no output"}`,
             )
         }
 
         if (config.extension === "tar.gz") {
-          const result = yield* run("tar", ["-xzf", archive, "-C", dir])
+          const result = yield* bounded("tar", ["-xzf", archive, "-C", dir])
           if (result.code !== 0)
             throw new Error(
-              result.stderr.trim() || result.stdout.trim() || `ripgrep extraction failed with code ${result.code}`,
+              `ripgrep extraction failed (tar, code ${result.code}): ${result.stderr.trim() || result.stdout.trim() || "no output"}`,
             )
         }
 
@@ -110,9 +135,14 @@ export namespace RipgrepBinary {
             const bytes = yield* HttpClientRequest.get(url).pipe(
               http.execute,
               Effect.flatMap((response) => response.arrayBuffer),
-              Effect.mapError((cause) => (cause instanceof Error ? cause : new Error(String(cause)))),
+              Effect.mapError((cause) => new Error(`ripgrep download failed from ${url}: ${describe(cause)}`)),
+              Effect.timeoutOrElse({
+                duration: DOWNLOAD_TIMEOUT,
+                orElse: () =>
+                  Effect.fail(new Error(`ripgrep download timed out after ${DOWNLOAD_TIMEOUT} from ${url}`)),
+              }),
             )
-            if (bytes.byteLength === 0) throw new Error(`failed to download ripgrep from ${url}`)
+            if (bytes.byteLength === 0) throw new Error(`ripgrep download returned an empty body from ${url}`)
 
             yield* fs.writeWithDirs(archive, new Uint8Array(bytes))
             yield* extract(archive, config, target)
