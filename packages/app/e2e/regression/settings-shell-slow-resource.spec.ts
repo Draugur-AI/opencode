@@ -21,22 +21,25 @@ const session = {
 }
 
 // TKT-411 (feedback #202): createShellSettingsController's `shells` resource has
-// `initialValue: []`, but `shells.latest` can still read as non-array before general.tsx's
-// ShellSetting consumes it -- `input.shells.reduce` then throws inside createShellOptions, and
-// the app-root ErrorBoundary (app.tsx) swallows the whole window, not just the dialog. Two
-// distinct causes were behind this, both fixed:
-// 1. mock-server.ts's own bug (not timing at all, 100% deterministic): it modeled
-//    `/api/pty/shells`, but sdk.client.pty.shells() calls the real bare V1 endpoint
-//    `/pty/shells` -- every request fell through to the fixture's generic fallback, which
-//    returns a bare `{}`, not caught by `?? []`. Fixed at the source (mock-server.ts).
-// 2. A genuine timing race, independent of (1) -- confirmed by delete-the-fix with (1) already
-//    fixed: opening the dialog before the app finishes its own startup still crashes. Reproduced
-//    here by firing Control+, immediately on navigation, before waiting for the app to report
-//    ready. Nothing about a slow session/provider mount on a real server is specific to this
-//    fixture, so guarded at the controller (general-controllers.ts), not just patched here.
-test("opening settings before the app finishes its own startup does not crash the whole window", async ({
-  page,
-}) => {
+// `initialValue: []`, but `shells.latest` could still read as non-array before general.tsx's
+// ShellSetting consumed it -- `input.shells.reduce` then threw inside createShellOptions, and
+// the app-root ErrorBoundary (app.tsx) swallowed the whole window, not just the dialog.
+//
+// What THIS test pins down, verified with a fresh dev server per configuration (delete-the-fix
+// on general-controllers.ts alone, mock-server.ts unchanged, still passes -- so this test does
+// not by itself prove a timing-dependent second cause): mock-server.ts modeled
+// `/api/pty/shells`, but sdk.client.pty.shells() calls the real bare V1 endpoint `/pty/shells`
+// -- every request fell through to the fixture's generic fallback, which returns a bare `{}`,
+// not caught by `?? []`. Not timing-dependent, not racy: a normal flow (wait for the app to be
+// visible, then open settings) crashed identically to firing the shortcut immediately on
+// navigation. Fixed at the source (mock-server.ts).
+//
+// general-controllers.ts's own guard (`Array.isArray(...) ? ... : []` at the fetcher, `?? []`
+// at the controller's return) is kept as a reasoned defensive improvement -- prefer
+// unrepresentable per the ticket's own fix shape, and a malformed or slow-to-resolve response
+// is not something a real server is proven incapable of -- but that guard's necessity is not
+// demonstrated by a red/green in this file; only the mock-server.ts fix is.
+test("opening settings does not crash the whole window on a malformed shells response", async ({ page }) => {
   const pageErrors: string[] = []
   page.on("pageerror", (error) => pageErrors.push(String(error)))
 
@@ -49,9 +52,8 @@ test("opening settings before the app finishes its own startup does not crash th
   })
 
   await page.goto(`/${base64Encode(directory)}/session/${session.id}`)
-  // Fire immediately -- no expectAppVisible wait. This is the race: the settings dialog (and
-  // createShellSettingsController's resource inside it) mounts before the app's own startup has
-  // settled, the same window feedback #202 caught.
+  // No expectAppVisible wait: opening as early as possible is the most reliable way to reach
+  // ShellSetting's first read of the resource, regardless of which cause is under test.
   await page.keyboard.press("Control+,")
   await page.waitForTimeout(1500)
 
