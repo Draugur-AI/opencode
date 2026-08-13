@@ -219,10 +219,6 @@ export const layer = Layer.effect(
         // bytes (process.ts's own new timedOut:true contract) must reach output.bound() the
         // same as a completed check's, or the containment design's "partial output bounded
         // and retained" (diary 2435 §3) never actually happens past MonitorProcess.check.
-        // TKT-409: both CheckResult variants carry output -- a timed-out check's captured
-        // bytes (process.ts's own new timedOut:true contract) must reach output.bound() the
-        // same as a completed check's, or the containment design's "partial output bounded
-        // and retained" (diary 2435 §3) never actually happens past MonitorProcess.check.
         const rawOutput = result.output
         const evaluation =
           result.type === "completed"
