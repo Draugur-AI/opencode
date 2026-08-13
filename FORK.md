@@ -582,6 +582,63 @@ here, and confirm the review actually fired (not just that CI ran) before treati
 a clean diff — an absent review on a wrong-based PR looks identical to an absent review on a
 genuinely quiet one.
 
+### Outage, 2026-08-12/13: quota exhaustion, and why it is worse than absence
+
+**The review can also fail by producing a review object that is not a review.** On the night of
+2026-08-12 the Copilot reviewer hit an account quota and, from then on, responded to every PR and
+every push with:
+
+> Copilot was unable to review this pull request because the user who requested the review has
+> reached their quota limit.
+
+State `COMMENTED`, **zero inline comments**. This is strictly more dangerous than the wrong-base
+case above, which at least looks absent: here a review *exists*, the PR shows a reviewer entry, and
+any check of the shape "did a review appear" answers yes.
+
+**Detecting it — test the body, and test it against the head that merged:**
+
+```bash
+HEAD=$(gh api repos/Draugur-AI/opencode/pulls/N --jq .head.sha)
+gh api repos/Draugur-AI/opencode/pulls/N/reviews \
+  --jq ".[] | select(.commit_id==\"$HEAD\") | {user: .user.login, quota: (.body|test(\"quota limit\"))}"
+```
+
+(`gh api --jq` is gh's built-in jq and takes **one** argument — it does not accept `--arg`, which
+fails with `accepts 1 arg(s), received 4`. Interpolate the sha into the expression, as above, or
+pipe to a standalone `jq --arg`.)
+
+**What shipped during it.** Eleven PRs merged. Per **merged head** — not per PR, see the footnote:
+
+| PR | merged head | automated review on that head |
+| --- | --- | --- |
+| #45 | `9b5eaac8` | **yes** — the only one |
+| #44 | `b7fe8ef7` | quota error only |
+| #46 | `fa7e5414` | quota error only |
+| #47 | `be3d07d3` | quota error only |
+| #48 | `0f78a31a` | quota error only |
+| #49 | `1d4fc327` | quota error only |
+| #50 | `9a906ec9` | quota error only |
+| #51 | `8bb4b757` | quota error only |
+| #52 | `fc75593c` | quota error only |
+| #53 | `7336b1e8` | quota error only |
+| #54 | `b06aba76` | quota error only |
+
+**10 of 11 merged heads carried no automated review.** All 11 were peer-reviewed by a non-author
+under the interim ruling below.
+
+**The interim ruling (Ethan, in effect for the duration):** a head that lost its Copilot run gets a
+**peer review from a non-author** before merge, and the PR body records
+`copilot quota outage — peer-reviewed by <name>` naming the affected shas, so the period is
+auditable from the PRs themselves rather than from memory. Peer passes were posted as **issue
+comments**, not review objects — so `/pulls/N/reviews` during this window is close to 100% noise and
+`/issues/N/comments` holds the actual review record.
+
+🛑 **Footnote on counting, because the first cut of this table was wrong in the flattering
+direction.** Counting Copilot reviews across *all* heads of a PR labels #44 and #46 as reviewed —
+earlier heads of both did get real reviews. But the question a provenance record has to answer is
+whether **the code that actually merged** was reviewed, and per-merged-head moves both into the
+quota-only column. Any audit of a review period must key on `head.sha`, not on the PR.
+
 ---
 
 <details>
